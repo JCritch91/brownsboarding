@@ -10,6 +10,9 @@ import {
   calculateNumberOfNights,
   isWithinTwoWeeks,
 } from "@/lib/helpers";
+import {
+  calculateBookingPricing,
+} from "@/lib/services/booking-confirmation-service";
 
 import AdminPageLayout from "@/components/AdminPageLayout";
 import PageCard from "@/components/PageCard";
@@ -334,25 +337,19 @@ async function adjustAvailabilityForBooking(
       return;
     }
 
-    const numberOfNights = calculateNumberOfNights(
-      booking.start_date,
-      booking.end_date
+    const nightlyRate = Number(pricing.nightly_rate);
+
+    const depositPercentage = Number(
+      pricing.deposit_percentage
     );
 
-    const nightlyRate = Number(pricing.nightly_rate);
-    const depositPercentage = Number(pricing.deposit_percentage);
-
-    const totalCost = numberOfNights * nightlyRate;
-
-    const depositAmount = shortNoticeBooking
-      ? 0
-      : totalCost * (depositPercentage / 100);
-
-    const balanceAmount = totalCost - depositAmount;
-
-    const newStatus = shortNoticeBooking
-      ? "Balance Pending"
-      : "Deposit Pending";
+    const pricingResult =
+      calculateBookingPricing(
+        booking.start_date,
+        booking.end_date,
+        nightlyRate,
+        depositPercentage
+      );
 
     const availabilityUpdated = await adjustAvailabilityForBooking(booking, -1);
 
@@ -364,13 +361,13 @@ async function adjustAvailabilityForBooking(
     const { error } = await supabase
       .from("bookings")
       .update({
-        status: newStatus,
+        status: pricingResult.newStatus,
         pricing_setting_id: pricing.id,
         nightly_rate: nightlyRate,
-        number_of_nights: numberOfNights,
-        total_cost: totalCost,
-        deposit_amount: depositAmount,
-        balance_amount: balanceAmount,
+        number_of_nights: pricingResult.numberOfNights,
+        total_cost: pricingResult.totalCost,
+        deposit_amount: pricingResult.depositAmount,
+        balance_amount: pricingResult.balanceAmount,
         updated_at: new Date().toISOString(),
       })
       .eq("id", booking.id);
@@ -404,11 +401,11 @@ const calendarResponse = await fetch(
         : null,
       startDate: booking.start_date,
       endDate: booking.end_date,
-      bookingStatus: newStatus,
+      bookingStatus: pricingResult.newStatus,
       paymentStatus,
-      totalCost: formatMoney(totalCost),
-      depositAmount: formatMoney(depositAmount),
-      balanceAmount: formatMoney(balanceAmount),
+      totalCost: formatMoney(pricingResult.totalCost),
+      depositAmount: formatMoney(pricingResult.depositAmount),
+      balanceAmount: formatMoney(pricingResult.balanceAmount),
       notes: booking.notes,
     }),
   }
@@ -466,9 +463,9 @@ if (!calendarResponse.ok) {
           dogName: formatName(booking.dogs?.name || "") || "your dog",
           startDate: formatDisplayDate(booking.start_date),
           endDate: formatDisplayDate(booking.end_date),
-          totalCost: formatMoney(totalCost),
-          depositAmount: formatMoney(depositAmount),
-          balanceAmount: formatMoney(balanceAmount),
+          totalCost: formatMoney(pricingResult.totalCost),
+          depositAmount: formatMoney(pricingResult.depositAmount),
+          balanceAmount: formatMoney(pricingResult.balanceAmount),
           shortNoticeBooking,
         }),
       }
