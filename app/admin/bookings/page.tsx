@@ -270,165 +270,112 @@ export default function AdminBookingsPage() {
     return true;
   }
 
-  async function confirmBooking(booking: BookingWithCustomer) {
-    const shortNoticeBooking = isWithinTwoWeeks(booking.start_date);
+  async function confirmBooking(
+  booking: BookingWithCustomer
+) {
 
-    const confirmed = window.confirm(
-      shortNoticeBooking
-        ? "This booking starts within 14 days.\n\nConfirming this booking will skip the deposit stage and move it straight to Balance Pending."
-        : "Are you sure you want to confirm this booking?\n\nThis will calculate the cost and move the booking to Deposit Pending."
-    );
+console.log("Confirm Booking clicked:", booking);
 
-    if (!confirmed) return;
+  const shortNoticeBooking = isWithinTwoWeeks(
+    booking.start_date
+  );
 
-    setMessage("");
-    setIsError(false);
+  const confirmed = window.confirm(
+    shortNoticeBooking
+      ? "This booking starts within 14 days.\n\nConfirming this booking will skip the deposit stage and move it straight to Balance Pending.\n\nDo you wish to continue?"
+      : "Are you sure you want to confirm this booking?\n\nThis will calculate the cost, reduce availability, update Google Calendar and send the customer a confirmation email."
+  );
 
-    const { data: pricing, error: pricingError } = await supabase
-      .from("pricing_settings")
-      .select("id, nightly_rate, deposit_percentage")
-      .eq("active", true)
-      .limit(1)
-      .maybeSingle();
+  if (!confirmed) {
+    return;
+  }
 
-    if (pricingError || !pricing) {
-      setIsError(true);
-      setMessage("Unable to load active pricing settings.");
-      return;
-    }
+  setMessage("");
+  setIsError(false);
 
-    const nightlyRate = Number(pricing.nightly_rate);
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession();
 
-    const depositPercentage = Number(
-      pricing.deposit_percentage
-    );
+  if (sessionError || !session) {
+    window.location.href = "/login";
+    return;
+  }
 
-    const pricingResult =
-      calculateBookingPricing(
-        booking.start_date,
-        booking.end_date,
-        nightlyRate,
-        depositPercentage
-      );
+  let response: Response;
 
-    const availabilityUpdated = await adjustAvailabilityForBooking(booking, -1);
-
-    if (!availabilityUpdated) {
-      await loadBookings();
-      return;
-    }
-
-    const { error } = await supabase
-      .from("bookings")
-      .update({
-        status: pricingResult.newStatus,
-        pricing_setting_id: pricing.id,
-        nightly_rate: nightlyRate,
-        number_of_nights: pricingResult.numberOfNights,
-        total_cost: pricingResult.totalCost,
-        deposit_amount: pricingResult.depositAmount,
-        balance_amount: pricingResult.balanceAmount,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", booking.id);
-
-      if (error) {
-        setIsError(true);
-        setMessage(error.message);
-        return;
-      }
-
-
-      const paymentStatus = shortNoticeBooking
-        ? "Full balance due"
-        : "Deposit due";
-
-      const bookingCalendarPayload =
-        buildBookingCalendarPayload({
+  try {
+    response = await fetch(
+      "/api/admin/bookings/confirm",
+      {
+        method: "POST",
+        headers: {
+          Authorization:
+            `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
           bookingId: booking.id,
-          bookingReference:
-            booking.booking_reference,
-          customerName:
-            getCustomerName(booking),
-          customerEmail:
-            booking.customer?.email,
-          dogName:
-            booking.dogs?.name,
-          dogBreed:
-            booking.dogs?.breed,
-          startDate:
-            booking.start_date,
-          endDate:
-            booking.end_date,
-          bookingStatus:
-            pricingResult.newStatus,
-          paymentStatus,
-          notes:
-            booking.notes,
-          pricing:
-            pricingResult,
-        });
-
-  const calendarResult =
-    await createBookingCalendarEvent(
-      bookingCalendarPayload
+        }),
+      }
     );
-
-  if (!calendarResult.success) {
+  } catch (requestError) {
     setIsError(true);
     setMessage(
-      calendarResult.error ||
-        "Booking confirmed, but the Google Calendar event could not be created."
+      requestError instanceof Error
+        ? requestError.message
+        : "Unable to contact the booking confirmation service."
+    );
+    return;
+  }
+
+  const result = await response
+    .json()
+    .catch(() => null);
+
+  if (!response.ok) {
+    setIsError(true);
+    setMessage(
+      result?.error ||
+        "The booking could not be confirmed."
     );
 
     await loadBookings();
     return;
   }
 
-    const confirmationEmailPayload =
-      buildBookingConfirmationEmailPayload({
-        bookingReference:
-          booking.booking_reference,
-        customerEmail:
-          booking.customer?.email,
-        customerName:
-          getCustomerName(booking),
-        dogName:
-          booking.dogs?.name,
-        startDate:
-          booking.start_date,
-        endDate:
-          booking.end_date,
-        shortNoticeBooking,
-        pricing:
-          pricingResult,
-      });
-
-      const emailResult =
-        await sendBookingConfirmationNotification(
-          confirmationEmailPayload
-        );
-
-      if (!emailResult.success) {
-        setIsError(true);
-        setMessage(
-          emailResult.error ||
-            "Booking confirmed, but the confirmation email could not be sent."
-        );
-
-        await loadBookings();
-        return;
-      }
-
-    setIsError(false);
+  if (!result?.databaseConfirmed) {
+    setIsError(true);
     setMessage(
-      shortNoticeBooking
-        ? "Booking confirmed and confirmation email sent. Full balance is now due."
-        : "Booking confirmed and deposit request email sent."
+      result?.error ||
+        "The confirmation service did not confirm the booking."
     );
 
     await loadBookings();
+    return;
   }
+
+  if (result.followUpRequired) {
+    setIsError(true);
+    setMessage(
+      result.message ||
+        "The booking was confirmed, but one or more calendar or email operations could not be completed."
+    );
+
+    await loadBookings();
+    return;
+  }
+
+  setIsError(false);
+  setMessage(
+    result.message ||
+      "Booking confirmed successfully."
+  );
+
+  await loadBookings();
+}
+
 
 async function cancelBooking(booking: BookingWithCustomer) {
   const confirmed = window.confirm(
