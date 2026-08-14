@@ -14,6 +14,10 @@ import {
   calculateBookingPricing,
 } from "@/lib/services/booking-confirmation-service";
 
+import {
+  buildBookingConfirmationEmailPayload,
+} from "@/lib/services/booking-payloads";
+
 import AdminPageLayout from "@/components/AdminPageLayout";
 import PageCard from "@/components/PageCard";
 import Button from "@/components/Buttons";
@@ -449,27 +453,37 @@ if (!calendarResponse.ok) {
 
 
 
-      const emailResponse = await fetch(
+const confirmationEmailPayload =
+  buildBookingConfirmationEmailPayload({
+    bookingReference:
+      booking.booking_reference,
+    customerEmail:
+      booking.customer?.email,
+    customerName:
+      getCustomerName(booking),
+    dogName:
+      booking.dogs?.name,
+    startDate:
+      booking.start_date,
+    endDate:
+      booking.end_date,
+    shortNoticeBooking,
+    pricing:
+      pricingResult,
+  });
+
+const emailResponse = await fetch(
   "/api/send-booking-confirmation-email",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          bookingReference: booking.booking_reference,
-          customerEmail: booking.customer?.email,
-          customerName: getCustomerName(booking),
-          dogName: formatName(booking.dogs?.name || "") || "your dog",
-          startDate: formatDisplayDate(booking.start_date),
-          endDate: formatDisplayDate(booking.end_date),
-          totalCost: formatMoney(pricingResult.totalCost),
-          depositAmount: formatMoney(pricingResult.depositAmount),
-          balanceAmount: formatMoney(pricingResult.balanceAmount),
-          shortNoticeBooking,
-        }),
-      }
-    );
+  {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(
+      confirmationEmailPayload
+    ),
+  }
+);
 
     if (!emailResponse.ok) {
       setIsError(true);

@@ -17,6 +17,13 @@ import {
   isWithinTwoWeeks,
   validateBookingDates,
 } from "@/lib/helpers";
+import {
+  calculateBookingPricing
+} from "@/lib/services/booking-confirmation-service";
+
+import {
+  buildBookingConfirmationEmailPayload,
+} from "@/lib/services/booking-payloads";
 
 import CustomerPageLayout from "@/components/CustomerPageLayout";
 import PageCard from "@/components/PageCard";
