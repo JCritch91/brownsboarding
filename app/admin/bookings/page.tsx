@@ -780,146 +780,67 @@ async function markBalancePaid(
 }
 
 async function autoCompleteEligibleBookings() {
-  const today = new Date().toISOString().split("T")[0];
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession();
 
-  const { data: eligibleBookings, error: loadError } = await supabase
-    .from("bookings")
-    .select(
-      `
-      id,
-      booking_reference,
-      owner_id,
-      start_date,
-      end_date,
-      status,
-      notes,
-      total_cost,
-      deposit_amount,
-      balance_amount,
-      dogs (
-        name,
-        breed
-      )
-      `
-    )
-    .eq("status", "Balance Paid")
-    .lt("end_date", today);
-
-  if (loadError) {
-    setIsError(true);
-    setMessage(loadError.message);
+  if (sessionError || !session) {
+    window.location.href = "/login";
     return;
   }
 
-  if (!eligibleBookings || eligibleBookings.length === 0) {
-    return;
-  }
+  let response: Response;
 
-  let calendarSyncFailures = 0;
-
-  for (const booking of eligibleBookings) {
-    const { error: bookingUpdateError } = await supabase
-      .from("bookings")
-      .update({
-        status: "Completed",
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", booking.id)
-      .eq("status", "Balance Paid");
-
-    if (bookingUpdateError) {
-      setIsError(true);
-      setMessage(bookingUpdateError.message);
-      return;
-    }
-
-    const { data: customerProfile, error: profileError } =
-      await supabase
-        .from("profiles")
-        .select("first_name, last_name, email")
-        .eq("id", booking.owner_id)
-        .maybeSingle();
-
-    if (profileError) {
-      calendarSyncFailures += 1;
-
-      console.error(
-        `Unable to load customer for booking ${booking.booking_reference}:`,
-        profileError.message
-      );
-
-      continue;
-    }
-
-    const customerName =
-      `${customerProfile?.first_name || ""} ${
-        customerProfile?.last_name || ""
-      }`.trim() ||
-      customerProfile?.email ||
-      "Customer";
-
-    const dogDetails = Array.isArray(booking.dogs)
-      ? booking.dogs[0]
-      : booking.dogs;
-
-    try {
-      const calendarResponse = await fetch(
-        "/api/google/update-booking-event",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            bookingId: booking.id,
-            bookingReference: booking.booking_reference,
-            ownerName: customerName,
-            ownerEmail: customerProfile?.email || null,
-            dogName: dogDetails?.name || "Dog",
-            dogBreed: dogDetails?.breed || null,
-            startDate: booking.start_date,
-            endDate: booking.end_date,
-            bookingStatus: "Completed",
-            paymentStatus: "Fully paid",
-            totalCost: formatMoney(
-              Number(booking.total_cost || 0)
-            ),
-            depositAmount: formatMoney(
-              Number(booking.deposit_amount || 0)
-            ),
-            balanceAmount: formatMoney(
-              Number(booking.balance_amount || 0)
-            ),
-            notes: booking.notes,
-          }),
-        }
-      );
-
-      if (!calendarResponse.ok) {
-        calendarSyncFailures += 1;
-
-        const calendarErrorText =
-          await calendarResponse.text();
-
-        console.error(
-          `Google Calendar completion update failed for ${booking.booking_reference}:`,
-          calendarErrorText
-        );
+  try {
+    response = await fetch(
+      "/api/admin/bookings/complete",
+      {
+        method: "POST",
+        headers: {
+          Authorization:
+            `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
       }
-    } catch (calendarError) {
-      calendarSyncFailures += 1;
-
-      console.error(
-        `Google Calendar completion update failed for ${booking.booking_reference}:`,
-        calendarError
-      );
-    }
-  }
-
-  if (calendarSyncFailures > 0) {
+    );
+  } catch (requestError) {
     setIsError(true);
     setMessage(
-      `${eligibleBookings.length} booking(s) were completed, but ${calendarSyncFailures} Google Calendar event(s) could not be updated.`
+      requestError instanceof Error
+        ? requestError.message
+        : "Unable to contact the booking completion service."
+    );
+    return;
+  }
+
+  const result = await response
+    .json()
+    .catch(() => null);
+
+  if (!response.ok) {
+    setIsError(true);
+    setMessage(
+      result?.error ||
+        "Eligible bookings could not be completed."
+    );
+    return;
+  }
+
+  if (result.followUpRequired) {
+    setIsError(true);
+    setMessage(
+      result.message ||
+        "Bookings were completed, but one or more Google Calendar events could not be updated."
+    );
+    return;
+  }
+
+  if (result.completed > 0) {
+    setIsError(false);
+    setMessage(
+      result.message ||
+        `${result.completed} booking(s) completed successfully.`
     );
   }
 }
