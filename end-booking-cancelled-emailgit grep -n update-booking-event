@@ -1,0 +1,26 @@
+[35mapp/admin/bookings/page.tsx[m[36m:[m[32m192[m[36m:[m      case "[1;31mCancelled[m":
+[35mapp/admin/bookings/page.tsx[m[36m:[m[32m216[m[36m:[m      case "[1;31mCancelled[m":
+[35mapp/admin/bookings/page.tsx[m[36m:[m[32m217[m[36m:[m        return "[1;31mCancelled[m";
+[35mapp/admin/bookings/page.tsx[m[36m:[m[32m399[m[36m:[m      status: "[1;31mCancelled[m",
+[35mapp/admin/bookings/page.tsx[m[36m:[m[32m440[m[36m:[m          bookingStatus: "[1;31mCancelled[m",
+[35mapp/admin/bookings/page.tsx[m[36m:[m[32m441[m[36m:[m          paymentStatus: "[1;31mCancelled[m",
+[35mapp/admin/bookings/page.tsx[m[36m:[m[32m1041[m[36m:[m    (booking) => booking.status === "[1;31mCancelled[m"
+[35mapp/admin/bookings/page.tsx[m[36m:[m[32m1278[m[36m:[m              [1;31mCancelled[m: {cancelledBookings.length}
+[35mapp/admin/bookings/page.tsx[m[36m:[m[32m1291[m[36m:[m            "[1;31mCancelled[m",
+[35mapp/admin/customers/[customerId]/page.tsx[m[36m:[m[32m567[m[36m:[m      case "[1;31mCancelled[m":
+[35mapp/admin/customers/[customerId]/page.tsx[m[36m:[m[32m592[m[36m:[m      case "[1;31mCancelled[m":
+[35mapp/admin/customers/[customerId]/page.tsx[m[36m:[m[32m593[m[36m:[m        return "[1;31mCancelled[m";
+[35mapp/admin/customers/[customerId]/page.tsx[m[36m:[m[32m605[m[36m:[m      booking.status !== "[1;31mCancelled[m" &&
+[35mapp/admin/customers/[customerId]/page.tsx[m[36m:[m[32m612[m[36m:[m      booking.status === "[1;31mCancelled[m" ||
+[35mapp/api/admin/bookings/cancel-booking/route.ts[m[36m:[m[32m130[m[36m:[m    if (booking.status === "[1;31mCancelled[m") {
+[35mapp/api/admin/bookings/cancel-booking/route.ts[m[36m:[m[32m255[m[36m:[m      status: "[1;31mCancelled[m",
+[35mapp/api/admin/bookings/cancel-booking/route.ts[m[36m:[m[32m321[m[36m:[m          bookingStatus: "[1;31mCancelled[m",
+[35mapp/api/admin/bookings/cancel-booking/route.ts[m[36m:[m[32m322[m[36m:[m          paymentStatus: "[1;31mCancelled[m",
+[35mapp/api/send-booking-cancelled-email/route.ts[m[36m:[m[32m59[m[36m:[m      "Booking [1;31mCancelled[m",
+[35mapp/my-bookings/page.tsx[m[36m:[m[32m153[m[36m:[m    case "[1;31mCancelled[m":
+[35mapp/my-bookings/page.tsx[m[36m:[m[32m154[m[36m:[m      return "[1;31mCancelled[m";
+[35mapp/my-bookings/page.tsx[m[36m:[m[32m178[m[36m:[m    case "[1;31mCancelled[m":
+[35mapp/my-bookings/page.tsx[m[36m:[m[32m189[m[36m:[m    return booking.end_date >= today && booking.status !== "[1;31mCancelled[m";
+[35mapp/my-bookings/page.tsx[m[36m:[m[32m195[m[36m:[m    return booking.end_date < today || booking.status === "[1;31mCancelled[m";
+[35mapp/my-bookings/page.tsx[m[36m:[m[32m456[m[36m:[m                          booking.status !== "[1;31mCancelled[m" && (
+[35mlib/google-calendar.ts[m[36m:[m[32m103[m[36m:[m  booking.bookingStatus === "[1;31mCancelled[m"
