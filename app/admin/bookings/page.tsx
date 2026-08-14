@@ -7,25 +7,8 @@ import {
   formatDisplayDate,
   formatMoney,
   formatName,
-  calculateNumberOfNights,
   isWithinTwoWeeks,
 } from "@/lib/helpers";
-import {
-  calculateBookingPricing,
-} from "@/lib/services/booking-confirmation-service";
-
-import {
-  buildBookingCalendarPayload,
-  buildBookingConfirmationEmailPayload,
-} from "@/lib/services/booking-payloads";
-
-import {
-  createBookingCalendarEvent,
-} from "@/lib/services/booking-calendar-service";
-
-import {
-  sendBookingConfirmationNotification,
-} from "@/lib/services/booking-notification-service";
 
 import {
   adjustBookingAvailability,

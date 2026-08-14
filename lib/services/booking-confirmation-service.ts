@@ -3,14 +3,6 @@ export type BookingConfirmationResult = {
   error?: string;
 };
 
-export async function confirmBooking(
-  bookingId: string
-): Promise<BookingConfirmationResult> {
-  return {
-    success: true,
-  };
-}
-
 export type BookingPricingResult = {
   numberOfNights: number;
   totalCost: number;

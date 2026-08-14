@@ -13,10 +13,16 @@ export async function GET() {
     const endDate = dayAfterTomorrow.toISOString().split("T")[0];
 
     const event = await createGoogleBookingEvent({
+      bookingId: "test-booking",
+      bookingReference: "TEST-001",
+      ownerName: "Browns Boarding",
+      ownerEmail: null,
       dogName: "Calendar Test",
-      customerName: "Browns Boarding",
+      dogBreed: null,
       startDate,
       endDate,
+      bookingStatus: "Test",
+      paymentStatus: "Test",
       notes: "Test event created by the Browns Boarding website.",
     });
 

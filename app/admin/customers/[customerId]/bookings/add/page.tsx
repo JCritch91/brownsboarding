@@ -18,7 +18,6 @@ import {
   formatDateForDatabase,
   formatDisplayDate,
   formatName,
-  formatMoney,
   getDatesInRange,
   isWithinTwoWeeks,
   validateBookingDates,
@@ -600,13 +599,6 @@ async function handleBooking(
     bookingMode === "confirmed" &&
     isWithinTwoWeeks(startDate);
 
-  const initialStatus =
-    bookingMode === "confirmed"
-      ? shortNoticeBooking
-        ? "Balance Pending"
-        : "Deposit Pending"
-      : "Pending";
-
   const numberOfNights = calculateNumberOfNights(
     startDate,
     endDate
@@ -624,11 +616,6 @@ async function handleBooking(
       ? shortNoticeBooking
         ? 0
         : totalCost * (depositPercentage / 100)
-      : null;
-
-  const balanceAmount =
-    totalCost !== null && depositAmount !== null
-      ? totalCost - depositAmount
       : null;
 
 setSaving(true);

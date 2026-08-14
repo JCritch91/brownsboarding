@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import AuthLayout from "@/components/AuthLayout";
 import Button from "@/components/Buttons"
+import LoadingScreen from "@/components/LoadingScreen";
 
-export default function ActivateAccountPage() {
+function ActivatePageContent() {
   const searchParams = useSearchParams();
   const [expiredToken, setExpiredToken] = useState(false);
 
@@ -141,5 +142,17 @@ if (!response.ok) {
         </>
         )}
     </AuthLayout>
+  );
+}
+
+export default function ActivatePage() {
+  return (
+    <Suspense
+      fallback={
+        <LoadingScreen message="Loading account activation..." />
+      }
+    >
+      <ActivatePageContent />
+    </Suspense>
   );
 }
