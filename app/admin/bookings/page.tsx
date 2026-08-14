@@ -20,6 +20,10 @@ import {
 } from "@/lib/services/booking-payloads";
 
 import {
+  createBookingCalendarEvent,
+} from "@/lib/services/booking-calendar-service";
+
+import {
   sendBookingConfirmationNotification,
 } from "@/lib/services/booking-notification-service";
 
@@ -365,91 +369,56 @@ export default function AdminBookingsPage() {
             pricingResult,
         });
 
-      const calendarResponse = await fetch(
-        "/api/google/create-booking-event",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(
-            bookingCalendarPayload
-          ),
-        }
-      );
-
-if (!calendarResponse.ok) {
-  const calendarErrorText = await calendarResponse.text();
-
-  console.error(
-    "Google Calendar error status:",
-    calendarResponse.status
-  );
-
-  console.error(
-    "Google Calendar error response:",
-    calendarErrorText
-  );
-
-  let calendarErrorMessage =
-    "Booking confirmed, but the Google Calendar event could not be created.";
-
-  try {
-    const calendarError = JSON.parse(calendarErrorText);
-
-    if (calendarError.error) {
-      calendarErrorMessage = calendarError.error;
-    }
-  } catch {
-    if (calendarErrorText) {
-      calendarErrorMessage = calendarErrorText;
-    }
-  }
-
-  setIsError(true);
-  setMessage(calendarErrorMessage);
-
-  await loadBookings();
-  return;
-}
-
-
-
-
-const confirmationEmailPayload =
-  buildBookingConfirmationEmailPayload({
-    bookingReference:
-      booking.booking_reference,
-    customerEmail:
-      booking.customer?.email,
-    customerName:
-      getCustomerName(booking),
-    dogName:
-      booking.dogs?.name,
-    startDate:
-      booking.start_date,
-    endDate:
-      booking.end_date,
-    shortNoticeBooking,
-    pricing:
-      pricingResult,
-  });
-
-  const emailResult =
-    await sendBookingConfirmationNotification(
-      confirmationEmailPayload
+  const calendarResult =
+    await createBookingCalendarEvent(
+      bookingCalendarPayload
     );
 
-  if (!emailResult.success) {
+  if (!calendarResult.success) {
     setIsError(true);
     setMessage(
-      emailResult.error ||
-        "Booking confirmed, but the confirmation email could not be sent."
+      calendarResult.error ||
+        "Booking confirmed, but the Google Calendar event could not be created."
     );
 
     await loadBookings();
     return;
   }
+
+    const confirmationEmailPayload =
+      buildBookingConfirmationEmailPayload({
+        bookingReference:
+          booking.booking_reference,
+        customerEmail:
+          booking.customer?.email,
+        customerName:
+          getCustomerName(booking),
+        dogName:
+          booking.dogs?.name,
+        startDate:
+          booking.start_date,
+        endDate:
+          booking.end_date,
+        shortNoticeBooking,
+        pricing:
+          pricingResult,
+      });
+
+      const emailResult =
+        await sendBookingConfirmationNotification(
+          confirmationEmailPayload
+        );
+
+      if (!emailResult.success) {
+        setIsError(true);
+        setMessage(
+          emailResult.error ||
+            "Booking confirmed, but the confirmation email could not be sent."
+        );
+
+        await loadBookings();
+        return;
+      }
 
     setIsError(false);
     setMessage(
