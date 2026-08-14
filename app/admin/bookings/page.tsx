@@ -426,36 +426,6 @@ async function cancelBooking(
   await loadBookings();
 }
 
-  async function recordPayment(
-    booking: BookingWithCustomer,
-    paymentType: string,
-    amount: number,
-    paymentDate: string
-  ) {
-    const { data, error } = await supabase
-      .from("payments")
-      .insert({
-        booking_id: booking.id,
-        owner_id: booking.owner_id,
-        dog_id: booking.dog_id,
-        amount,
-        payment_type: paymentType,
-        payment_date: paymentDate,
-        notes: `${paymentType} payment recorded for ${
-          formatName(booking.dogs?.name || "") || "dog"
-        }`,
-        updated_at: new Date().toISOString(),
-      })
-      .select("id, invoice_number")
-      .single();
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    return data;
-  }
-
 async function markDepositPaid(
   booking: BookingWithCustomer
 ) {
