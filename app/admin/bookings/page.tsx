@@ -10,9 +10,6 @@ import {
   isWithinTwoWeeks,
 } from "@/lib/helpers";
 
-import {
-  adjustBookingAvailability,
-} from "@/lib/services/booking-availability-service";
 
 import AdminPageLayout from "@/components/AdminPageLayout";
 import PageCard from "@/components/PageCard";
@@ -221,38 +218,6 @@ export default function AdminBookingsPage() {
     }
   }
 
-  async function adjustAvailabilityForBooking(
-    booking: BookingWithCustomer,
-    change: number
-  ) {
-    const result = await adjustBookingAvailability(
-      {
-        startDate: booking.start_date,
-        endDate: booking.end_date,
-      },
-      change
-    );
-
-    if (!result.success) {
-      setIsError(true);
-      setMessage(
-        result.error ||
-          "Unable to update booking availability."
-      );
-
-      for (const failure of result.syncFailures) {
-        console.error(
-          `Availability calendar sync failed for ${failure.date}:`,
-          failure.error
-        );
-      }
-
-      return false;
-    }
-
-    return true;
-  }
-
   async function confirmBooking(
   booking: BookingWithCustomer
 ) {
@@ -360,139 +325,102 @@ console.log("Confirm Booking clicked:", booking);
 }
 
 
-async function cancelBooking(booking: BookingWithCustomer) {
+async function cancelBooking(
+  booking: BookingWithCustomer
+) {
   const confirmed = window.confirm(
-    "Are you sure you want to cancel this booking?"
+    `Are you sure you want to cancel booking ${booking.booking_reference}?\n\n${
+      booking.status === "Pending"
+        ? "This Pending booking has not reduced availability."
+        : "Availability will be restored for each occupied night."
+    }`
   );
 
-  if (!confirmed) return;
-
-  setMessage("");
-
-  await fetch("/api/send-booking-cancelled-email", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      bookingReference: booking.booking_reference,
-      customerEmail: booking.customer?.email,
-      customerName: getCustomerName(booking),
-      dogName:
-        formatName(booking.dogs?.name || "") || "your dog",
-      startDate: formatDisplayDate(booking.start_date),
-      endDate: formatDisplayDate(booking.end_date),
-    }),
-  });
-
-  setIsError(false);
-
-  const shouldRestoreAvailability = [
-    "Deposit Pending",
-    "Balance Pending",
-    "Balance Paid",
-  ].includes(booking.status);
-
-  const { error } = await supabase
-    .from("bookings")
-    .update({
-      status: "Cancelled",
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", booking.id);
-
-  if (error) {
-    setIsError(true);
-    setMessage(error.message);
+  if (!confirmed) {
     return;
   }
 
-  if (shouldRestoreAvailability) {
-    const availabilityUpdated = await adjustAvailabilityForBooking(
-      booking,
-      1
-    );
+  setMessage("");
+  setIsError(false);
 
-    if (!availabilityUpdated) {
-      await loadBookings();
-      return;
-    }
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession();
 
-    const calendarResponse = await fetch(
-      "/api/google/update-booking-event",
+  if (sessionError || !session) {
+    window.location.href = "/login";
+    return;
+  }
+
+  let response: Response;
+
+  try {
+    response = await fetch(
+      "/api/bookings/cancel",
       {
         method: "POST",
         headers: {
+          Authorization:
+            `Bearer ${session.access_token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           bookingId: booking.id,
-          bookingReference: booking.booking_reference,
-          ownerName: getCustomerName(booking),
-          ownerEmail: booking.customer?.email || null,
-          dogName:
-            formatName(booking.dogs?.name || "") || "Dog",
-          dogBreed: booking.dogs?.breed
-            ? formatName(booking.dogs.breed)
-            : null,
-          startDate: booking.start_date,
-          endDate: booking.end_date,
-          bookingStatus: "Cancelled",
-          paymentStatus: "Cancelled",
-          totalCost: formatMoney(
-            Number(booking.total_cost || 0)
-          ),
-          depositAmount: formatMoney(
-            Number(booking.deposit_amount || 0)
-          ),
-          balanceAmount: formatMoney(
-            Number(booking.balance_amount || 0)
-          ),
-          notes: booking.notes,
         }),
       }
     );
+  } catch (requestError) {
+    setIsError(true);
+    setMessage(
+      requestError instanceof Error
+        ? requestError.message
+        : "Unable to contact the booking cancellation service."
+    );
+    return;
+  }
 
-    if (!calendarResponse.ok) {
-      const calendarErrorText =
-        await calendarResponse.text();
+  const result = await response
+    .json()
+    .catch(() => null);
 
-      console.error(
-        "Google Calendar cancellation update error:",
-        calendarErrorText
-      );
+  if (!response.ok) {
+    setIsError(true);
+    setMessage(
+      result?.error ||
+        "The booking could not be cancelled."
+    );
 
-      let calendarErrorMessage =
-        "Booking cancelled and availability restored, but the Google Calendar event could not be updated.";
+    await loadBookings();
+    return;
+  }
 
-      try {
-        const calendarError = JSON.parse(
-          calendarErrorText
-        );
+  if (!result?.databaseCancelled) {
+    setIsError(true);
+    setMessage(
+      result?.error ||
+        "The cancellation service did not cancel the booking."
+    );
 
-        if (calendarError.error) {
-          calendarErrorMessage = calendarError.error;
-        }
-      } catch {
-        if (calendarErrorText) {
-          calendarErrorMessage = calendarErrorText;
-        }
-      }
+    await loadBookings();
+    return;
+  }
 
-      setIsError(true);
-      setMessage(calendarErrorMessage);
+  if (result.followUpRequired) {
+    setIsError(true);
+    setMessage(
+      result.message ||
+        "The booking was cancelled, but one or more calendar or email operations could not be completed."
+    );
 
-      await loadBookings();
-      return;
-    }
+    await loadBookings();
+    return;
   }
 
   setIsError(false);
-
   setMessage(
-    shouldRestoreAvailability
-      ? "Booking cancelled, availability restored, and Google Calendar updated."
-      : "Pending booking cancelled."
+    result.message ||
+      "Booking cancelled successfully."
   );
 
   await loadBookings();
