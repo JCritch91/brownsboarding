@@ -16,51 +16,27 @@ import PageCard from "@/components/PageCard";
 import Button from "@/components/Buttons";
 import MessageBox from "@/components/MessageBox";
 import LoadingScreen from "@/components/LoadingScreen";
+import {
+  BOOKING_STATUSES,
+  type Booking,
+  type BookingCustomerSummary,
+  type BookingFilter,
+  type BookingWithCustomer,
+} from "@/types/booking";
 
-type Booking = {
-  id: string;
-  booking_reference: string;
-  owner_id: string;
-  dog_id: string;
-  start_date: string;
-  end_date: string;
-  status: string;
-  notes: string | null;
-  created_at: string;
-
-  pricing_setting_id: string | null;
-  nightly_rate: number | null;
-  number_of_nights: number | null;
-  total_cost: number | null;
-  deposit_amount: number | null;
-  balance_amount: number | null;
-
-  deposit_paid_at: string | null;
-  balance_paid_at: string | null;
-
-  dogs: {
-    name: string;
-    breed: string | null;
-  } | null;
-};
-
-type CustomerProfile = {
-  id: string;
-  first_name: string | null;
-  last_name: string | null;
-  email: string | null;
-};
-
-type BookingWithCustomer = Booking & {
-  customer?: CustomerProfile | null;
-};
 
 export default function AdminBookingsPage() {
-  const [loading, setLoading] = useState(true);
-  const [bookings, setBookings] = useState<BookingWithCustomer[]>([]);
-  const [message, setMessage] = useState("");
-  const [isError, setIsError] = useState(false);
-  const [selectedFilter, setSelectedFilter] = useState("All");
+const [loading, setLoading] = useState(true);
+
+const [bookings, setBookings] =
+  useState<BookingWithCustomer[]>([]);
+
+const [message, setMessage] = useState("");
+const [isError, setIsError] = useState(false);
+
+const [selectedFilter, setSelectedFilter] =
+  useState<BookingFilter>("All");
+
 
   useEffect(() => {
     checkAdminAndLoadBookings();
@@ -129,7 +105,7 @@ export default function AdminBookingsPage() {
       new Set(bookingData.map((booking) => booking.owner_id))
     );
 
-    let profiles: CustomerProfile[] = [];
+    let profiles: BookingCustomerSummary[] = [];
 
     if (ownerIds.length > 0) {
       const { data: profileData, error: profileLoadError } = await supabase
@@ -221,8 +197,6 @@ export default function AdminBookingsPage() {
   async function confirmBooking(
   booking: BookingWithCustomer
 ) {
-
-console.log("Confirm Booking clicked:", booking);
 
   const shortNoticeBooking = isWithinTwoWeeks(
     booking.start_date
@@ -727,12 +701,6 @@ async function markBalancePaid(
     .json()
     .catch(() => null);
 
-    console.log(
-  "Record payment response:",
-  response.status,
-  result
-);
-
   if (!response.ok) {
     setIsError(true);
     setMessage(
@@ -1109,15 +1077,8 @@ async function autoCompleteEligibleBookings() {
         </div>
 
         <div className="mt-5 md:mt-8 flex flex-wrap gap-2 md:gap-3">
-          {[
-            "All",
-            "Pending",
-            "Deposit Pending",
-            "Balance Pending",
-            "Balance Paid",
-            "Completed",
-            "Cancelled",
-          ].map((filter) => (
+          {(["All", ...BOOKING_STATUSES] as BookingFilter[]).map(
+            (filter) => (
             <button
               key={filter}
               type="button"
