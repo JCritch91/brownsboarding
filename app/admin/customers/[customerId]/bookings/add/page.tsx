@@ -631,269 +631,153 @@ async function handleBooking(
       ? totalCost - depositAmount
       : null;
 
-  setSaving(true);
+setSaving(true);
 
-  const { data: bookingData, error: bookingError } =
-    await supabase
-      .from("bookings")
-      .insert({
-        owner_id: customerId,
-        dog_id: selectedDog,
-        start_date: startDate,
-        end_date: endDate,
-        status: initialStatus,
-        notes: notes.trim() || null,
+const {
+  data: { session },
+  error: sessionError,
+} = await supabase.auth.getSession();
 
-        pricing_setting_id:
-          bookingMode === "confirmed"
-            ? pricingSettingId
-            : null,
+if (sessionError || !session) {
+  setSaving(false);
+  window.location.href = "/login";
+  return;
+}
 
-        nightly_rate:
-          bookingMode === "confirmed"
-            ? nightlyRate
-            : null,
+/*
+ * Every admin-created booking begins as Pending.
+ *
+ * If Confirm Immediately is selected, the secure
+ * confirmation route will apply pricing, reduce
+ * availability, update calendars and send email.
+ */
+const {
+  data: newBooking,
+  error: bookingCreateError,
+} = await supabase
+  .from("bookings")
+  .insert({
+    owner_id: customerId,
+    dog_id: selectedDog,
+    start_date: startDate,
+    end_date: endDate,
+    status: "Pending",
+    notes: notes.trim() || null,
+    updated_at: new Date().toISOString(),
+  })
+  .select(
+    `
+    id,
+    booking_reference
+    `
+  )
+  .single();
 
-        number_of_nights:
-          bookingMode === "confirmed"
-            ? numberOfNights
-            : null,
+if (bookingCreateError || !newBooking) {
+  setSaving(false);
+  setIsError(true);
+  setMessage(
+    bookingCreateError?.message ||
+      "Unable to create the booking."
+  );
+  return;
+}
 
-        total_cost: totalCost,
-        deposit_amount: depositAmount,
-        balance_amount: balanceAmount,
-
-        updated_at: new Date().toISOString(),
-      })
-      .select(
-        `
-        id,
-        booking_reference
-        `
-      )
-      .single();
-
-  if (bookingError || !bookingData) {
-    setSaving(false);
-    setIsError(true);
-    setMessage(
-      bookingError?.message ||
-        "Unable to create the booking."
-    );
-    return;
-  }
-
-  if (bookingMode === "confirmed") {
-    const { error: availabilityError } =
-      await supabase.rpc(
-        "adjust_availability_for_booking",
-        {
-          p_start_date: startDate,
-          p_end_date: endDate,
-          p_change: -1,
-        }
-      );
-
-    if (availabilityError) {
-      await supabase
-        .from("bookings")
-        .delete()
-        .eq("id", bookingData.id);
-
-      setSaving(false);
-      setIsError(true);
-      setMessage(
-        `The booking could not be confirmed because availability could not be updated: ${availabilityError.message}`
-      );
-      return;
-    }
-
-    const { data: updatedAvailability, error: loadError } =
-      await supabase
-        .from("availability")
-        .select(
-          `
-          id,
-          date,
-          available,
-          total_spaces,
-          spaces_available,
-          notes
-          `
-        )
-        .gte("date", startDate)
-        .lt("date", endDate)
-        .order("date", { ascending: true });
-
-    if (loadError) {
-      setSaving(false);
-      setIsError(true);
-      setMessage(
-        `The booking was confirmed, but the updated availability dates could not be loaded: ${loadError.message}`
-      );
-      return;
-    }
-
-    let availabilityCalendarFailures = 0;
-
-    for (const availabilityRecord of updatedAvailability || []) {
-      try {
-        const calendarResponse = await fetch(
-          "/api/google/sync-availability-event",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              availabilityId: availabilityRecord.id,
-              date: availabilityRecord.date,
-              available: availabilityRecord.available,
-              totalSpaces:
-                availabilityRecord.total_spaces,
-              spacesAvailable:
-                availabilityRecord.spaces_available,
-              notes: availabilityRecord.notes,
-            }),
-          }
-        );
-
-        if (!calendarResponse.ok) {
-          availabilityCalendarFailures += 1;
-
-          console.error(
-            `Availability calendar sync failed for ${availabilityRecord.date}:`,
-            await calendarResponse.text()
-          );
-        }
-      } catch (calendarError) {
-        availabilityCalendarFailures += 1;
-
-        console.error(
-          `Availability calendar sync failed for ${availabilityRecord.date}:`,
-          calendarError
-        );
-      }
-    }
-
-    const paymentStatus = shortNoticeBooking
-      ? "Full balance due"
-      : "Deposit due";
-
-    const bookingCalendarResponse = await fetch(
-      "/api/google/create-booking-event",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          bookingId: bookingData.id,
-          bookingReference:
-            bookingData.booking_reference,
-          ownerName: getCustomerName(),
-          ownerEmail: customer.email || null,
-          dogName: formatName(dog.name) || "Dog",
-          dogBreed: dog.breed
-            ? formatName(dog.breed)
-            : null,
-          startDate,
-          endDate,
-          bookingStatus: initialStatus,
-          paymentStatus,
-          totalCost:
-            totalCost !== null
-              ? formatMoney(totalCost)
-              : null,
-          depositAmount:
-            depositAmount !== null
-              ? formatMoney(depositAmount)
-              : null,
-          balanceAmount:
-            balanceAmount !== null
-              ? formatMoney(balanceAmount)
-              : null,
-          notes: notes.trim() || null,
-        }),
-      }
-    );
-
-    if (!bookingCalendarResponse.ok) {
-      setSaving(false);
-
-      const calendarErrorText =
-        await bookingCalendarResponse.text();
-
-      console.error(
-        "Google booking calendar creation failed:",
-        calendarErrorText
-      );
-
-      setIsError(true);
-      setMessage(
-        "The booking was confirmed and availability was reduced, but the Google booking event could not be created."
-      );
-      return;
-    }
-
-    const emailResponse = await fetch(
-      "/api/send-booking-confirmation-email",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          bookingReference:
-            bookingData.booking_reference,
-          customerEmail: customer.email,
-          customerName: getCustomerName(),
-          dogName:
-            formatName(dog.name) || "your dog",
-          startDate:
-            formatDisplayDate(startDate),
-          endDate:
-            formatDisplayDate(endDate),
-          totalCost:
-            totalCost !== null
-              ? formatMoney(totalCost)
-              : null,
-          depositAmount:
-            depositAmount !== null
-              ? formatMoney(depositAmount)
-              : null,
-          balanceAmount:
-            balanceAmount !== null
-              ? formatMoney(balanceAmount)
-              : null,
-          shortNoticeBooking,
-        }),
-      }
-    );
-
-    if (!emailResponse.ok) {
-      setSaving(false);
-      setIsError(true);
-      setMessage(
-        "The booking was confirmed and added to Google Calendar, but the confirmation email could not be sent."
-      );
-      return;
-    }
-
-    if (availabilityCalendarFailures > 0) {
-      setSaving(false);
-      setIsError(true);
-      setMessage(
-        `The booking was confirmed, but ${availabilityCalendarFailures} availability calendar event(s) could not be updated.`
-      );
-      return;
-    }
-  }
-
+/*
+ * Pending mode stops here. No availability,
+ * calendar or email operations are performed.
+ */
+if (bookingMode === "pending") {
   setSaving(false);
 
   window.location.href =
     `/admin/customers/${customerId}`;
+
+  return;
+}
+
+/*
+ * Confirm Immediately uses the same secure route
+ * as the Confirm Booking button on Admin Bookings.
+ */
+let confirmationResponse: Response;
+
+try {
+  confirmationResponse = await fetch(
+    "/api/admin/bookings/confirm",
+    {
+      method: "POST",
+      headers: {
+        Authorization:
+          `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        bookingId: newBooking.id,
+      }),
+    }
+  );
+} catch (requestError) {
+  setSaving(false);
+  setIsError(true);
+  setMessage(
+    requestError instanceof Error
+      ? `The booking was created as Pending, but the confirmation service could not be contacted: ${requestError.message}`
+      : "The booking was created as Pending, but the confirmation service could not be contacted."
+  );
+  return;
+}
+
+const confirmationResult =
+  await confirmationResponse
+    .json()
+    .catch(() => null);
+
+/*
+ * A failed confirmation leaves the newly created
+ * booking as Pending. It can safely be confirmed
+ * later from Admin Bookings.
+ */
+if (!confirmationResponse.ok) {
+  setSaving(false);
+  setIsError(true);
+  setMessage(
+    confirmationResult?.error
+      ? `The booking was created as Pending, but it could not be confirmed: ${confirmationResult.error}`
+      : "The booking was created as Pending, but it could not be confirmed."
+  );
+  return;
+}
+
+if (!confirmationResult?.databaseConfirmed) {
+  setSaving(false);
+  setIsError(true);
+  setMessage(
+    confirmationResult?.error ||
+      "The booking was created as Pending, but the confirmation service did not confirm it."
+  );
+  return;
+}
+
+/*
+ * HTTP 207 is still a successful database
+ * confirmation, but one or more calendar or email
+ * follow-up operations failed.
+ */
+if (confirmationResult.followUpRequired) {
+  setSaving(false);
+  setIsError(true);
+  setMessage(
+    confirmationResult.message ||
+      "The booking was confirmed, but one or more calendar or email operations could not be completed."
+  );
+  return;
+}
+
+setSaving(false);
+
+window.location.href =
+  `/admin/customers/${customerId}`;
 }
 
     const projectedNights =
