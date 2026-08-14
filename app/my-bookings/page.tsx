@@ -37,6 +37,7 @@ export default function MyBookingsPage() {
   const [loading, setLoading] = useState(true);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [message, setMessage] = useState("");
+  const [isError, setIsError] = useState(false);
 
   useEffect(() => {
     loadBookings();
@@ -205,29 +206,20 @@ function getStatusStyle(status: string) {
 }
 
 async function cancelBooking(booking: Booking) {
-  const today = new Date();
-  const arrival = new Date(`${booking.start_date}T00:00:00`);
-
-  const daysUntilArrival = Math.ceil(
-    (arrival.getTime() - today.getTime()) /
-      (1000 * 60 * 60 * 24)
+  const confirmed = window.confirm(
+    `Are you sure you want to cancel booking ${booking.booking_reference}?\n\n${
+      booking.status === "Pending"
+        ? "This booking request has not yet reduced availability."
+        : "The reserved availability will be restored."
+    }`
   );
 
-  let confirmed = false;
-
-  if (daysUntilArrival < 14) {
-    confirmed = window.confirm(
-      "This booking starts within 14 days.\n\nAs per the Browns Boarding cancellation policy, your deposit will be forfeited if you proceed.\n\nDo you still wish to cancel this booking?"
-    );
-  } else {
-    confirmed = window.confirm(
-      `Are you sure you want to cancel booking ${booking.booking_reference}?`
-    );
+  if (!confirmed) {
+    return;
   }
 
-  if (!confirmed) return;
-
   setMessage("");
+  setIsError(false);
 
   const {
     data: { session },
@@ -239,39 +231,79 @@ async function cancelBooking(booking: Booking) {
     return;
   }
 
-  const cancellationResponse = await fetch(
-    "/api/bookings/cancel-booking",
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        bookingId: booking.id,
-      }),
-    }
-  );
+  let response: Response;
 
-  const cancellationResult = await cancellationResponse
-    .json()
-    .catch(() => null);
-
-  if (!cancellationResponse.ok) {
+  try {
+    response = await fetch(
+      "/api/bookings/cancel",
+      {
+        method: "POST",
+        headers: {
+          Authorization:
+            `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          bookingId: booking.id,
+        }),
+      }
+    );
+  } catch (requestError) {
+    setIsError(true);
     setMessage(
-      cancellationResult?.error ||
-        "Unable to cancel the booking."
+      requestError instanceof Error
+        ? requestError.message
+        : "Unable to contact the booking cancellation service."
     );
     return;
   }
 
+  const result = await response
+    .json()
+    .catch(() => null);
+
+  if (!response.ok) {
+    setIsError(true);
+    setMessage(
+      result?.error ||
+        "The booking could not be cancelled."
+    );
+
+    await loadBookings();
+    return;
+  }
+
+  if (!result?.databaseCancelled) {
+    setIsError(true);
+    setMessage(
+      result?.error ||
+        "The cancellation service did not cancel the booking."
+    );
+
+    await loadBookings();
+    return;
+  }
+
+  if (result.followUpRequired) {
+    setIsError(true);
+    setMessage(
+      result.message ||
+        "The booking was cancelled, but one or more calendar or email operations could not be completed."
+    );
+
+    await loadBookings();
+    return;
+  }
+
+  setIsError(false);
   setMessage(
-    cancellationResult?.message ||
-      "Booking cancelled successfully."
+    result.message ||
+      "Your booking has been cancelled successfully."
   );
 
   await loadBookings();
 }
+
 
   const upcomingBookings = bookings.filter(isUpcomingOrCurrent);
   const historicBookings = bookings.filter(isHistoric);
