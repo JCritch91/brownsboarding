@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+
 import {
   getDatesInRange,
+  isWithinTwoWeeks,
   validateBookingDates,
 } from "@/lib/helpers";
 
@@ -9,14 +11,15 @@ import {
   calculateBookingPricing,
 } from "@/lib/services/booking-confirmation-service";
 
+import {
+  buildBookingCalendarPayload,
+  buildBookingConfirmationEmailPayload,
+} from "@/lib/services/booking-payloads";
+
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
-
-import {
-  buildBookingCalendarPayload,
-} from "@/lib/services/booking-payloads";
 
 type AvailabilityCalendarFailure = {
   date: string;
@@ -96,8 +99,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const body = await request.json();
-    const bookingId = body.bookingId;
+    const body = (await request.json()) as {
+      bookingId?: unknown;
+    };
+
+const bookingId = body.bookingId;
 
     if (
       typeof bookingId !== "string" ||
@@ -760,8 +766,9 @@ const availabilityCalendarSynced =
   customer.email ||
   "Customer";
 
-const shortNoticeBooking =
-  pricingResult.depositAmount === 0;
+const shortNoticeBooking = isWithinTwoWeeks(
+  booking.start_date
+);
 
 const paymentStatus = shortNoticeBooking
   ? "Full balance due"
@@ -836,16 +843,104 @@ try {
   );
 }
 
+const confirmationEmailPayload =
+  buildBookingConfirmationEmailPayload({
+    bookingReference:
+      booking.booking_reference,
+    customerEmail:
+      customer.email,
+    customerName,
+    dogName:
+      dog.name,
+    startDate:
+      booking.start_date,
+    endDate:
+      booking.end_date,
+    shortNoticeBooking,
+    pricing:
+      pricingResult,
+  });
 
-const calendarFollowUpRequired =
+let confirmationEmailSent = false;
+let confirmationEmailError: string | null =
+  null;
+
+if (!customer.email) {
+  confirmationEmailError =
+    "The customer does not have an email address.";
+} else {
+  try {
+    const emailResponse = await fetch(
+      `${requestOrigin}/api/send-booking-confirmation-email`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(
+          confirmationEmailPayload
+        ),
+      }
+    );
+
+    if (!emailResponse.ok) {
+      const responseText =
+        await emailResponse.text();
+
+      confirmationEmailError =
+        responseText ||
+        "The confirmation email route returned an unsuccessful response.";
+
+      console.error(
+        `Booking confirmation email failed for ${booking.booking_reference}:`,
+        confirmationEmailError
+      );
+    } else {
+      confirmationEmailSent = true;
+    }
+  } catch (emailError) {
+    confirmationEmailError =
+      emailError instanceof Error
+        ? emailError.message
+        : "Unknown booking confirmation email error.";
+
+    console.error(
+      `Booking confirmation email failed for ${booking.booking_reference}:`,
+      emailError
+    );
+  }
+}
+
+const followUpRequired =
   !availabilityCalendarSynced ||
-  !bookingCalendarCreated;
+  !bookingCalendarCreated ||
+  !confirmationEmailSent;
+
+const failedOperations: string[] = [];
+
+if (!availabilityCalendarSynced) {
+  failedOperations.push(
+    `${availabilityCalendarFailures.length} availability calendar event(s)`
+  );
+}
+
+if (!bookingCalendarCreated) {
+  failedOperations.push(
+    "the Google booking calendar event"
+  );
+}
+
+if (!confirmationEmailSent) {
+  failedOperations.push(
+    "the customer confirmation email"
+  );
+}
 
 return NextResponse.json(
   {
     success: true,
     databaseConfirmed: true,
-    followUpRequired: true,
+    followUpRequired,
 
     booking: {
       id: booking.id,
@@ -913,18 +1008,21 @@ return NextResponse.json(
     },
 
     email: {
-      sent: false,
-      required: true,
+      sent:
+        confirmationEmailSent,
+      error:
+        confirmationEmailError,
     },
 
-    message:
-      calendarFollowUpRequired
-        ? "The booking was confirmed, but one or more Google Calendar operations could not be completed."
-        : "The booking was confirmed and both Google calendars were updated. The confirmation email is still required.",
+    message: followUpRequired
+      ? `The booking was confirmed, but the following operation(s) could not be completed: ${failedOperations.join(
+          ", "
+        )}.`
+      : "The booking was confirmed successfully, both Google calendars were updated and the confirmation email was sent.",
   },
   {
     status:
-      calendarFollowUpRequired
+      followUpRequired
         ? 207
         : 200,
   }
