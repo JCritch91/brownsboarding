@@ -20,6 +20,10 @@ import {
 } from "@/lib/services/booking-payloads";
 
 import {
+  sendBookingConfirmationNotification,
+} from "@/lib/services/booking-notification-service";
+
+import {
   adjustBookingAvailability,
 } from "@/lib/services/booking-availability-service";
 
@@ -431,28 +435,21 @@ const confirmationEmailPayload =
       pricingResult,
   });
 
-const emailResponse = await fetch(
-  "/api/send-booking-confirmation-email",
-  {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(
+  const emailResult =
+    await sendBookingConfirmationNotification(
       confirmationEmailPayload
-    ),
-  }
-);
+    );
 
-    if (!emailResponse.ok) {
-      setIsError(true);
-      setMessage(
+  if (!emailResult.success) {
+    setIsError(true);
+    setMessage(
+      emailResult.error ||
         "Booking confirmed, but the confirmation email could not be sent."
-      );
+    );
 
-      await loadBookings();
-      return;
-    }
+    await loadBookings();
+    return;
+  }
 
     setIsError(false);
     setMessage(
