@@ -14,6 +14,15 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+import {
+  buildBookingCalendarPayload,
+} from "@/lib/services/booking-payloads";
+
+type AvailabilityCalendarFailure = {
+  date: string;
+  error: string;
+};
+
 export async function POST(request: Request) {
   try {
     const authorizationHeader =
@@ -666,60 +675,261 @@ if (updatedAvailabilityError) {
   );
 }
 
-return NextResponse.json({
-  success: true,
-  databaseConfirmed: true,
-  followUpRequired: true,
-  booking: {
-    id: booking.id,
+const availabilityCalendarFailures:
+  AvailabilityCalendarFailure[] = [];
+
+let availabilityCalendarSyncedDates = 0;
+
+const requestOrigin =
+  new URL(request.url).origin;
+
+for (
+  const availabilityRecord of
+    updatedAvailability || []
+) {
+  try {
+    const calendarResponse = await fetch(
+      `${requestOrigin}/api/google/sync-availability-event`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          availabilityId:
+            availabilityRecord.id,
+          date:
+            availabilityRecord.date,
+          available:
+            availabilityRecord.available,
+          totalSpaces:
+            availabilityRecord.total_spaces,
+          spacesAvailable:
+            availabilityRecord.spaces_available,
+          notes:
+            availabilityRecord.notes,
+        }),
+      }
+    );
+
+    if (!calendarResponse.ok) {
+      const calendarErrorText =
+        await calendarResponse.text();
+
+      availabilityCalendarFailures.push({
+        date: availabilityRecord.date,
+        error:
+          calendarErrorText ||
+          "Google Calendar returned an unsuccessful response.",
+      });
+
+      console.error(
+        `Availability calendar sync failed for ${availabilityRecord.date}:`,
+        calendarErrorText
+      );
+
+      continue;
+    }
+
+    availabilityCalendarSyncedDates += 1;
+  } catch (calendarError) {
+    const errorMessage =
+      calendarError instanceof Error
+        ? calendarError.message
+        : "Unknown Google Calendar error.";
+
+    availabilityCalendarFailures.push({
+      date: availabilityRecord.date,
+      error: errorMessage,
+    });
+
+    console.error(
+      `Availability calendar sync failed for ${availabilityRecord.date}:`,
+      calendarError
+    );
+  }
+}
+
+const availabilityCalendarSynced =
+  availabilityCalendarFailures.length === 0;
+
+  const customerName =
+  `${customer.first_name || ""} ${
+    customer.last_name || ""
+  }`.trim() ||
+  customer.email ||
+  "Customer";
+
+const shortNoticeBooking =
+  pricingResult.depositAmount === 0;
+
+const paymentStatus = shortNoticeBooking
+  ? "Full balance due"
+  : "Deposit due";
+
+const bookingCalendarPayload =
+  buildBookingCalendarPayload({
+    bookingId: booking.id,
     bookingReference:
       booking.booking_reference,
-    previousStatus:
-      booking.status,
-    newStatus:
-      pricingResult.newStatus,
+    customerName,
+    customerEmail:
+      customer.email,
+    dogName:
+      dog.name,
+    dogBreed:
+      dog.breed,
     startDate:
       booking.start_date,
     endDate:
       booking.end_date,
+    bookingStatus:
+      pricingResult.newStatus,
+    paymentStatus,
     notes:
       booking.notes,
+    pricing:
+      pricingResult,
+  });
+
+let bookingCalendarCreated = false;
+let bookingCalendarError: string | null = null;
+
+try {
+  const bookingCalendarResponse = await fetch(
+    `${requestOrigin}/api/google/create-booking-event`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(
+        bookingCalendarPayload
+      ),
+    }
+  );
+
+  if (!bookingCalendarResponse.ok) {
+    const responseText =
+      await bookingCalendarResponse.text();
+
+    bookingCalendarError =
+      responseText ||
+      "Google Calendar returned an unsuccessful response.";
+
+    console.error(
+      `Booking calendar creation failed for ${booking.booking_reference}:`,
+      bookingCalendarError
+    );
+  } else {
+    bookingCalendarCreated = true;
+  }
+} catch (calendarError) {
+  bookingCalendarError =
+    calendarError instanceof Error
+      ? calendarError.message
+      : "Unknown Google booking calendar error.";
+
+  console.error(
+    `Booking calendar creation failed for ${booking.booking_reference}:`,
+    calendarError
+  );
+}
+
+
+const calendarFollowUpRequired =
+  !availabilityCalendarSynced ||
+  !bookingCalendarCreated;
+
+return NextResponse.json(
+  {
+    success: true,
+    databaseConfirmed: true,
+    followUpRequired: true,
+
+    booking: {
+      id: booking.id,
+      bookingReference:
+        booking.booking_reference,
+      previousStatus:
+        booking.status,
+      newStatus:
+        pricingResult.newStatus,
+      startDate:
+        booking.start_date,
+      endDate:
+        booking.end_date,
+      notes:
+        booking.notes,
+    },
+
+    customer: {
+      id: customer.id,
+      name: customerName,
+      email:
+        customer.email,
+    },
+
+    dog: {
+      id: dog.id,
+      name: dog.name,
+      breed: dog.breed,
+    },
+
+    pricing: {
+      pricingSettingId:
+        pricing.id,
+      nightlyRate,
+      depositPercentage,
+      numberOfNights:
+        pricingResult.numberOfNights,
+      totalCost:
+        pricingResult.totalCost,
+      depositAmount:
+        pricingResult.depositAmount,
+      balanceAmount:
+        pricingResult.balanceAmount,
+    },
+
+    availability: {
+      records:
+        updatedAvailability || [],
+      occupiedDates,
+      checkedDates:
+        occupiedDates.length,
+      calendarSynced:
+        availabilityCalendarSynced,
+      calendarSyncedDates:
+        availabilityCalendarSyncedDates,
+      calendarFailures:
+        availabilityCalendarFailures,
+    },
+
+    bookingCalendar: {
+      created:
+        bookingCalendarCreated,
+      error:
+        bookingCalendarError,
+    },
+
+    email: {
+      sent: false,
+      required: true,
+    },
+
+    message:
+      calendarFollowUpRequired
+        ? "The booking was confirmed, but one or more Google Calendar operations could not be completed."
+        : "The booking was confirmed and both Google calendars were updated. The confirmation email is still required.",
   },
-  customer: {
-    id: customer.id,
-    name:
-      `${customer.first_name || ""} ${
-        customer.last_name || ""
-      }`.trim() ||
-      customer.email ||
-      "Customer",
-    email:
-      customer.email,
-  },
-  dog: {
-    id: dog.id,
-    name: dog.name,
-    breed: dog.breed,
-  },
-  pricing: {
-    pricingSettingId:
-      pricing.id,
-    nightlyRate,
-    depositPercentage,
-    numberOfNights:
-      pricingResult.numberOfNights,
-    totalCost:
-      pricingResult.totalCost,
-    depositAmount:
-      pricingResult.depositAmount,
-    balanceAmount:
-      pricingResult.balanceAmount,
-  },
-  availability:
-    updatedAvailability || [],
-  message:
-    "The booking and availability were updated atomically. Calendar and email follow-up operations are still required.",
-});
+  {
+    status:
+      calendarFollowUpRequired
+        ? 207
+        : 200,
+  }
+);
+
   } catch (error) {
     console.error(
       "Admin booking confirmation failed:",
