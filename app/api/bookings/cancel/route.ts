@@ -459,51 +459,62 @@ export async function POST(request: Request) {
       ? formatName(dog.breed)
       : null;
 
-    /*
-     * Availability calendar events only need
-     * synchronising when capacity was restored.
-     */
-    const availabilityCalendarFailures:
-      AvailabilityCalendarFailure[] = [];
+/*
+ * Run external follow-up operations concurrently.
+ *
+ * The database cancellation has already completed
+ * atomically, so failures here are reported as
+ * partial success without reverting the booking.
+ */
 
-    let availabilityCalendarSyncedDates = 0;
-    let updatedAvailability: unknown[] = [];
+const availabilityCalendarFailures:
+  AvailabilityCalendarFailure[] = [];
 
-    if (shouldRestoreAvailability) {
-      const {
-        data: availabilityData,
-        error: availabilityLoadError,
-      } = await supabaseAdmin
-        .from("availability")
-        .select(
-          `
-          id,
-          date,
-          available,
-          total_spaces,
-          spaces_available,
-          notes
-          `
-        )
-        .gte("date", booking.start_date)
-        .lt("date", booking.end_date)
-        .order("date", { ascending: true });
+let availabilityCalendarSyncedDates = 0;
+let updatedAvailability: unknown[] = [];
 
-      if (availabilityLoadError) {
-        availabilityCalendarFailures.push({
-          date: "booking date range",
-          error:
-            `Availability was restored, but the updated records could not be loaded: ${availabilityLoadError.message}`,
-        });
-      } else {
-        updatedAvailability =
-          availabilityData || [];
+const availabilityCalendarPromise =
+  async () => {
+    if (!shouldRestoreAvailability) {
+      return;
+    }
 
-        for (
-          const availabilityRecord of
-            availabilityData || []
-        ) {
-          try {
+    const {
+      data: availabilityData,
+      error: availabilityLoadError,
+    } = await supabaseAdmin
+      .from("availability")
+      .select(
+        `
+        id,
+        date,
+        available,
+        total_spaces,
+        spaces_available,
+        notes
+        `
+      )
+      .gte("date", booking.start_date)
+      .lt("date", booking.end_date)
+      .order("date", { ascending: true });
+
+    if (availabilityLoadError) {
+      availabilityCalendarFailures.push({
+        date: "booking date range",
+        error:
+          `Availability was restored, but the updated records could not be loaded: ${availabilityLoadError.message}`,
+      });
+
+      return;
+    }
+
+    updatedAvailability =
+      availabilityData || [];
+
+    const syncResults =
+      await Promise.allSettled(
+        (availabilityData || []).map(
+          async (availabilityRecord) => {
             const response = await fetch(
               `${requestOrigin}/api/google/sync-availability-event`,
               {
@@ -533,170 +544,243 @@ export async function POST(request: Request) {
               const responseText =
                 await response.text();
 
-              availabilityCalendarFailures.push({
-                date:
-                  availabilityRecord.date,
-                error:
-                  responseText ||
-                  "The availability calendar returned an unsuccessful response.",
-              });
-
-              continue;
+              throw new Error(
+                responseText ||
+                  "The availability calendar returned an unsuccessful response."
+              );
             }
 
-            availabilityCalendarSyncedDates += 1;
-          } catch (calendarError) {
-            availabilityCalendarFailures.push({
-              date:
-                availabilityRecord.date,
-              error:
-                calendarError instanceof Error
-                  ? calendarError.message
-                  : "Unknown availability calendar error.",
-            });
+            return availabilityRecord.date;
           }
+        )
+      );
+
+    syncResults.forEach(
+      (syncResult, index) => {
+        const availabilityRecord =
+          (availabilityData || [])[index];
+
+        if (syncResult.status === "fulfilled") {
+          availabilityCalendarSyncedDates += 1;
+          return;
         }
-      }
-    }
 
-    /*
-     * Pending bookings do not have a Google booking
-     * event because they have not been confirmed.
-     */
-    const shouldUpdateBookingCalendar =
-      shouldRestoreAvailability;
+        availabilityCalendarFailures.push({
+          date:
+            availabilityRecord?.date ||
+            "unknown date",
+          error:
+            syncResult.reason instanceof Error
+              ? syncResult.reason.message
+              : "Unknown availability calendar error.",
+        });
 
-    let bookingCalendarUpdated =
-      !shouldUpdateBookingCalendar;
-
-    let bookingCalendarError: string | null =
-      null;
-
-    if (shouldUpdateBookingCalendar) {
-      try {
-        const calendarResponse = await fetch(
-          `${requestOrigin}/api/google/update-booking-event`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-            body: JSON.stringify({
-              bookingId:
-                booking.id,
-              bookingReference:
-                booking.booking_reference,
-              ownerName:
-                customerName,
-              ownerEmail:
-                customer.email || null,
-              dogName,
-              dogBreed,
-              startDate:
-                booking.start_date,
-              endDate:
-                booking.end_date,
-              bookingStatus:
-                "Cancelled",
-              paymentStatus:
-                "Cancelled",
-              totalCost:
-                formatMoney(
-                  Number(
-                    booking.total_cost || 0
-                  )
-                ),
-              depositAmount:
-                formatMoney(
-                  Number(
-                    booking.deposit_amount || 0
-                  )
-                ),
-              balanceAmount:
-                formatMoney(
-                  Number(
-                    booking.balance_amount || 0
-                  )
-                ),
-              notes:
-                booking.notes,
-            }),
-          }
+        console.error(
+          `Availability calendar sync failed for ${
+            availabilityRecord?.date ||
+            "unknown date"
+          }:`,
+          syncResult.reason
         );
-
-        if (!calendarResponse.ok) {
-          const responseText =
-            await calendarResponse.text();
-
-          bookingCalendarError =
-            responseText ||
-            "The Google booking calendar returned an unsuccessful response.";
-        } else {
-          bookingCalendarUpdated = true;
-        }
-      } catch (calendarError) {
-        bookingCalendarError =
-          calendarError instanceof Error
-            ? calendarError.message
-            : "Unknown Google booking calendar error.";
       }
+    );
+  };
+
+/*
+ * Pending bookings have no Google booking event.
+ */
+const shouldUpdateBookingCalendar =
+  shouldRestoreAvailability;
+
+let bookingCalendarUpdated =
+  !shouldUpdateBookingCalendar;
+
+let bookingCalendarError: string | null =
+  null;
+
+const bookingCalendarPromise =
+  async () => {
+    if (!shouldUpdateBookingCalendar) {
+      return;
     }
 
-    let cancellationEmailSent = false;
-    let cancellationEmailError: string | null =
-      null;
+    const calendarResponse = await fetch(
+      `${requestOrigin}/api/google/update-booking-event`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type":
+            "application/json",
+        },
+        body: JSON.stringify({
+          bookingId:
+            booking.id,
+          bookingReference:
+            booking.booking_reference,
+          ownerName:
+            customerName,
+          ownerEmail:
+            customer.email || null,
+          dogName,
+          dogBreed,
+          startDate:
+            booking.start_date,
+          endDate:
+            booking.end_date,
+          bookingStatus:
+            "Cancelled",
+          paymentStatus:
+            "Cancelled",
+          totalCost:
+            formatMoney(
+              Number(
+                booking.total_cost || 0
+              )
+            ),
+          depositAmount:
+            formatMoney(
+              Number(
+                booking.deposit_amount || 0
+              )
+            ),
+          balanceAmount:
+            formatMoney(
+              Number(
+                booking.balance_amount || 0
+              )
+            ),
+          notes:
+            booking.notes,
+        }),
+      }
+    );
 
+    if (!calendarResponse.ok) {
+      const responseText =
+        await calendarResponse.text();
+
+      throw new Error(
+        responseText ||
+          "The Google booking calendar returned an unsuccessful response."
+      );
+    }
+
+    bookingCalendarUpdated = true;
+  };
+
+let cancellationEmailSent = false;
+
+let cancellationEmailError: string | null =
+  null;
+
+const cancellationEmailPromise =
+  async () => {
     if (!customer.email) {
-      cancellationEmailError =
-        "The customer does not have an email address.";
-    } else {
-      try {
-        const emailResponse = await fetch(
-          `${requestOrigin}/api/send-booking-cancelled-email`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-            body: JSON.stringify({
-              bookingReference:
-                booking.booking_reference,
-              customerEmail:
-                customer.email,
-              customerName,
-              dogName,
-              startDate:
-                formatDisplayDate(
-                  booking.start_date
-                ),
-              endDate:
-                formatDisplayDate(
-                  booking.end_date
-                ),
-            }),
-          }
-        );
-
-        if (!emailResponse.ok) {
-          const responseText =
-            await emailResponse.text();
-
-          cancellationEmailError =
-            responseText ||
-            "The cancellation email route returned an unsuccessful response.";
-        } else {
-          cancellationEmailSent = true;
-        }
-      } catch (emailError) {
-        cancellationEmailError =
-          emailError instanceof Error
-            ? emailError.message
-            : "Unknown cancellation email error.";
-      }
+      throw new Error(
+        "The customer does not have an email address."
+      );
     }
 
+    const emailResponse = await fetch(
+      `${requestOrigin}/api/send-booking-cancelled-email`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type":
+            "application/json",
+        },
+        body: JSON.stringify({
+          bookingReference:
+            booking.booking_reference,
+          customerEmail:
+            customer.email,
+          customerName,
+          dogName,
+          startDate:
+            formatDisplayDate(
+              booking.start_date
+            ),
+          endDate:
+            formatDisplayDate(
+              booking.end_date
+            ),
+        }),
+      }
+    );
+
+    if (!emailResponse.ok) {
+      const responseText =
+        await emailResponse.text();
+
+      throw new Error(
+        responseText ||
+          "The cancellation email route returned an unsuccessful response."
+      );
+    }
+
+    cancellationEmailSent = true;
+  };
+
+/*
+ * Availability sync, booking-calendar update and
+ * email delivery are independent follow-up tasks.
+ */
+const [
+  availabilityOperation,
+  bookingCalendarOperation,
+  cancellationEmailOperation,
+] = await Promise.allSettled([
+  availabilityCalendarPromise(),
+  bookingCalendarPromise(),
+  cancellationEmailPromise(),
+]);
+
+if (
+  availabilityOperation.status === "rejected"
+) {
+  const errorMessage =
+    availabilityOperation.reason instanceof Error
+      ? availabilityOperation.reason.message
+      : "Unknown availability calendar error.";
+
+  availabilityCalendarFailures.push({
+    date: "booking date range",
+    error: errorMessage,
+  });
+
+  console.error(
+    "Availability calendar operation failed:",
+    availabilityOperation.reason
+  );
+}
+
+if (
+  bookingCalendarOperation.status === "rejected"
+) {
+  bookingCalendarError =
+    bookingCalendarOperation.reason instanceof Error
+      ? bookingCalendarOperation.reason.message
+      : "Unknown Google booking calendar error.";
+
+  console.error(
+    `Booking calendar update failed for ${booking.booking_reference}:`,
+    bookingCalendarOperation.reason
+  );
+}
+
+if (
+  cancellationEmailOperation.status === "rejected"
+) {
+  cancellationEmailError =
+    cancellationEmailOperation.reason instanceof Error
+      ? cancellationEmailOperation.reason.message
+      : "Unknown cancellation email error.";
+
+  console.error(
+    `Cancellation email failed for ${booking.booking_reference}:`,
+    cancellationEmailOperation.reason
+  );
+}
     const availabilityCalendarSynced =
       availabilityCalendarFailures.length === 0;
 
