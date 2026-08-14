@@ -518,18 +518,172 @@ const pricingResult =
     depositPercentage
   );
 
+const {
+  data: confirmationData,
+  error: confirmationError,
+} = await supabaseAdmin
+  .rpc("confirm_booking_atomic", {
+    p_booking_id: booking.id,
+    p_pricing_setting_id: pricing.id,
+    p_nightly_rate: nightlyRate,
+    p_number_of_nights:
+      pricingResult.numberOfNights,
+    p_total_cost:
+      pricingResult.totalCost,
+    p_deposit_amount:
+      pricingResult.depositAmount,
+    p_balance_amount:
+      pricingResult.balanceAmount,
+    p_new_status:
+      pricingResult.newStatus,
+  })
+  .single();
+
+if (confirmationError) {
+  console.error(
+    "Atomic booking confirmation failed:",
+    confirmationError
+  );
+
+  const errorMessage =
+    confirmationError.message ||
+    "The booking could not be confirmed.";
+
+  if (
+    errorMessage.includes(
+      "BOOKING_NOT_PENDING"
+    )
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          "The booking has already been processed and can no longer be confirmed.",
+      },
+      {
+        status: 409,
+      }
+    );
+  }
+
+  if (
+    errorMessage.includes(
+      "INSUFFICIENT_AVAILABILITY"
+    )
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          "The booking could not be confirmed because one or more dates are no longer available.",
+      },
+      {
+        status: 409,
+      }
+    );
+  }
+
+  if (
+    errorMessage.includes(
+      "BOOKING_NOT_FOUND"
+    )
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          "The booking could not be found.",
+      },
+      {
+        status: 404,
+      }
+    );
+  }
+
+  return NextResponse.json(
+    {
+      error: errorMessage,
+    },
+    {
+      status: 500,
+    }
+  );
+}
+
+if (!confirmationData) {
+  return NextResponse.json(
+    {
+      error:
+        "The confirmation completed without returning a booking result.",
+    },
+    {
+      status: 500,
+    }
+  );
+}
+
+const {
+  data: updatedAvailability,
+  error: updatedAvailabilityError,
+} = await supabaseAdmin
+  .from("availability")
+  .select(
+    `
+    id,
+    date,
+    available,
+    total_spaces,
+    spaces_available,
+    notes
+    `
+  )
+  .gte("date", booking.start_date)
+  .lt("date", booking.end_date)
+  .order("date", { ascending: true });
+
+if (updatedAvailabilityError) {
+  return NextResponse.json(
+    {
+      success: true,
+      databaseConfirmed: true,
+      followUpRequired: true,
+      booking: {
+        id: booking.id,
+        bookingReference:
+          booking.booking_reference,
+        previousStatus:
+          booking.status,
+        newStatus:
+          pricingResult.newStatus,
+        startDate:
+          booking.start_date,
+        endDate:
+          booking.end_date,
+      },
+      error:
+        `The booking was confirmed, but the updated availability records could not be loaded: ${updatedAvailabilityError.message}`,
+    },
+    {
+      status: 207,
+    }
+  );
+}
+
 return NextResponse.json({
   success: true,
-  readyForConfirmation: true,
+  databaseConfirmed: true,
+  followUpRequired: true,
   booking: {
     id: booking.id,
     bookingReference:
       booking.booking_reference,
-    currentStatus: booking.status,
-    confirmationStatus:
+    previousStatus:
+      booking.status,
+    newStatus:
       pricingResult.newStatus,
-    startDate: booking.start_date,
-    endDate: booking.end_date,
+    startDate:
+      booking.start_date,
+    endDate:
+      booking.end_date,
+    notes:
+      booking.notes,
   },
   customer: {
     id: customer.id,
@@ -539,7 +693,8 @@ return NextResponse.json({
       }`.trim() ||
       customer.email ||
       "Customer",
-    email: customer.email,
+    email:
+      customer.email,
   },
   dog: {
     id: dog.id,
@@ -547,7 +702,8 @@ return NextResponse.json({
     breed: dog.breed,
   },
   pricing: {
-    pricingSettingId: pricing.id,
+    pricingSettingId:
+      pricing.id,
     nightlyRate,
     depositPercentage,
     numberOfNights:
@@ -559,12 +715,10 @@ return NextResponse.json({
     balanceAmount:
       pricingResult.balanceAmount,
   },
-  availability: {
-    occupiedDates,
-    checkedDates: occupiedDates.length,
-  },
+  availability:
+    updatedAvailability || [],
   message:
-    "Booking passed all confirmation validation checks.",
+    "The booking and availability were updated atomically. Calendar and email follow-up operations are still required.",
 });
   } catch (error) {
     console.error(
