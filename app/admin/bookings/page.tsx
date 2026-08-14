@@ -456,181 +456,179 @@ async function cancelBooking(
     return data;
   }
 
-  async function markDepositPaid(booking: BookingWithCustomer) {
-    const today = new Date();
-
-    const todayFormatted = [
-      String(today.getDate()).padStart(2, "0"),
-      String(today.getMonth() + 1).padStart(2, "0"),
-      today.getFullYear(),
-    ].join("/");
-
-    const depositPaidDateDisplay = window.prompt(
-      "Enter the date the deposit was paid (DD/MM/YYYY):",
-      todayFormatted
+async function markDepositPaid(
+  booking: BookingWithCustomer
+) {
+  if (booking.status !== "Deposit Pending") {
+    setIsError(true);
+    setMessage(
+      "This booking is no longer awaiting a deposit."
     );
-
-    if (!depositPaidDateDisplay) return;
-
-    const datePattern = /^\d{2}\/\d{2}\/\d{4}$/;
-
-    if (!datePattern.test(depositPaidDateDisplay)) {
-      setIsError(true);
-      setMessage("Please enter the deposit paid date in format DD/MM/YYYY.");
-      return;
-    }
-
-    const [day, month, year] = depositPaidDateDisplay.split("/");
-
-    const depositPaidDateDb = `${year}-${month}-${day}`;
-
-    const confirmed = window.confirm(
-      `Confirm deposit was paid on ${depositPaidDateDisplay}?\n\nThis will move the booking to Balance Pending, record the payment, and send a deposit receipt email to the customer.`
-    );
-
-    if (!confirmed) return;
-
-    setMessage("");
-    setIsError(false);
-
-    const { error } = await supabase
-      .from("bookings")
-      .update({
-        status: "Balance Pending",
-        deposit_paid_at: depositPaidDateDb,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", booking.id);
-
-    if (error) {
-      setIsError(true);
-      setMessage(error.message);
-      return;
-    }
-
-    let paymentRecord;
-
-    try {
-      paymentRecord = await recordPayment(
-        booking,
-        "Deposit",
-        Number(booking.deposit_amount || 0),
-        depositPaidDateDb
-      );
-    } catch (paymentError) {
-      setIsError(true);
-      setMessage(
-        paymentError instanceof Error
-          ? paymentError.message
-          : "Deposit marked as paid, but the payment record could not be saved."
-      );
-
-      await loadBookings();
-      return;
-    }
-
-    const calendarResponse = await fetch(
-  "/api/google/update-booking-event",
-  {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      bookingId: booking.id,
-      bookingReference: booking.booking_reference,
-      ownerName: getCustomerName(booking),
-      ownerEmail: booking.customer?.email || null,
-      dogName: formatName(booking.dogs?.name || "") || "Dog",
-      dogBreed: booking.dogs?.breed
-        ? formatName(booking.dogs.breed)
-        : null,
-      startDate: booking.start_date,
-      endDate: booking.end_date,
-      bookingStatus: "Balance Pending",
-      paymentStatus: "Deposit received, balance outstanding",
-      totalCost: formatMoney(Number(booking.total_cost || 0)),
-      depositAmount: formatMoney(Number(booking.deposit_amount || 0)),
-      balanceAmount: formatMoney(Number(booking.balance_amount || 0)),
-      notes: booking.notes,
-    }),
+    return;
   }
-);
 
-if (!calendarResponse.ok) {
-  const calendarErrorText = await calendarResponse.text();
+  const today = new Date();
 
-  console.error(
-    "Google Calendar deposit update error:",
-    calendarErrorText
+  const todayFormatted = [
+    String(today.getDate()).padStart(2, "0"),
+    String(today.getMonth() + 1).padStart(2, "0"),
+    today.getFullYear(),
+  ].join("/");
+
+  const depositPaidDateDisplay = window.prompt(
+    "Enter the date the deposit was paid (DD/MM/YYYY):",
+    todayFormatted
   );
 
-  let calendarErrorMessage =
-    "Deposit recorded, but the Google Calendar event could not be updated.";
-
-  try {
-    const calendarError = JSON.parse(calendarErrorText);
-
-    if (calendarError.error) {
-      calendarErrorMessage = calendarError.error;
-    }
-  } catch {
-    if (calendarErrorText) {
-      calendarErrorMessage = calendarErrorText;
-    }
+  if (!depositPaidDateDisplay) {
+    return;
   }
 
-  setIsError(true);
-  setMessage(calendarErrorMessage);
+  const datePattern = /^\d{2}\/\d{2}\/\d{4}$/;
 
-  await loadBookings();
-  return;
-}
-
-    const emailResponse = await fetch("/api/send-deposit-received-email", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        bookingId: booking.id,
-        bookingReference: booking.booking_reference,
-        customerEmail: booking.customer?.email,
-        customerName: getCustomerName(booking),
-        dogName: formatName(booking.dogs?.name || "") || "your dog",
-        startDate: formatDisplayDate(booking.start_date),
-        endDate: formatDisplayDate(booking.end_date),
-        depositPaidDate: depositPaidDateDisplay,
-        invoiceNumber: paymentRecord.invoice_number,
-        depositAmount: formatMoney(Number(booking.deposit_amount || 0)),
-      }),
-    });
-
-    if (!emailResponse.ok) {
-      setIsError(true);
-      setMessage(
-        "Deposit marked as paid and payment recorded, but the confirmation email could not be sent."
-      );
-
-      await loadBookings();
-      return;
-    }
-
-    await supabase
-      .from("bookings")
-      .update({
-        deposit_received_email_sent: true,
-        deposit_received_email_sent_at: new Date().toISOString(),
-      })
-      .eq("id", booking.id);
-
-    setIsError(false);
+  if (!datePattern.test(depositPaidDateDisplay)) {
+    setIsError(true);
     setMessage(
-      "Deposit marked as paid, payment recorded, and confirmation email sent."
+      "Please enter the deposit paid date in DD/MM/YYYY format."
+    );
+    return;
+  }
+
+const [day, month, year] =
+  depositPaidDateDisplay.split("/");
+
+  const depositPaidDate = new Date(
+    `${year}-${month}-${day}T00:00:00Z`
+  );
+
+  if (
+    Number.isNaN(depositPaidDate.getTime()) ||
+    depositPaidDate.getUTCDate() !== Number(day) ||
+    depositPaidDate.getUTCMonth() + 1 !==
+      Number(month) ||
+    depositPaidDate.getUTCFullYear() !==
+      Number(year)
+  ) {
+    setIsError(true);
+    setMessage(
+      "Please enter a valid deposit paid date."
+    );
+    return;
+  }
+
+  const todayDate = new Date();
+  todayDate.setHours(23, 59, 59, 999);
+
+  if (depositPaidDate > todayDate) {
+    setIsError(true);
+    setMessage(
+      "The deposit paid date cannot be in the future."
+    );
+    return;
+  }
+
+  const depositPaidDateDb =
+    `${year}-${month}-${day}`;
+
+  const confirmed = window.confirm(
+    `Confirm the deposit was paid on ${depositPaidDateDisplay}?\n\nThis will move the booking to Balance Pending, create the payment record, update Google Calendar and send a deposit receipt to the customer.`
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  setMessage("");
+  setIsError(false);
+
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession();
+
+  if (sessionError || !session) {
+    window.location.href = "/login";
+    return;
+  }
+
+  let response: Response;
+
+  try {
+    response = await fetch(
+      "/api/admin/bookings/record-payment",
+      {
+        method: "POST",
+        headers: {
+          Authorization:
+            `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          bookingId: booking.id,
+          paymentType: "Deposit",
+          paymentDate: depositPaidDateDb,
+        }),
+      }
+    );
+  } catch (requestError) {
+    setIsError(true);
+    setMessage(
+      requestError instanceof Error
+        ? requestError.message
+        : "Unable to contact the payment service."
+    );
+    return;
+  }
+
+  const result = await response
+    .json()
+    .catch(() => null);
+
+  if (!response.ok) {
+    setIsError(true);
+    setMessage(
+      result?.error ||
+        "The deposit payment could not be recorded."
     );
 
     await loadBookings();
+    return;
   }
+
+  if (!result?.paymentRecorded) {
+    setIsError(true);
+    setMessage(
+      result?.error ||
+        "The payment service did not record the deposit."
+    );
+
+    await loadBookings();
+    return;
+  }
+
+  /*
+   * HTTP 207 means the database payment succeeded,
+   * but the calendar or receipt email failed.
+   */
+  if (result.followUpRequired) {
+    setIsError(true);
+    setMessage(
+      result.message ||
+        "The deposit was recorded, but the calendar or receipt email could not be completed."
+    );
+
+    await loadBookings();
+    return;
+  }
+
+  setIsError(false);
+  setMessage(
+    result.message ||
+      "The deposit was recorded successfully."
+  );
+
+  await loadBookings();
+}
 
   async function markBalancePaid(booking: BookingWithCustomer) {
     const today = new Date();
