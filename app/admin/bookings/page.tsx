@@ -15,6 +15,7 @@ import {
 } from "@/lib/services/booking-confirmation-service";
 
 import {
+  buildBookingCalendarPayload,
   buildBookingConfirmationEmailPayload,
 } from "@/lib/services/booking-payloads";
 
