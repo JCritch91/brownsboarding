@@ -630,173 +630,184 @@ const [day, month, year] =
   await loadBookings();
 }
 
-  async function markBalancePaid(booking: BookingWithCustomer) {
-    const today = new Date();
-
-    const todayFormatted = [
-      String(today.getDate()).padStart(2, "0"),
-      String(today.getMonth() + 1).padStart(2, "0"),
-      today.getFullYear(),
-    ].join("/");
-
-    const balancePaidDateDisplay = window.prompt(
-      "Enter the date the balance was paid (DD/MM/YYYY):",
-      todayFormatted
+async function markBalancePaid(
+  booking: BookingWithCustomer
+) {
+  if (booking.status !== "Balance Pending") {
+    setIsError(true);
+    setMessage(
+      "This booking is no longer awaiting its balance."
     );
-
-    if (!balancePaidDateDisplay) return;
-
-    const datePattern = /^\d{2}\/\d{2}\/\d{4}$/;
-
-    if (!datePattern.test(balancePaidDateDisplay)) {
-      setIsError(true);
-      setMessage("Please enter the balance paid date in format DD/MM/YYYY.");
-      return;
-    }
-
-    const [day, month, year] = balancePaidDateDisplay.split("/");
-
-    const balancePaidDateDb = `${year}-${month}-${day}`;
-
-    const confirmed = window.confirm(
-      `Confirm the remaining balance was paid on ${balancePaidDateDisplay}?\n\nThis will move the booking to Balance Paid, record the payment, and send a payment confirmation email to the customer.`
-    );
-
-    if (!confirmed) return;
-
-    setMessage("");
-    setIsError(false);
-
-    const { error } = await supabase
-      .from("bookings")
-      .update({
-        status: "Balance Paid",
-        balance_paid_at: balancePaidDateDb,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", booking.id);
-
-    if (error) {
-      setIsError(true);
-      setMessage(error.message);
-      return;
-    }
-
-    let paymentRecord;
-
-    try {
-      paymentRecord = await recordPayment(
-        booking,
-        "Balance",
-        Number(booking.balance_amount || 0),
-        balancePaidDateDb
-      );
-    } catch (paymentError) {
-      setIsError(true);
-      setMessage(
-        paymentError instanceof Error
-          ? paymentError.message
-          : "Balance marked as paid, but the payment record could not be saved."
-      );
-
-      await loadBookings();
-      return;
-    }
-
-    const calendarResponse = await fetch(
-  "/api/google/update-booking-event",
-  {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      bookingId: booking.id,
-      bookingReference: booking.booking_reference,
-      ownerName: getCustomerName(booking),
-      ownerEmail: booking.customer?.email || null,
-      dogName: formatName(booking.dogs?.name || "") || "Dog",
-      dogBreed: booking.dogs?.breed
-        ? formatName(booking.dogs.breed)
-        : null,
-      startDate: booking.start_date,
-      endDate: booking.end_date,
-      bookingStatus: "Balance Paid",
-      paymentStatus: "Fully paid",
-      totalCost: formatMoney(Number(booking.total_cost || 0)),
-      depositAmount: formatMoney(Number(booking.deposit_amount || 0)),
-      balanceAmount: formatMoney(Number(booking.balance_amount || 0)),
-      notes: booking.notes,
-    }),
+    return;
   }
-);
 
-if (!calendarResponse.ok) {
-  const calendarErrorText = await calendarResponse.text();
+  const today = new Date();
 
-  console.error(
-    "Google Calendar balance update error:",
-    calendarErrorText
+  const todayFormatted = [
+    String(today.getDate()).padStart(2, "0"),
+    String(today.getMonth() + 1).padStart(2, "0"),
+    today.getFullYear(),
+  ].join("/");
+
+  const balancePaidDateDisplay = window.prompt(
+    "Enter the date the balance was paid (DD/MM/YYYY):",
+    todayFormatted
   );
 
-  let calendarErrorMessage =
-    "Balance recorded, but the Google Calendar event could not be updated.";
-
-  try {
-    const calendarError = JSON.parse(calendarErrorText);
-
-    if (calendarError.error) {
-      calendarErrorMessage = calendarError.error;
-    }
-  } catch {
-    if (calendarErrorText) {
-      calendarErrorMessage = calendarErrorText;
-    }
+  if (!balancePaidDateDisplay) {
+    return;
   }
 
-  setIsError(true);
-  setMessage(calendarErrorMessage);
+  const datePattern = /^\d{2}\/\d{2}\/\d{4}$/;
 
-  await loadBookings();
-  return;
-}
-
-    const emailResponse = await fetch("/api/send-balance-received-email", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        bookingId: booking.id,
-        bookingReference: booking.booking_reference,
-        customerEmail: booking.customer?.email,
-        customerName: getCustomerName(booking),
-        dogName: formatName(booking.dogs?.name || "") || "your dog",
-        startDate: formatDisplayDate(booking.start_date),
-        endDate: formatDisplayDate(booking.end_date),
-        balancePaidDate: balancePaidDateDisplay,
-        balanceAmount: formatMoney(Number(booking.balance_amount || 0)),
-        invoiceNumber: paymentRecord.invoice_number,
-      }),
-    });
-
-    if (!emailResponse.ok) {
-      setIsError(true);
-      setMessage(
-        "Balance marked as paid and payment recorded, but the confirmation email could not be sent."
-      );
-
-      await loadBookings();
-      return;
-    }
-
-    setIsError(false);
+  if (!datePattern.test(balancePaidDateDisplay)) {
+    setIsError(true);
     setMessage(
-      "Balance marked as paid, payment recorded, and confirmation email sent."
+      "Please enter the balance paid date in DD/MM/YYYY format."
+    );
+    return;
+  }
+
+  const [day, month, year] =
+    balancePaidDateDisplay.split("/");
+
+  const balancePaidDate = new Date(
+    `${year}-${month}-${day}T00:00:00Z`
+  );
+
+  if (
+    Number.isNaN(balancePaidDate.getTime()) ||
+    balancePaidDate.getUTCDate() !== Number(day) ||
+    balancePaidDate.getUTCMonth() + 1 !==
+      Number(month) ||
+    balancePaidDate.getUTCFullYear() !== Number(year)
+  ) {
+    setIsError(true);
+    setMessage(
+      "Please enter a valid balance paid date."
+    );
+    return;
+  }
+
+  const todayDate = new Date();
+  todayDate.setHours(23, 59, 59, 999);
+
+  if (balancePaidDate > todayDate) {
+    setIsError(true);
+    setMessage(
+      "The balance paid date cannot be in the future."
+    );
+    return;
+  }
+
+  const balancePaidDateDb =
+    `${year}-${month}-${day}`;
+
+  const confirmed = window.confirm(
+    `Confirm the remaining balance was paid on ${balancePaidDateDisplay}?\n\nThis will move the booking to Balance Paid, create the payment record, update Google Calendar and send a balance receipt to the customer.`
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  setMessage("");
+  setIsError(false);
+
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession();
+
+  if (sessionError || !session) {
+    window.location.href = "/login";
+    return;
+  }
+
+  let response: Response;
+
+  try {
+    response = await fetch(
+      "/api/admin/bookings/record-payment",
+      {
+        method: "POST",
+        headers: {
+          Authorization:
+            `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          bookingId: booking.id,
+          paymentType: "Balance",
+          paymentDate: balancePaidDateDb,
+        }),
+      }
+    );
+  } catch (requestError) {
+    setIsError(true);
+    setMessage(
+      requestError instanceof Error
+        ? requestError.message
+        : "Unable to contact the payment service."
+    );
+    return;
+  }
+
+  const result = await response
+    .json()
+    .catch(() => null);
+
+    console.log(
+  "Record payment response:",
+  response.status,
+  result
+);
+
+  if (!response.ok) {
+    setIsError(true);
+    setMessage(
+      result?.error ||
+        "The balance payment could not be recorded."
     );
 
     await loadBookings();
+    return;
   }
+
+  if (!result?.paymentRecorded) {
+    setIsError(true);
+    setMessage(
+      result?.error ||
+        "The payment service did not record the balance."
+    );
+
+    await loadBookings();
+    return;
+  }
+
+  /*
+   * HTTP 207 means the database payment succeeded,
+   * but the calendar or receipt email failed.
+   */
+  if (result.followUpRequired) {
+    setIsError(true);
+    setMessage(
+      result.message ||
+        "The balance was recorded, but the calendar or receipt email could not be completed."
+    );
+
+    await loadBookings();
+    return;
+  }
+
+  setIsError(false);
+  setMessage(
+    result.message ||
+      "The balance was recorded successfully."
+  );
+
+  await loadBookings();
+}
 
 async function autoCompleteEligibleBookings() {
   const today = new Date().toISOString().split("T")[0];
