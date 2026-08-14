@@ -19,6 +19,10 @@ import {
   buildBookingConfirmationEmailPayload,
 } from "@/lib/services/booking-payloads";
 
+import {
+  adjustBookingAvailability,
+} from "@/lib/services/booking-availability-service";
+
 import AdminPageLayout from "@/components/AdminPageLayout";
 import PageCard from "@/components/PageCard";
 import Button from "@/components/Buttons";
@@ -226,94 +230,37 @@ export default function AdminBookingsPage() {
     }
   }
 
-async function adjustAvailabilityForBooking(
-  booking: BookingWithCustomer,
-  change: number
-) {
-  const { error: availabilityError } = await supabase.rpc(
-    "adjust_availability_for_booking",
-    {
-      p_start_date: booking.start_date,
-      p_end_date: booking.end_date,
-      p_change: change,
-    }
-  );
-
-  if (availabilityError) {
-    setIsError(true);
-    setMessage(availabilityError.message);
-    return false;
-  }
-
-  const { data: updatedAvailability, error: loadError } = await supabase
-    .from("availability")
-    .select(
-      "id, date, available, total_spaces, spaces_available, notes"
-    )
-    .gte("date", booking.start_date)
-    .lt("date", booking.end_date)
-    .order("date", { ascending: true });
-
-  if (loadError) {
-    setIsError(true);
-    setMessage(
-      `Availability was updated, but the updated dates could not be loaded: ${loadError.message}`
+  async function adjustAvailabilityForBooking(
+    booking: BookingWithCustomer,
+    change: number
+  ) {
+    const result = await adjustBookingAvailability(
+      {
+        startDate: booking.start_date,
+        endDate: booking.end_date,
+      },
+      change
     );
-    return false;
-  }
 
-  let calendarSyncFailures = 0;
-
-  for (const availabilityRecord of updatedAvailability || []) {
-    try {
-      const calendarResponse = await fetch(
-        "/api/google/sync-availability-event",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            availabilityId: availabilityRecord.id,
-            date: availabilityRecord.date,
-            available: availabilityRecord.available,
-            totalSpaces: availabilityRecord.total_spaces,
-            spacesAvailable: availabilityRecord.spaces_available,
-            notes: availabilityRecord.notes,
-          }),
-        }
+    if (!result.success) {
+      setIsError(true);
+      setMessage(
+        result.error ||
+          "Unable to update booking availability."
       );
 
-      if (!calendarResponse.ok) {
-        calendarSyncFailures += 1;
-
-        const calendarErrorText = await calendarResponse.text();
-
+      for (const failure of result.syncFailures) {
         console.error(
-          `Google availability calendar sync failed for ${availabilityRecord.date}:`,
-          calendarErrorText
+          `Availability calendar sync failed for ${failure.date}:`,
+          failure.error
         );
       }
-    } catch (calendarError) {
-      calendarSyncFailures += 1;
 
-      console.error(
-        `Google availability calendar sync failed for ${availabilityRecord.date}:`,
-        calendarError
-      );
+      return false;
     }
-  }
 
-  if (calendarSyncFailures > 0) {
-    setIsError(true);
-    setMessage(
-      `Availability was updated, but ${calendarSyncFailures} availability calendar event(s) could not be synced.`
-    );
-    return false;
+    return true;
   }
-
-  return true;
-}
 
   async function confirmBooking(booking: BookingWithCustomer) {
     const shortNoticeBooking = isWithinTwoWeeks(booking.start_date);
@@ -384,37 +331,48 @@ async function adjustAvailabilityForBooking(
       }
 
 
-const paymentStatus = shortNoticeBooking
-  ? "Full balance due"
-  : "Deposit due";
+      const paymentStatus = shortNoticeBooking
+        ? "Full balance due"
+        : "Deposit due";
 
-const calendarResponse = await fetch(
-  "/api/google/create-booking-event",
-  {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      bookingReference: booking.booking_reference,
-      bookingId: booking.id,
-      ownerName: getCustomerName(booking),
-      ownerEmail: booking.customer?.email || null,
-      dogName: formatName(booking.dogs?.name || "") || "Dog",
-      dogBreed: booking.dogs?.breed
-        ? formatName(booking.dogs.breed)
-        : null,
-      startDate: booking.start_date,
-      endDate: booking.end_date,
-      bookingStatus: pricingResult.newStatus,
-      paymentStatus,
-      totalCost: formatMoney(pricingResult.totalCost),
-      depositAmount: formatMoney(pricingResult.depositAmount),
-      balanceAmount: formatMoney(pricingResult.balanceAmount),
-      notes: booking.notes,
-    }),
-  }
-);
+      const bookingCalendarPayload =
+        buildBookingCalendarPayload({
+          bookingId: booking.id,
+          bookingReference:
+            booking.booking_reference,
+          customerName:
+            getCustomerName(booking),
+          customerEmail:
+            booking.customer?.email,
+          dogName:
+            booking.dogs?.name,
+          dogBreed:
+            booking.dogs?.breed,
+          startDate:
+            booking.start_date,
+          endDate:
+            booking.end_date,
+          bookingStatus:
+            pricingResult.newStatus,
+          paymentStatus,
+          notes:
+            booking.notes,
+          pricing:
+            pricingResult,
+        });
+
+      const calendarResponse = await fetch(
+        "/api/google/create-booking-event",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(
+            bookingCalendarPayload
+          ),
+        }
+      );
 
 if (!calendarResponse.ok) {
   const calendarErrorText = await calendarResponse.text();
