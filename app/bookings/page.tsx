@@ -18,7 +18,7 @@ import {
 } from "@/lib/helpers";
 import CustomerPageLayout from "@/components/CustomerPageLayout";
 import PageCard from "@/components/PageCard";
-import Button from "@/components/Buttons";;
+import Button from "@/components/Buttons";
 import LoadingScreen from "@/components/LoadingScreen";
 import BookingForm, {
   type BookingFormDog,
@@ -26,6 +26,25 @@ import BookingForm, {
 import type {
   Availability,
 } from "@/types/availability";
+import {
+  authenticatedApiRequest,
+} from "@/lib/client/authenticated-api";
+
+type CreateBookingResponse = {
+  success: boolean;
+  bookingCreated: boolean;
+  booking?: {
+    id: string;
+    bookingReference: string;
+    ownerId: string;
+    dogId: string;
+    startDate: string;
+    endDate: string;
+    status: "Pending";
+  };
+  message?: string;
+  error?: string;
+};
 
 
 export default function BookingsPage() {
@@ -257,42 +276,6 @@ function isUnavailableDate(date: Date) {
     }
   }
 
-  async function checkExistingBookingOverlap(
-    dogId: string,
-    newStartDate: string,
-    newEndDate: string
-  ) {
-    const { data, error } = await supabase
-      .from("bookings")
-      .select("id, start_date, end_date, status")
-      .eq("dog_id", dogId)
-      .in("status", [
-        "Pending",
-        "Deposit Pending",
-        "Balance Pending",
-        "Balance Paid",
-      ]);
-
-    if (error) {
-      return {
-        hasOverlap: false,
-        errorMessage: error.message,
-      };
-    }
-
-    const hasOverlap = (data || []).some((booking) => {
-      return (
-        newStartDate <= booking.end_date &&
-        newEndDate >= booking.start_date
-      );
-    });
-
-    return {
-      hasOverlap,
-      errorMessage: "",
-    };
-  }
-
   function clearDateSelection() {
     setSelectedRange(undefined);
     setStartDate("");
@@ -356,89 +339,97 @@ function isUnavailableDate(date: Date) {
       return;
     }
 
-    const existingBookingCheck = await checkExistingBookingOverlap(
-      selectedDog,
-      startDate,
-      endDate
-    );
+setSaving(true);
 
-    if (existingBookingCheck.errorMessage) {
-      setIsError(true);
-      setMessage(existingBookingCheck.errorMessage);
-      return;
+const result =
+  await authenticatedApiRequest<CreateBookingResponse>(
+    "/api/bookings/create",
+    {
+      body: {
+        dogId: selectedDog,
+        startDate,
+        endDate,
+        notes,
+      },
     }
+  );
 
-    if (existingBookingCheck.hasOverlap) {
-      setIsError(true);
-      setMessage(
-        "This dog already has a booking that overlaps with the selected dates. Please choose different dates or check My Bookings."
-      );
-      return;
-    }
+setSaving(false);
 
-    setSaving(true);
+if (result.unauthenticated) {
+  window.location.href = "/login";
+  return;
+}
 
-    let user;
+if (!result.ok) {
+  setIsError(true);
+  setMessage(
+    result.error ||
+      "Your booking request could not be submitted."
+  );
+  return;
+}
 
-    try {
-      user = await getCurrentUser();
-    } catch {
-      setSaving(false);
-      window.location.href = "/login";
-      return;
-    }
+if (
+  !result.data ||
+  !result.data.bookingCreated
+) {
+  setIsError(true);
+  setMessage(
+    result.data?.error ||
+      "The booking service did not create your booking request."
+  );
+  return;
+}
 
-    const { error } = await supabase.from("bookings").insert({
-      owner_id: user.id,
-      dog_id: selectedDog,
-      start_date: startDate,
-      end_date: endDate,
-      status: "Pending",
-      notes: notes.trim(),
-      updated_at: new Date().toISOString(),
-    });
+setIsError(false);
 
-    setSaving(false);
+setMessage(
+  result.data.message ||
+    "Booking request submitted successfully. Browns Boarding will review your request and confirm the final cost and deposit details."
+);
 
-    if (error) {
-      setIsError(true);
-      setMessage(error.message);
-      return;
-    }
-
-    setMessage(
-      "Booking request submitted successfully. Browns Boarding will review your request and confirm the final cost and deposit details."
-    );
-
-    setSelectedDog("");
-    setStartDate("");
-    setEndDate("");
-    setNotes("");
-    setSelectedRange(undefined);
-  }
+setSelectedDog("");
+setStartDate("");
+setEndDate("");
+setNotes("");
+setSelectedRange(undefined);
+}
 
   if (loading) {
     return <LoadingScreen message="Loading booking form..." />;
   }
 
-  const projectedNights =
-    startDate && endDate
-      ? calculateNumberOfNights(startDate, endDate)
+const projectedNights =
+  startDate && endDate
+    ? calculateNumberOfNights(
+        startDate,
+        endDate
+      )
+    : 0;
+
+const projectedTotal =
+  nightlyRate !== null &&
+  projectedNights > 0
+    ? nightlyRate * projectedNights
+    : 0;
+
+const isProjectedShortNotice = startDate
+  ? isWithinTwoWeeks(startDate)
+  : false;
+
+const projectedDeposit =
+  isProjectedShortNotice
+    ? 0
+    : depositPercentage !== null &&
+        projectedTotal > 0
+      ? projectedTotal *
+        (depositPercentage / 100)
       : 0;
 
-  const projectedTotal =
-    nightlyRate && projectedNights ? nightlyRate * projectedNights : 0;
+const projectedBalance =
+  projectedTotal - projectedDeposit;
 
-  const projectedDeposit =
-    depositPercentage && projectedTotal
-      ? projectedTotal * (depositPercentage / 100)
-      : 0;
-
-  const projectedBalance = projectedTotal - projectedDeposit;
-
-  const isProjectedShortNotice = startDate
-    ? isWithinTwoWeeks(startDate)
-    : false;
 
   return (
     <CustomerPageLayout>
