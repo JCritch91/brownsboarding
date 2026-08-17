@@ -9,6 +9,9 @@ import CustomerPageLayout from "@/components/CustomerPageLayout";
 import PageCard from "@/components/PageCard";
 import Button from "@/components/Buttons";
 import Link from "next/link";
+import {
+  ACTIVE_BOOKING_STATUSES,
+} from "@/types/booking";
 
 type Dog = {
   id: string;
@@ -28,6 +31,9 @@ type Dog = {
 };
 
 export default function MyDogsPage() {
+  const [removingDogId, setRemovingDogId] =
+  useState<string | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [dogs, setDogs] = useState<Dog[]>([]);
   const [message, setMessage] = useState("");
@@ -112,13 +118,22 @@ if (loading) {
   return <LoadingScreen message="Loading your details..." />;
 }
 
-  async function removeDog(dogId: string) {
+async function removeDog(dogId: string) {
+  if (removingDogId) {
+    return;
+  }
 
-  const { data: bookings, error: bookingError } = await supabase
-    .from("bookings")
-    .select("id")
-    .eq("dog_id", dogId)
-    .in("status", ["Pending", "Confirmed"]);
+  setMessage("");
+
+  const { data: bookings, error: bookingError } =
+    await supabase
+      .from("bookings")
+      .select("id")
+      .eq("dog_id", dogId)
+      .in(
+        "status",
+        ACTIVE_BOOKING_STATUSES
+      );
 
   if (bookingError) {
     setMessage(bookingError.message);
@@ -127,31 +142,37 @@ if (loading) {
 
   if (bookings && bookings.length > 0) {
     setMessage(
-      "This dog cannot be removed because there is a current or future booking associated with it."
+      "This dog cannot be removed because it has an active booking. Please cancel or complete the booking first."
     );
     return;
   }
 
-  const confirmed = window.confirm(
-    "Are you sure you want to remove this dog?\n\nThe dog will no longer appear in My Dogs, but historical information and bookings will be retained."
-  );
+const confirmed = window.confirm(
+  "Are you sure you want to remove this dog?\n\nThe dog will no longer appear in My Dogs, but historical information and bookings will be retained."
+);
 
-  if (!confirmed) return;
+if (!confirmed) {
+  return;
+}
 
-  const { error } = await supabase
-    .from("dogs")
-    .update({
-      active: false,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", dogId);
+setRemovingDogId(dogId);
 
-  if (error) {
-    setMessage(error.message);
-    return;
-  }
+const { error } = await supabase
+  .from("dogs")
+  .update({
+    active: false,
+    updated_at: new Date().toISOString(),
+  })
+  .eq("id", dogId);
 
-  loadDogs();
+if (error) {
+  setRemovingDogId(null);
+  setMessage(error.message);
+  return;
+}
+
+await loadDogs();
+setRemovingDogId(null);
 }
 
   return (
@@ -188,7 +209,7 @@ if (loading) {
               {dogs.map((dog) => (
                 <div
                   key={dog.id}
-                    className="bg-[#FFFDF[#D9CBB89] p-4 md:p-6 rounded-xl border border-] shadow-lg"                >
+                    className="rounded-xl border border-[#D9CBB8] bg-white p-4 shadow-lg md:p-6"                >
                   <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-3 md:gap-4">
                     <div>
                       <h2 className="text-xl md:text-2xl font-semibold text-[#5C4033]">
@@ -249,9 +270,12 @@ if (loading) {
                     <button
                       type="button"
                       onClick={() => removeDog(dog.id)}
-                      className="inline-flex w-fit items-center justify-center border border-red-400 text-red-600 px-4 py-2 text-sm md:text-base rounded-lg font-semibold hover:bg-red-50 hover:scale-105 transition-all duration-300 text-center cursor-pointer"
+                      disabled={removingDogId !== null}
+                      className="inline-flex w-fit cursor-pointer items-center justify-center rounded-lg border border-red-400 px-4 py-2 text-sm font-semibold text-red-600 transition-all duration-300 hover:scale-105 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100 md:text-base"
                     >
-                      Remove Dog
+                      {removingDogId === dog.id
+                        ? "Removing..."
+                        : "Remove Dog"}
                     </button>
                   </div>
                 </div>
