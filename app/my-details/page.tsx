@@ -26,6 +26,15 @@ import {
   authenticatedApiRequest,
 } from "@/lib/client/authenticated-api";
 
+type DeactivateAccountResponse = {
+  success: boolean;
+  accountDeactivated: boolean;
+  customerId: string;
+  deactivatedDogs: number;
+  message?: string;
+  error?: string;
+};
+
 type UpdateProfileResponse = {
   success: boolean;
   profileUpdated: boolean;
@@ -51,6 +60,8 @@ type UpdateProfileResponse = {
 };
 
 export default function MyDetailsPage() {
+  const [deletingAccount, setDeletingAccount] =
+  useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -263,80 +274,73 @@ async function handleSave(
   }
 }
 
-  async function deleteAccount() {
-    const confirmed = window.confirm(
-      "Are you sure you want to delete your account?\n\nYour account and dogs will be made inactive. Historic information will be retained by Browns Boarding."
+async function deleteAccount() {
+  if (deletingAccount) {
+    return;
+  }
+
+  setMessage("");
+  setIsError(false);
+
+  const confirmed = window.confirm(
+    "Are you sure you want to deactivate your account?\n\nYou will no longer be able to access the customer portal, and your dogs will be made inactive. Historical booking information will be retained."
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  setDeletingAccount(true);
+
+  const result =
+    await authenticatedApiRequest<DeactivateAccountResponse>(
+      "/api/profile/deactivate"
     );
 
-    if (!confirmed) return;
+  if (result.unauthenticated) {
+    setDeletingAccount(false);
+    window.location.href = "/login";
+    return;
+  }
 
-    setMessage("");
-    setIsError(false);
+  if (!result.ok) {
+    setDeletingAccount(false);
+    setIsError(true);
+    setMessage(
+      result.error ||
+        "Your account could not be deactivated."
+    );
+    return;
+  }
 
-    let user;
+  if (
+    !result.data ||
+    !result.data.accountDeactivated
+  ) {
+    setDeletingAccount(false);
+    setIsError(true);
+    setMessage(
+      result.data?.error ||
+        "The account service did not deactivate your account."
+    );
+    return;
+  }
 
-    try {
-      user = await getCurrentUser();
-    } catch {
-      window.location.href = "/login";
-      return;
-    }
-
-    const { data: bookings, error: bookingError } = await supabase
-      .from("bookings")
-      .select("id")
-      .eq("owner_id", user.id)
-      .in(
-        "status",
-        ACTIVE_BOOKING_STATUSES
-      );
-
-    if (bookingError) {
-      setIsError(true);
-      setMessage(bookingError.message);
-      return;
-    }
-
-    if (bookings && bookings.length > 0) {
-      setIsError(true);
-      setMessage(
-        "Your account cannot be deleted because you have pending or confirmed bookings. Please cancel those bookings first."
-      );
-      return;
-    }
-
-    const { error: profileError } = await supabase
-      .from("profiles")
-      .update({
-        active: false,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", user.id);
-
-    if (profileError) {
-      setIsError(true);
-      setMessage(profileError.message);
-      return;
-    }
-
-    const { error: dogError } = await supabase
-      .from("dogs")
-      .update({
-        active: false,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("owner_id", user.id);
-
-    if (dogError) {
-      setIsError(true);
-      setMessage(dogError.message);
-      return;
-    }
-
+  const { error: signOutError } =
     await supabase.auth.signOut();
 
-    window.location.href = "/";
+  setDeletingAccount(false);
+
+  if (signOutError) {
+    setIsError(true);
+    setMessage(
+      "Your account was deactivated, but the local session could not be cleared. Please close the browser or return to the login page."
+    );
+    return;
   }
+
+  window.location.href = "/";
+}
 
   if (loading) {
     return <LoadingScreen message="Loading your details..." />;
@@ -366,14 +370,16 @@ async function handleSave(
           emailDisabled
           showVetDetails
           additionalActions={
-          <button
-            type="button"
-            onClick={deleteAccount}
-            disabled={saving}
-            className="inline-flex min-h-11 w-fit items-center justify-center rounded-lg border border-red-500 px-4 py-2 text-sm font-semibold text-red-600 transition-all duration-300 hover:scale-105 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100 md:px-8 md:py-3 md:text-base"
-          >
-            Delete Account
-          </button>
+        <button
+          type="button"
+          onClick={deleteAccount}
+          disabled={deletingAccount}
+          className="inline-flex min-h-11 w-fit cursor-pointer items-center justify-center rounded-lg border border-red-400 px-4 py-2 text-sm font-semibold text-red-600 transition-all duration-300 hover:scale-105 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100 md:text-base"
+        >
+          {deletingAccount
+            ? "Deleting..."
+            : "Deleting Account"}
+        </button>
           }
           />
               </PageCard>
