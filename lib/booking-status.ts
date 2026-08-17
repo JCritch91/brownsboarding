@@ -1,7 +1,12 @@
 import type {
+  Booking,
   BookingStatus,
-  BookingWithCustomer,
 } from "@/types/booking";
+
+type BookingStatusDetails = Pick<
+  Booking,
+  "status" | "deposit_amount"
+>;
 
 export function getBookingStatusStyle(
   status: BookingStatus
@@ -27,16 +32,18 @@ export function getBookingStatusStyle(
 
     default: {
       const exhaustiveCheck: never = status;
-
       return exhaustiveCheck;
     }
   }
 }
 
 export function getBookingDisplayStatus(
-  booking: BookingWithCustomer
+  booking: BookingStatusDetails
 ) {
   switch (booking.status) {
+    case "Pending":
+      return "Pending";
+
     case "Deposit Pending":
       return "Confirmed";
 
@@ -54,9 +61,6 @@ export function getBookingDisplayStatus(
 
     case "Cancelled":
       return "Cancelled";
-
-    case "Pending":
-      return "Pending";
 
     default: {
       const exhaustiveCheck: never =

@@ -11,6 +11,10 @@ import Button from "@/components/Buttons";
 import {
   authenticatedApiRequest,
 } from "@/lib/client/authenticated-api";
+import type {
+  Booking,
+} from "@/types/booking";
+import BookingStatusBadge from "@/components/bookings/BookingStatusBadge";
 
 type BookingCancellationResponse = {
   success: boolean;
@@ -18,30 +22,6 @@ type BookingCancellationResponse = {
   followUpRequired: boolean;
   message?: string;
   error?: string;
-};
-
-type Booking = {
-  id: string;
-  booking_reference: string;
-  dog_id: string;
-  start_date: string;
-  end_date: string;
-  status: string;
-  notes: string | null;
-  created_at: string;
-
-  nightly_rate: number | null;
-  number_of_nights: number | null;
-  total_cost: number | null;
-  deposit_amount: number | null;
-  balance_amount: number | null;
-  deposit_paid_at: string | null;
-  balance_paid_at: string | null;
-
-  dogs: {
-    name: string;
-    breed: string | null;
-  } | null;
 };
 
 export default function MyBookingsPage() {
@@ -69,29 +49,32 @@ export default function MyBookingsPage() {
 
     const { data, error } = await supabase
       .from("bookings")
-      .select(
-        `
-        id,
-        booking_reference,
-        dog_id,
-        start_date,
-        end_date,
-        status,
-        notes,
-        created_at,
-        nightly_rate,
-        number_of_nights,
-        total_cost,
-        deposit_amount,
-        balance_amount,
-        deposit_paid_at,
-        balance_paid_at,
-        dogs (
-          name,
-          breed
-        )
-      `
-      )
+.select(
+  `
+  id,
+  booking_reference,
+  owner_id,
+  dog_id,
+  start_date,
+  end_date,
+  status,
+  notes,
+  created_at,
+  pricing_setting_id,
+  nightly_rate,
+  number_of_nights,
+  total_cost,
+  deposit_amount,
+  balance_amount,
+  deposit_paid_at,
+  balance_paid_at,
+  dogs (
+    name,
+    breed
+  )
+  `
+)
+
       .eq("owner_id", user.id)
       .order("start_date", { ascending: true });
 
@@ -143,56 +126,6 @@ function getBalanceDueText(startDate: string) {
     .split(" ")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
-}
-
-function getDisplayStatus(status: string) {
-  switch (status) {
-    case "Pending":
-      return "Pending review";
-
-    case "Deposit Pending":
-      return "Confirmed, deposit required";
-
-    case "Balance Pending":
-      return "Deposit received, balance pending";
-
-    case "Balance Paid":
-      return "Fully paid";
-
-    case "Completed":
-      return "Completed";
-
-    case "Cancelled":
-      return "Cancelled";
-
-    default:
-      return status;
-  }
-}
-
-function getStatusStyle(status: string) {
-  switch (status) {
-    case "Pending":
-      return "bg-amber-50 text-amber-800 border-amber-300";
-
-    case "Deposit Pending":
-      return "bg-green-50 text-green-800 border-green-300";
-
-    case "Balance Pending":
-      return "bg-blue-50 text-blue-800 border-blue-300";
-
-    case "Balance Paid":
-      return "bg-teal-50 text-teal-800 border-teal-300";
-
-    case "Completed":
-      return "bg-gray-50 text-gray-700 border-gray-300";
-
-    case "Cancelled":
-      return "bg-red-50 text-red-700 border-red-300";
-
-    default:
-      return "bg-gray-50 text-gray-700 border-gray-300";
-  }
 }
 
   function isUpcomingOrCurrent(booking: Booking) {
@@ -315,7 +248,9 @@ return (
       }
     >
       {message && (
-        <MessageBox type="info">
+        <MessageBox
+          type={isError ? "error" : "info"}
+        >
           {message}
         </MessageBox>
       )}
@@ -372,7 +307,7 @@ return (
                           {formatDisplayDate(booking.end_date)}
                         </p>
 
-                        {booking.total_cost ? (
+                        {booking.total_cost !== null ? (
                           <div className="mt-3 md:mt-4 bg-[#F5EFE6] border border-[#D9CBB8] p-3 md:p-4 rounded-lg">
                             <p className="text-sm md:text-base text-[#5C4033] font-semibold">
                               Booking Cost
@@ -398,8 +333,8 @@ return (
 
                             {booking.status === "Balance Pending" && (
                               <>
-                                {booking.deposit_amount &&
-                                booking.deposit_amount > 0 ? (
+                                {booking.deposit_amount !== null &&
+                                  booking.deposit_amount > 0? (
                                   <>
                                     <p className="text-sm md:text-base text-[#8B6A4E]">
                                       Deposit received:{" "}
@@ -457,8 +392,9 @@ return (
                               </>
                             )}
 
-                            {booking.number_of_nights &&
-                              booking.nightly_rate && (
+                            {booking.number_of_nights !== null &&
+                              booking.number_of_nights > 0 &&
+                              booking.nightly_rate !== null && (
                                 <p className="mt-2 text-sm text-[#8B6A4E]">
                                   Based on {booking.number_of_nights} night
                                   {booking.number_of_nights === 1 ? "" : "s"} at{" "}
@@ -478,8 +414,8 @@ return (
                         {booking.status !== "Pending" &&
                           booking.status !== "Cancelled" && (
                             <div className="mt-3 md:mt-4 space-y-1.5 md:space-y-2">
-                              {booking.deposit_amount &&
-                              booking.deposit_amount > 0 ? (
+                              {booking.deposit_amount !== null &&
+                                booking.deposit_amount > 0?(
                                 booking.deposit_paid_at ? (
                                   <p className="text-sm md:text-base text-green-700 font-medium">
                                     Deposit received on{" "}
@@ -528,13 +464,7 @@ return (
                       </div>
 
                       <div className="flex flex-wrap md:flex-col gap-2 md:gap-3 md:items-end">
-                        <span
-                          className={`inline-flex w-fit items-center border px-3 py-1.5 md:px-4 md:py-2 rounded-lg text-xs md:text-base font-semibold ${getStatusStyle(
-                            booking.status
-                          )}`}
-                        >
-                          {getDisplayStatus(booking.status)}
-                        </span>
+                        <BookingStatusBadge booking={booking} />
 
                         {[
                           "Pending",
@@ -602,13 +532,7 @@ return (
                         )}
                       </div>
 
-                      <span
-                        className={`inline-flex w-fit items-center border px-3 py-1.5 md:px-4 md:py-2 rounded-lg text-xs md:text-base font-semibold ${getStatusStyle(
-                          booking.status
-                        )}`}
-                      >
-                        {getDisplayStatus(booking.status)}
-                      </span>
+                      <BookingStatusBadge booking={booking} />
                     </div>
                   </div>
                 ))}

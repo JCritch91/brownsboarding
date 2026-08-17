@@ -4,11 +4,11 @@ import {
 } from "@/lib/booking-status";
 
 import type {
-  BookingWithCustomer,
+  Booking,
 } from "@/types/booking";
 
 type BookingStatusBadgeProps = {
-  booking: BookingWithCustomer;
+  booking: Booking;
 };
 
 export default function BookingStatusBadge({
