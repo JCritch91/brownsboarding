@@ -22,6 +22,33 @@ import LoadingScreen from "@/components/LoadingScreen";
 import {
   ACTIVE_BOOKING_STATUSES,
 } from "@/types/booking";
+import {
+  authenticatedApiRequest,
+} from "@/lib/client/authenticated-api";
+
+type UpdateProfileResponse = {
+  success: boolean;
+  profileUpdated: boolean;
+  profile?: {
+    id: string;
+    first_name: string | null;
+    last_name: string | null;
+    email: string | null;
+    phone: string | null;
+    address_line_1: string | null;
+    address_line_2: string | null;
+    town: string | null;
+    postcode: string | null;
+    emergency_contact_name: string | null;
+    emergency_contact_phone: string | null;
+    vet_name: string | null;
+    vet_phone: string | null;
+    vet_address: string | null;
+    active: boolean;
+  };
+  message?: string;
+  error?: string;
+};
 
 export default function MyDetailsPage() {
   const [loading, setLoading] = useState(true);
@@ -127,44 +154,114 @@ const [form, setForm] = useState<CustomerFormValues>({
     }));
   }
 
-  async function handleSave(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+async function handleSave(
+  event: FormEvent<HTMLFormElement>
+) {
+  event.preventDefault();
 
-    setSaving(true);
-    setMessage("");
-    setIsError(false);
-
-    const { error } = await supabase
-      .from("profiles")
-      .update({
-        first_name: formatName(form.first_name),
-        last_name: formatName(form.last_name),
-        phone: formatUkPhone(form.phone),
-        address_line_1: formatAddressLine(form.address_line_1),
-        address_line_2: formatAddressLine(form.address_line_2),
-        town: formatName(form.town),
-        postcode: formatPostcode(form.postcode),
-        emergency_contact_name: formatName(form.emergency_contact_name),
-        emergency_contact_phone: formatUkPhone(form.emergency_contact_phone),
-        vet_name: formatName(form.vet_name),
-        vet_phone: formatUkPhone(form.vet_phone),
-        vet_address: formatAddressLine(form.vet_address),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", userId);
-
-    setSaving(false);
-
-    if (error) {
-      setIsError(true);
-      setMessage(error.message);
-      return;
-    }
-
-    setIsError(false);
-    setMessage("Details saved successfully.");
-    window.dispatchEvent(new Event("profile-updated"));
+  if (saving) {
+    return;
   }
+
+  setMessage("");
+  setIsError(false);
+
+  const firstName =
+    formatName(form.first_name);
+
+  const lastName =
+    formatName(form.last_name);
+
+  if (!firstName || !lastName) {
+    setIsError(true);
+    setMessage(
+      "First name and last name are required."
+    );
+    return;
+  }
+
+  setSaving(true);
+
+  const result =
+    await authenticatedApiRequest<UpdateProfileResponse>(
+      "/api/profile/update",
+      {
+        method: "PATCH",
+        body: {
+          ...form,
+          first_name: firstName,
+          last_name: lastName,
+        },
+      }
+    );
+
+  setSaving(false);
+
+  if (result.unauthenticated) {
+    window.location.href = "/login";
+    return;
+  }
+
+  if (!result.ok) {
+    setIsError(true);
+    setMessage(
+      result.error ||
+        "Your details could not be updated."
+    );
+    return;
+  }
+
+  if (
+    !result.data ||
+    !result.data.profileUpdated
+  ) {
+    setIsError(true);
+    setMessage(
+      result.data?.error ||
+        "The profile service did not update your details."
+    );
+    return;
+  }
+
+  setIsError(false);
+  setMessage(
+    result.data.message ||
+      "Your details have been updated successfully."
+  );
+
+  if (result.data.profile) {
+    setForm({
+      first_name:
+        result.data.profile.first_name || "",
+      last_name:
+        result.data.profile.last_name || "",
+      email:
+        result.data.profile.email || "",
+      phone:
+        result.data.profile.phone || "",
+      address_line_1:
+        result.data.profile.address_line_1 || "",
+      address_line_2:
+        result.data.profile.address_line_2 || "",
+      town:
+        result.data.profile.town || "",
+      postcode:
+        result.data.profile.postcode || "",
+      emergency_contact_name:
+        result.data.profile
+          .emergency_contact_name || "",
+      emergency_contact_phone:
+        result.data.profile
+          .emergency_contact_phone || "",
+      vet_name:
+        result.data.profile.vet_name || "",
+      vet_phone:
+        result.data.profile.vet_phone || "",
+      vet_address:
+        result.data.profile.vet_address || "",
+    });
+  }
+}
 
   async function deleteAccount() {
     const confirmed = window.confirm(
