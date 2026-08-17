@@ -3,19 +3,16 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { ensureActiveAdminUser } from "@/lib/appActions";
-import {
-  formatDisplayDate,
-  formatMoney,
-  formatName,
-  isWithinTwoWeeks,
-} from "@/lib/helpers";
-
-
 import AdminPageLayout from "@/components/AdminPageLayout";
 import PageCard from "@/components/PageCard";
 import Button from "@/components/Buttons";
 import MessageBox from "@/components/MessageBox";
 import LoadingScreen from "@/components/LoadingScreen";
+import {
+  formatDisplayDate,
+  formatName,
+  isWithinTwoWeeks,
+} from "@/lib/helpers";
 import {
   BOOKING_STATUSES,
   type Booking,
@@ -24,6 +21,7 @@ import {
   type BookingWithCustomer,
 } from "@/types/booking";
 import BookingStatusBadge from "@/components/bookings/BookingStatusBadge";
+import BookingPricingPanel from "@/components/bookings/BookingPricingPanel";
 
 
 export default function AdminBookingsPage() {
@@ -832,37 +830,7 @@ async function autoCompleteEligibleBookings() {
               </p>
             )}
 
-            {booking.total_cost && (
-              <div className="mt-3 md:mt-4 bg-[#F5EFE6] border border-[#D9CBB8] p-3 md:p-4 rounded-lg">
-                <p className="text-sm md:text-base text-[#5C4033] font-semibold">
-                  Booking Cost
-                </p>
-
-                <p className="mt-1 md:mt-2 text-sm md:text-base text-[#8B6A4E]">
-                  Total: {formatMoney(booking.total_cost)}
-                </p>
-
-                {booking.deposit_amount !== null && (
-                  <p className="text-sm md:text-base text-[#8B6A4E]">
-                    Deposit: {formatMoney(booking.deposit_amount)}
-                  </p>
-                )}
-
-                {booking.balance_amount !== null && (
-                  <p className="text-sm md:text-base text-[#8B6A4E]">
-                    Balance: {formatMoney(booking.balance_amount)}
-                  </p>
-                )}
-
-                {booking.number_of_nights && booking.nightly_rate && (
-                  <p className="mt-2 text-xs md:text-sm text-[#8B6A4E]">
-                    Based on {booking.number_of_nights} night
-                    {booking.number_of_nights === 1 ? "" : "s"} at{" "}
-                    {formatMoney(booking.nightly_rate)} per night.
-                  </p>
-                )}
-              </div>
-            )}
+            <BookingPricingPanel booking={booking} />
 
             {booking.notes && (
               <p className="mt-2 md:mt-3 text-sm md:text-base text-[#8B6A4E]">
