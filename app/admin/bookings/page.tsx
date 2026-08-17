@@ -21,6 +21,30 @@ import {
   authenticatedApiRequest,
 } from "@/lib/client/authenticated-api";
 
+type BookingPaymentResponse = {
+  success: boolean;
+  paymentRecorded: boolean;
+  followUpRequired: boolean;
+  message?: string;
+  error?: string;
+};
+
+type BookingConfirmationResponse = {
+  success: boolean;
+  databaseConfirmed: boolean;
+  followUpRequired: boolean;
+  message?: string;
+  error?: string;
+};
+
+type BookingCancellationResponse = {
+  success: boolean;
+  databaseCancelled: boolean;
+  followUpRequired: boolean;
+  message?: string;
+  error?: string;
+};
+
 type BookingCompletionResponse = {
   success: boolean;
   databaseCompleted?: boolean;
@@ -143,19 +167,9 @@ const [selectedFilter, setSelectedFilter] =
     setBookings(bookingsWithCustomers);
   }
 
-  function getCustomerName(booking: BookingWithCustomer) {
-    const firstName = booking.customer?.first_name || "";
-    const lastName = booking.customer?.last_name || "";
-
-    const fullName = `${firstName} ${lastName}`.trim();
-
-    return fullName || booking.customer?.email || "Customer";
-  }
-
-  async function confirmBooking(
+async function confirmBooking(
   booking: BookingWithCustomer
 ) {
-
   const shortNoticeBooking = isWithinTwoWeeks(
     booking.start_date
   );
@@ -173,51 +187,25 @@ const [selectedFilter, setSelectedFilter] =
   setMessage("");
   setIsError(false);
 
-  const {
-    data: { session },
-    error: sessionError,
-  } = await supabase.auth.getSession();
+  const result =
+    await authenticatedApiRequest<BookingConfirmationResponse>(
+      "/api/admin/bookings/confirm",
+      {
+        body: {
+          bookingId: booking.id,
+        },
+      }
+    );
 
-  if (sessionError || !session) {
+  if (result.unauthenticated) {
     window.location.href = "/login";
     return;
   }
 
-  let response: Response;
-
-  try {
-    response = await fetch(
-      "/api/admin/bookings/confirm",
-      {
-        method: "POST",
-        headers: {
-          Authorization:
-            `Bearer ${session.access_token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          bookingId: booking.id,
-        }),
-      }
-    );
-  } catch (requestError) {
+  if (!result.ok) {
     setIsError(true);
     setMessage(
-      requestError instanceof Error
-        ? requestError.message
-        : "Unable to contact the booking confirmation service."
-    );
-    return;
-  }
-
-  const result = await response
-    .json()
-    .catch(() => null);
-
-  if (!response.ok) {
-    setIsError(true);
-    setMessage(
-      result?.error ||
+      result.error ||
         "The booking could not be confirmed."
     );
 
@@ -225,10 +213,13 @@ const [selectedFilter, setSelectedFilter] =
     return;
   }
 
-  if (!result?.databaseConfirmed) {
+  if (
+    !result.data ||
+    !result.data.databaseConfirmed
+  ) {
     setIsError(true);
     setMessage(
-      result?.error ||
+      result.data?.error ||
         "The confirmation service did not confirm the booking."
     );
 
@@ -236,10 +227,10 @@ const [selectedFilter, setSelectedFilter] =
     return;
   }
 
-  if (result.followUpRequired) {
+  if (result.data.followUpRequired) {
     setIsError(true);
     setMessage(
-      result.message ||
+      result.data.message ||
         "The booking was confirmed, but one or more calendar or email operations could not be completed."
     );
 
@@ -249,7 +240,7 @@ const [selectedFilter, setSelectedFilter] =
 
   setIsError(false);
   setMessage(
-    result.message ||
+    result.data.message ||
       "Booking confirmed successfully."
   );
 
@@ -275,51 +266,25 @@ async function cancelBooking(
   setMessage("");
   setIsError(false);
 
-  const {
-    data: { session },
-    error: sessionError,
-  } = await supabase.auth.getSession();
+  const result =
+    await authenticatedApiRequest<BookingCancellationResponse>(
+      "/api/bookings/cancel",
+      {
+        body: {
+          bookingId: booking.id,
+        },
+      }
+    );
 
-  if (sessionError || !session) {
+  if (result.unauthenticated) {
     window.location.href = "/login";
     return;
   }
 
-  let response: Response;
-
-  try {
-    response = await fetch(
-      "/api/bookings/cancel",
-      {
-        method: "POST",
-        headers: {
-          Authorization:
-            `Bearer ${session.access_token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          bookingId: booking.id,
-        }),
-      }
-    );
-  } catch (requestError) {
+  if (!result.ok) {
     setIsError(true);
     setMessage(
-      requestError instanceof Error
-        ? requestError.message
-        : "Unable to contact the booking cancellation service."
-    );
-    return;
-  }
-
-  const result = await response
-    .json()
-    .catch(() => null);
-
-  if (!response.ok) {
-    setIsError(true);
-    setMessage(
-      result?.error ||
+      result.error ||
         "The booking could not be cancelled."
     );
 
@@ -327,10 +292,13 @@ async function cancelBooking(
     return;
   }
 
-  if (!result?.databaseCancelled) {
+  if (
+    !result.data ||
+    !result.data.databaseCancelled
+  ) {
     setIsError(true);
     setMessage(
-      result?.error ||
+      result.data?.error ||
         "The cancellation service did not cancel the booking."
     );
 
@@ -338,10 +306,10 @@ async function cancelBooking(
     return;
   }
 
-  if (result.followUpRequired) {
+  if (result.data.followUpRequired) {
     setIsError(true);
     setMessage(
-      result.message ||
+      result.data.message ||
         "The booking was cancelled, but one or more calendar or email operations could not be completed."
     );
 
@@ -351,11 +319,84 @@ async function cancelBooking(
 
   setIsError(false);
   setMessage(
-    result.message ||
+    result.data.message ||
       "Booking cancelled successfully."
   );
 
   await loadBookings();
+}
+
+async function recordBookingPayment(
+  booking: BookingWithCustomer,
+  paymentType: "Deposit" | "Balance",
+  paymentDate: string
+) {
+  const result =
+    await authenticatedApiRequest<BookingPaymentResponse>(
+      "/api/admin/bookings/record-payment",
+      {
+        body: {
+          bookingId: booking.id,
+          paymentType,
+          paymentDate,
+        },
+      }
+    );
+
+  if (result.unauthenticated) {
+    window.location.href = "/login";
+
+    return false;
+  }
+
+  if (!result.ok) {
+    setIsError(true);
+    setMessage(
+      result.error ||
+        `The ${paymentType.toLowerCase()} payment could not be recorded.`
+    );
+
+    await loadBookings();
+
+    return false;
+  }
+
+  if (
+    !result.data ||
+    !result.data.paymentRecorded
+  ) {
+    setIsError(true);
+    setMessage(
+      result.data?.error ||
+        `The payment service did not record the ${paymentType.toLowerCase()}.`
+    );
+
+    await loadBookings();
+
+    return false;
+  }
+
+  if (result.data.followUpRequired) {
+    setIsError(true);
+    setMessage(
+      result.data.message ||
+        `The ${paymentType.toLowerCase()} was recorded, but the calendar or receipt email could not be completed.`
+    );
+
+    await loadBookings();
+
+    return false;
+  }
+
+  setIsError(false);
+  setMessage(
+    result.data.message ||
+      `The ${paymentType.toLowerCase()} was recorded successfully.`
+  );
+
+  await loadBookings();
+
+  return true;
 }
 
 async function markDepositPaid(
@@ -440,96 +481,14 @@ const [day, month, year] =
     return;
   }
 
-  setMessage("");
-  setIsError(false);
+ setMessage("");
+setIsError(false);
 
-  const {
-    data: { session },
-    error: sessionError,
-  } = await supabase.auth.getSession();
-
-  if (sessionError || !session) {
-    window.location.href = "/login";
-    return;
-  }
-
-  let response: Response;
-
-  try {
-    response = await fetch(
-      "/api/admin/bookings/record-payment",
-      {
-        method: "POST",
-        headers: {
-          Authorization:
-            `Bearer ${session.access_token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          bookingId: booking.id,
-          paymentType: "Deposit",
-          paymentDate: depositPaidDateDb,
-        }),
-      }
-    );
-  } catch (requestError) {
-    setIsError(true);
-    setMessage(
-      requestError instanceof Error
-        ? requestError.message
-        : "Unable to contact the payment service."
-    );
-    return;
-  }
-
-  const result = await response
-    .json()
-    .catch(() => null);
-
-  if (!response.ok) {
-    setIsError(true);
-    setMessage(
-      result?.error ||
-        "The deposit payment could not be recorded."
-    );
-
-    await loadBookings();
-    return;
-  }
-
-  if (!result?.paymentRecorded) {
-    setIsError(true);
-    setMessage(
-      result?.error ||
-        "The payment service did not record the deposit."
-    );
-
-    await loadBookings();
-    return;
-  }
-
-  /*
-   * HTTP 207 means the database payment succeeded,
-   * but the calendar or receipt email failed.
-   */
-  if (result.followUpRequired) {
-    setIsError(true);
-    setMessage(
-      result.message ||
-        "The deposit was recorded, but the calendar or receipt email could not be completed."
-    );
-
-    await loadBookings();
-    return;
-  }
-
-  setIsError(false);
-  setMessage(
-    result.message ||
-      "The deposit was recorded successfully."
-  );
-
-  await loadBookings();
+await recordBookingPayment(
+  booking,
+  "Deposit",
+  depositPaidDateDb
+);
 }
 
 async function markBalancePaid(
