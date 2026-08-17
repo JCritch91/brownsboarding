@@ -16,6 +16,7 @@ import {
   type BookingWithCustomer,
 } from "@/types/booking";
 import AdminBookingCard from "@/components/bookings/AdminBookingCard";
+import BookingStatusSummary from "@/components/bookings/BookingStatusSummary";
 
 
 export default function AdminBookingsPage() {
@@ -802,43 +803,14 @@ async function autoCompleteEligibleBookings() {
           </MessageBox>
         )}
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4">
-          <div className="bg-amber-50 border border-amber-300 p-3 md:p-4 rounded-lg">
-            <p className="text-amber-800 font-semibold text-xs md:text-base">
-              Pending: {pendingBookings.length}
-            </p>
-          </div>
-
-          <div className="bg-green-50 border border-green-300 p-3 md:p-4 rounded-lg">
-            <p className="text-green-800 font-semibold text-xs md:text-base">
-              Confirmed: {depositPendingBookings.length}
-            </p>
-          </div>
-
-          <div className="bg-blue-50 border border-blue-300 p-3 md:p-4 rounded-lg">
-            <p className="text-blue-800 font-semibold text-xs md:text-base">
-              Deposit Received: {balancePendingBookings.length}
-            </p>
-          </div>
-
-          <div className="bg-teal-50 border border-teal-300 p-3 md:p-4 rounded-lg">
-            <p className="text-teal-800 font-semibold text-xs md:text-base">
-              Full Balance Paid: {balancePaidBookings.length}
-            </p>
-          </div>
-
-          <div className="bg-gray-50 border border-gray-300 p-3 md:p-4 rounded-lg">
-            <p className="text-gray-700 font-semibold text-xs md:text-base">
-              Completed: {completedBookings.length}
-            </p>
-          </div>
-
-          <div className="bg-red-50 border border-red-300 p-3 md:p-4 rounded-lg">
-            <p className="text-red-700 font-semibold text-xs md:text-base">
-              Cancelled: {cancelledBookings.length}
-            </p>
-          </div>
-        </div>
+        <BookingStatusSummary
+          pendingCount={pendingBookings.length}
+          confirmedCount={depositPendingBookings.length}
+          depositReceivedCount={balancePendingBookings.length}
+          balancePaidCount={balancePaidBookings.length}
+          completedCount={completedBookings.length}
+          cancelledCount={cancelledBookings.length}
+        />
 
         <div className="mt-5 md:mt-8 flex flex-wrap gap-2 md:gap-3">
           {(["All", ...BOOKING_STATUSES] as BookingFilter[]).map(
