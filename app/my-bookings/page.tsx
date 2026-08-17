@@ -8,6 +8,17 @@ import LoadingScreen from "@/components/LoadingScreen";
 import CustomerPageLayout from "@/components/CustomerPageLayout";
 import PageCard from "@/components/PageCard";
 import Button from "@/components/Buttons";
+import {
+  authenticatedApiRequest,
+} from "@/lib/client/authenticated-api";
+
+type BookingCancellationResponse = {
+  success: boolean;
+  databaseCancelled: boolean;
+  followUpRequired: boolean;
+  message?: string;
+  error?: string;
+};
 
 type Booking = {
   id: string;
@@ -205,7 +216,9 @@ function getStatusStyle(status: string) {
   }).format(amount);
 }
 
-async function cancelBooking(booking: Booking) {
+async function cancelBooking(
+  booking: Booking
+) {
   const confirmed = window.confirm(
     `Are you sure you want to cancel booking ${booking.booking_reference}?\n\n${
       booking.status === "Pending"
@@ -221,51 +234,25 @@ async function cancelBooking(booking: Booking) {
   setMessage("");
   setIsError(false);
 
-  const {
-    data: { session },
-    error: sessionError,
-  } = await supabase.auth.getSession();
+  const result =
+    await authenticatedApiRequest<BookingCancellationResponse>(
+      "/api/bookings/cancel",
+      {
+        body: {
+          bookingId: booking.id,
+        },
+      }
+    );
 
-  if (sessionError || !session) {
+  if (result.unauthenticated) {
     window.location.href = "/login";
     return;
   }
 
-  let response: Response;
-
-  try {
-    response = await fetch(
-      "/api/bookings/cancel",
-      {
-        method: "POST",
-        headers: {
-          Authorization:
-            `Bearer ${session.access_token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          bookingId: booking.id,
-        }),
-      }
-    );
-  } catch (requestError) {
+  if (!result.ok) {
     setIsError(true);
     setMessage(
-      requestError instanceof Error
-        ? requestError.message
-        : "Unable to contact the booking cancellation service."
-    );
-    return;
-  }
-
-  const result = await response
-    .json()
-    .catch(() => null);
-
-  if (!response.ok) {
-    setIsError(true);
-    setMessage(
-      result?.error ||
+      result.error ||
         "The booking could not be cancelled."
     );
 
@@ -273,10 +260,13 @@ async function cancelBooking(booking: Booking) {
     return;
   }
 
-  if (!result?.databaseCancelled) {
+  if (
+    !result.data ||
+    !result.data.databaseCancelled
+  ) {
     setIsError(true);
     setMessage(
-      result?.error ||
+      result.data?.error ||
         "The cancellation service did not cancel the booking."
     );
 
@@ -284,10 +274,10 @@ async function cancelBooking(booking: Booking) {
     return;
   }
 
-  if (result.followUpRequired) {
+  if (result.data.followUpRequired) {
     setIsError(true);
     setMessage(
-      result.message ||
+      result.data.message ||
         "The booking was cancelled, but one or more calendar or email operations could not be completed."
     );
 
@@ -297,12 +287,13 @@ async function cancelBooking(booking: Booking) {
 
   setIsError(false);
   setMessage(
-    result.message ||
+    result.data.message ||
       "Your booking has been cancelled successfully."
   );
 
   await loadBookings();
 }
+
 
 
   const upcomingBookings = bookings.filter(isUpcomingOrCurrent);
