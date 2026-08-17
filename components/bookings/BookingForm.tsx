@@ -21,6 +21,9 @@ import {
   FormSelect,
   FormTextarea,
 } from "@/components/FormInput";
+import type {
+  Availability,
+} from "@/types/availability";
 
 export type BookingFormDog = {
   id: string;
@@ -31,14 +34,8 @@ export type BookingFormDog = {
   vaccination_expiry: string | null;
 };
 
-export type BookingFormAvailability = {
-  id: string;
-  date: string;
-  available: boolean;
-  total_spaces: number;
-  spaces_available: number;
-  notes: string | null;
-};
+export type BookingFormAvailability =
+  Availability;
 
 type BookingFormProps = {
   dogs: BookingFormDog[];
