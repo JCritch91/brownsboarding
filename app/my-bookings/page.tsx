@@ -15,6 +15,7 @@ import type {
   Booking,
 } from "@/types/booking";
 import BookingStatusBadge from "@/components/bookings/BookingStatusBadge";
+import CustomerBookingPricing from "@/components/bookings/CustomerBookingPricing";
 
 type BookingCancellationResponse = {
   success: boolean;
@@ -95,29 +96,6 @@ setBookings((data ?? []) as unknown as Booking[]);
     return `${day}/${month}/${year}`;
   }
 
-
-function getBalanceDueText(startDate: string) {
-  const [year, month, day] = startDate.split("-").map(Number);
-
-  const dueDate = new Date(year, month - 1, day);
-  dueDate.setDate(dueDate.getDate() - 14);
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  dueDate.setHours(0, 0, 0, 0);
-
-  if (dueDate <= today) {
-    return "due now";
-  }
-
-  const dueDay = String(dueDate.getDate()).padStart(2, "0");
-  const dueMonth = String(dueDate.getMonth() + 1).padStart(2, "0");
-  const dueYear = dueDate.getFullYear();
-
-  return `due by ${dueDay}/${dueMonth}/${dueYear}`;
-}
-
   function toTitleCase(text: string | null | undefined) {
   if (!text) return "";
 
@@ -139,15 +117,6 @@ function getBalanceDueText(startDate: string) {
 
     return booking.end_date < today || booking.status === "Cancelled";
   }
-
-  function formatMoney(amount: number | null) {
-  if (amount === null || amount === undefined) return "";
-
-  return new Intl.NumberFormat("en-GB", {
-    style: "currency",
-    currency: "GBP",
-  }).format(amount);
-}
 
 async function cancelBooking(
   booking: Booking
@@ -307,154 +276,9 @@ return (
                           {formatDisplayDate(booking.end_date)}
                         </p>
 
-                        {booking.total_cost !== null ? (
-                          <div className="mt-3 md:mt-4 bg-[#F5EFE6] border border-[#D9CBB8] p-3 md:p-4 rounded-lg">
-                            <p className="text-sm md:text-base text-[#5C4033] font-semibold">
-                              Booking Cost
-                            </p>
-
-                            <p className="mt-1 md:mt-2 text-sm md:text-base text-[#8B6A4E]">
-                              Total stay cost: {formatMoney(booking.total_cost)}
-                            </p>
-
-                            {booking.status === "Deposit Pending" && (
-                              <>
-                                <p className="text-sm md:text-base text-[#8B6A4E]">
-                                  Deposit due now:{" "}
-                                  {formatMoney(booking.deposit_amount)}
-                                </p>
-
-                                <p className="text-sm md:text-base text-[#8B6A4E]">
-                                  Remaining balance after deposit:{" "}
-                                  {formatMoney(booking.balance_amount)}
-                                </p>
-                              </>
-                            )}
-
-                            {booking.status === "Balance Pending" && (
-                              <>
-                                {booking.deposit_amount !== null &&
-                                  booking.deposit_amount > 0? (
-                                  <>
-                                    <p className="text-sm md:text-base text-[#8B6A4E]">
-                                      Deposit received:{" "}
-                                      {formatMoney(booking.deposit_amount)}
-                                    </p>
-
-                                    <p className="text-sm md:text-base text-[#8B6A4E]">
-                                      Remaining balance{" "}
-                                      {getBalanceDueText(booking.start_date)}:{" "}
-                                      {formatMoney(booking.balance_amount)}
-                                    </p>
-                                  </>
-                                ) : (
-                                  <p className="text-sm md:text-base text-[#8B6A4E]">
-                                    Full balance due now:{" "}
-                                    {formatMoney(booking.balance_amount)}
-                                  </p>
-                                )}
-                              </>
-                            )}
-
-                            {booking.status === "Balance Paid" && (
-                              <>
-                                <p className="text-sm md:text-base text-[#8B6A4E]">
-                                  Deposit received:{" "}
-                                  {formatMoney(booking.deposit_amount)}
-                                </p>
-
-                                <p className="text-sm md:text-base text-[#8B6A4E]">
-                                  Remaining balance paid:{" "}
-                                  {formatMoney(booking.balance_amount)}
-                                </p>
-
-                                <p className="text-sm md:text-base text-green-700 font-medium">
-                                  Remaining balance due: £0.00
-                                </p>
-                              </>
-                            )}
-
-                            {booking.status === "Completed" && (
-                              <>
-                                <p className="text-sm md:text-base text-[#8B6A4E]">
-                                  Deposit received:{" "}
-                                  {formatMoney(booking.deposit_amount)}
-                                </p>
-
-                                <p className="text-sm md:text-base text-[#8B6A4E]">
-                                  Remaining balance paid:{" "}
-                                  {formatMoney(booking.balance_amount)}
-                                </p>
-
-                                <p className="text-sm md:text-base text-green-700 font-medium">
-                                  Fully paid.
-                                </p>
-                              </>
-                            )}
-
-                            {booking.number_of_nights !== null &&
-                              booking.number_of_nights > 0 &&
-                              booking.nightly_rate !== null && (
-                                <p className="mt-2 text-sm text-[#8B6A4E]">
-                                  Based on {booking.number_of_nights} night
-                                  {booking.number_of_nights === 1 ? "" : "s"} at{" "}
-                                  {formatMoney(booking.nightly_rate)} per night.
-                                </p>
-                              )}
-                          </div>
-                        ) : (
-                          <div className="mt-3 md:mt-4 bg-amber-50 border border-amber-300 p-3 md:p-4 rounded-lg">
-                            <p className="text-sm md:text-base text-amber-800 font-medium">
-                              Price will be confirmed once Browns Boarding
-                              reviews your booking.
-                            </p>
-                          </div>
-                        )}
-
-                        {booking.status !== "Pending" &&
-                          booking.status !== "Cancelled" && (
-                            <div className="mt-3 md:mt-4 space-y-1.5 md:space-y-2">
-                              {booking.deposit_amount !== null &&
-                                booking.deposit_amount > 0?(
-                                booking.deposit_paid_at ? (
-                                  <p className="text-sm md:text-base text-green-700 font-medium">
-                                    Deposit received on{" "}
-                                    {formatDisplayDate(
-                                      booking.deposit_paid_at
-                                    )}
-                                  </p>
-                                ) : booking.status === "Balance Pending" ||
-                                  booking.status === "Balance Paid" ? (
-                                  <p className="text-sm md:text-base text-green-700 font-medium">
-                                    Deposit received.
-                                  </p>
-                                ) : (
-                                  <p className="text-sm md:text-base text-amber-700 font-medium">
-                                    Deposit payment is still required.
-                                  </p>
-                                )
-                              ) : null}
-
-                              {booking.balance_paid_at ? (
-                                <p className="text-sm md:text-base text-green-700 font-medium">
-                                  Balance received on{" "}
-                                  {formatDisplayDate(booking.balance_paid_at)}
-                                </p>
-                              ) : booking.status === "Balance Pending" ? (
-                                <p className="text-sm md:text-base text-amber-700 font-medium">
-                                  {booking.deposit_amount && booking.deposit_amount > 0
-                                    ? `Remaining balance is ${getBalanceDueText(
-                                        booking.start_date
-                                      )}.`
-                                    : "Full balance is due now."}
-                                </p>
-                              ) : booking.status === "Balance Paid" ? (
-                                <p className="text-sm md:text-base text-green-700 font-medium">
-                                  Full balance paid.
-                                </p>
-                              ) : null}
-                            </div>
-                          )}
+                        <CustomerBookingPricing
+                          booking={booking}
+                        />
 
                         {booking.notes && (
                           <p className="mt-2 md:mt-3 text-sm md:text-base text-[#8B6A4E]">
