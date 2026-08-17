@@ -572,96 +572,14 @@ async function markBalancePaid(
     return;
   }
 
-  setMessage("");
-  setIsError(false);
+setMessage("");
+setIsError(false);
 
-  const {
-    data: { session },
-    error: sessionError,
-  } = await supabase.auth.getSession();
-
-  if (sessionError || !session) {
-    window.location.href = "/login";
-    return;
-  }
-
-  let response: Response;
-
-  try {
-    response = await fetch(
-      "/api/admin/bookings/record-payment",
-      {
-        method: "POST",
-        headers: {
-          Authorization:
-            `Bearer ${session.access_token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          bookingId: booking.id,
-          paymentType: "Balance",
-          paymentDate: balancePaidDateDb,
-        }),
-      }
-    );
-  } catch (requestError) {
-    setIsError(true);
-    setMessage(
-      requestError instanceof Error
-        ? requestError.message
-        : "Unable to contact the payment service."
-    );
-    return;
-  }
-
-  const result = await response
-    .json()
-    .catch(() => null);
-
-  if (!response.ok) {
-    setIsError(true);
-    setMessage(
-      result?.error ||
-        "The balance payment could not be recorded."
-    );
-
-    await loadBookings();
-    return;
-  }
-
-  if (!result?.paymentRecorded) {
-    setIsError(true);
-    setMessage(
-      result?.error ||
-        "The payment service did not record the balance."
-    );
-
-    await loadBookings();
-    return;
-  }
-
-  /*
-   * HTTP 207 means the database payment succeeded,
-   * but the calendar or receipt email failed.
-   */
-  if (result.followUpRequired) {
-    setIsError(true);
-    setMessage(
-      result.message ||
-        "The balance was recorded, but the calendar or receipt email could not be completed."
-    );
-
-    await loadBookings();
-    return;
-  }
-
-  setIsError(false);
-  setMessage(
-    result.message ||
-      "The balance was recorded successfully."
-  );
-
-  await loadBookings();
+await recordBookingPayment(
+  booking,
+  "Balance",
+  balancePaidDateDb
+);
 }
 
 async function autoCompleteEligibleBookings() {
