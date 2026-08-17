@@ -10,8 +10,8 @@ import PageCard from "@/components/PageCard";
 import Button from "@/components/Buttons";
 import Link from "next/link";
 import {
-  ACTIVE_BOOKING_STATUSES,
-} from "@/types/booking";
+  authenticatedApiRequest,
+} from "@/lib/client/authenticated-api";
 
 type Dog = {
   id: string;
@@ -28,6 +28,19 @@ type Dog = {
   feeding_notes: string | null;
   behaviour_notes: string | null;
   meet_and_greet_completed: boolean | null;
+};
+
+type DeactivateDogResponse = {
+  success: boolean;
+  dogDeactivated: boolean;
+  dog?: {
+    id: string;
+    ownerId: string;
+    name: string;
+    active: boolean;
+  };
+  message?: string;
+  error?: string;
 };
 
 export default function MyDogsPage() {
@@ -125,54 +138,59 @@ async function removeDog(dogId: string) {
 
   setMessage("");
 
-  const { data: bookings, error: bookingError } =
-    await supabase
-      .from("bookings")
-      .select("id")
-      .eq("dog_id", dogId)
-      .in(
-        "status",
-        ACTIVE_BOOKING_STATUSES
-      );
+  const confirmed = window.confirm(
+    "Are you sure you want to remove this dog?\n\nThe dog will no longer appear in My Dogs, but historical information and bookings will be retained."
+  );
 
-  if (bookingError) {
-    setMessage(bookingError.message);
+  if (!confirmed) {
     return;
   }
 
-  if (bookings && bookings.length > 0) {
+  setRemovingDogId(dogId);
+
+  const result =
+    await authenticatedApiRequest<DeactivateDogResponse>(
+      `/api/dogs/${dogId}`,
+      {
+        method: "DELETE",
+      }
+    );
+
+  if (result.unauthenticated) {
+    setRemovingDogId(null);
+    window.location.href = "/login";
+    return;
+  }
+
+  if (!result.ok) {
+    setRemovingDogId(null);
     setMessage(
-      "This dog cannot be removed because it has an active booking. Please cancel or complete the booking first."
+      result.error ||
+        "The dog could not be removed."
     );
     return;
   }
 
-const confirmed = window.confirm(
-  "Are you sure you want to remove this dog?\n\nThe dog will no longer appear in My Dogs, but historical information and bookings will be retained."
-);
+  if (
+    !result.data ||
+    !result.data.dogDeactivated
+  ) {
+    setRemovingDogId(null);
+    setMessage(
+      result.data?.error ||
+        "The dog service did not remove the dog."
+    );
+    return;
+  }
 
-if (!confirmed) {
-  return;
-}
+  await loadDogs();
 
-setRemovingDogId(dogId);
-
-const { error } = await supabase
-  .from("dogs")
-  .update({
-    active: false,
-    updated_at: new Date().toISOString(),
-  })
-  .eq("id", dogId);
-
-if (error) {
   setRemovingDogId(null);
-  setMessage(error.message);
-  return;
-}
 
-await loadDogs();
-setRemovingDogId(null);
+  setMessage(
+    result.data.message ||
+      "Your dog has been removed successfully."
+  );
 }
 
   return (
