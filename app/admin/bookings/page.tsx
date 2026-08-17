@@ -8,15 +8,15 @@ import PageCard from "@/components/PageCard";
 import MessageBox from "@/components/MessageBox";
 import LoadingScreen from "@/components/LoadingScreen";
 import { isWithinTwoWeeks } from "@/lib/helpers";
-import {
-  BOOKING_STATUSES,
-  type Booking,
-  type BookingCustomerSummary,
-  type BookingFilter,
-  type BookingWithCustomer,
+import type {
+  Booking,
+  BookingCustomerSummary,
+  BookingFilter,
+  BookingWithCustomer,
 } from "@/types/booking";
 import AdminBookingCard from "@/components/bookings/AdminBookingCard";
 import BookingStatusSummary from "@/components/bookings/BookingStatusSummary";
+import BookingStatusFilters from "@/components/bookings/BookingStatusFilters";
 
 
 export default function AdminBookingsPage() {
@@ -812,23 +812,10 @@ async function autoCompleteEligibleBookings() {
           cancelledCount={cancelledBookings.length}
         />
 
-        <div className="mt-5 md:mt-8 flex flex-wrap gap-2 md:gap-3">
-          {(["All", ...BOOKING_STATUSES] as BookingFilter[]).map(
-            (filter) => (
-            <button
-              key={filter}
-              type="button"
-              onClick={() => setSelectedFilter(filter)}
-              className={`px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-base rounded-lg font-semibold transition-all duration-300 cursor-pointer ${
-                selectedFilter === filter
-                  ? "bg-[#8B6A4E] text-white"
-                  : "bg-white border border-[#D9CBB8] text-[#8B6A4E] hover:bg-[#F5EFE6]"
-              }`}
-            >
-              {filter}
-            </button>
-          ))}
-        </div>
+        <BookingStatusFilters
+          selectedFilter={selectedFilter}
+          onFilterChange={setSelectedFilter}
+        />
 
         <div className="mt-6 md:mt-10">
           <h2 className="text-xl md:text-2xl font-semibold text-[#5C4033] mb-4 md:mb-6">
