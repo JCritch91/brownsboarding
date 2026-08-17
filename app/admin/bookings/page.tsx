@@ -7,11 +7,7 @@ import AdminPageLayout from "@/components/AdminPageLayout";
 import PageCard from "@/components/PageCard";
 import MessageBox from "@/components/MessageBox";
 import LoadingScreen from "@/components/LoadingScreen";
-import {
-  formatDisplayDate,
-  formatName,
-  isWithinTwoWeeks,
-} from "@/lib/helpers";
+import { isWithinTwoWeeks } from "@/lib/helpers";
 import {
   BOOKING_STATUSES,
   type Booking,
@@ -19,8 +15,7 @@ import {
   type BookingFilter,
   type BookingWithCustomer,
 } from "@/types/booking";
-import BookingPricingPanel from "@/components/bookings/BookingPricingPanel";
-import AdminBookingActions from "@/components/bookings/AdminBookingActions";
+import AdminBookingCard from "@/components/bookings/AdminBookingCard";
 
 
 export default function AdminBookingsPage() {
@@ -795,61 +790,6 @@ async function autoCompleteEligibleBookings() {
     return <LoadingScreen message="Loading admin bookings..." />;
   }
 
-  function BookingCard({ booking }: { booking: BookingWithCustomer }) {
-    return (
-      <div className="bg-white border border-[#D9CBB8] rounded-xl p-4 md:p-6 shadow">
-        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 md:gap-4">
-          <div>
-            <h3 className="text-xl md:text-2xl font-semibold text-[#5C4033]">
-              {formatName(booking.dogs?.name || "") || "Dog"}
-            </h3>
-
-            <p className="mt-1 text-xs font-semibold text-[#8B6A4E] md:text-sm">
-              Booking reference: {booking.booking_reference}
-            </p>
-
-            {booking.dogs?.breed && (
-              <p className="mt-1 text-sm md:text-base text-[#8B6A4E]">
-                {formatName(booking.dogs.breed)}
-              </p>
-            )}
-
-            <p className="mt-2 md:mt-3 text-sm md:text-base text-[#5C4033] font-medium">
-              Stay dates: {formatDisplayDate(booking.start_date)} →{" "}
-              {formatDisplayDate(booking.end_date)}
-            </p>
-
-            <p className="mt-2 md:mt-3 text-sm md:text-base text-[#8B6A4E]">
-              Customer: {getCustomerName(booking)}
-            </p>
-
-            {booking.customer?.email && (
-              <p className="mt-1 text-sm md:text-base text-[#8B6A4E] break-all">
-                Email: {booking.customer.email}
-              </p>
-            )}
-
-            <BookingPricingPanel booking={booking} />
-
-            {booking.notes && (
-              <p className="mt-2 md:mt-3 text-sm md:text-base text-[#8B6A4E]">
-                Notes: {booking.notes}
-              </p>
-            )}
-          </div>
-
-          <AdminBookingActions
-            booking={booking}
-            onConfirm={confirmBooking}
-            onCancel={cancelBooking}
-            onMarkDepositPaid={markDepositPaid}
-            onMarkBalancePaid={markBalancePaid}
-          />
-        </div>
-      </div>
-    );
-  }
-
   return (
     <AdminPageLayout>
       <PageCard
@@ -931,9 +871,16 @@ async function autoCompleteEligibleBookings() {
             </p>
           ) : (
             <div className="space-y-4 md:space-y-6">
-              {filteredBookings.map((booking) => (
-                <BookingCard key={booking.id} booking={booking} />
-              ))}
+            {filteredBookings.map((booking) => (
+              <AdminBookingCard
+                key={booking.id}
+                booking={booking}
+                onConfirm={confirmBooking}
+                onCancel={cancelBooking}
+                onMarkDepositPaid={markDepositPaid}
+                onMarkBalancePaid={markBalancePaid}
+              />
+            ))}
             </div>
           )}
         </div>
