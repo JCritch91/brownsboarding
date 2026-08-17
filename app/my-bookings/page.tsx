@@ -14,8 +14,7 @@ import {
 import type {
   Booking,
 } from "@/types/booking";
-import BookingStatusBadge from "@/components/bookings/BookingStatusBadge";
-import CustomerBookingPricing from "@/components/bookings/CustomerBookingPricing";
+import CustomerBookingCard from "@/components/bookings/CustomerBookingCard";
 
 type BookingCancellationResponse = {
   success: boolean;
@@ -88,23 +87,7 @@ if (error) {
 
 setBookings((data ?? []) as unknown as Booking[]);
   }
-  function formatDisplayDate(dateString: string) {
-    if (!dateString) return "";
 
-    const [year, month, day] = dateString.split("-");
-
-    return `${day}/${month}/${year}`;
-  }
-
-  function toTitleCase(text: string | null | undefined) {
-  if (!text) return "";
-
-  return text
-    .toLowerCase()
-    .split(" ")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-}
 
   function isUpcomingOrCurrent(booking: Booking) {
     const today = new Date().toISOString().split("T")[0];
@@ -250,63 +233,14 @@ return (
               </p>
             ) : (
               <div className="space-y-4 md:space-y-6">
-                {upcomingBookings.map((booking) => (
-                  <div
-                    key={booking.id}
-                    className="bg-white border border-[#D9CBB8] rounded-xl p-4 md:p-6 shadow"
-                  >
-                    <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 md:gap-4">
-                      <div>
-                        <h3 className="text-xl md:text-2xl font-semibold text-[#5C4033]">
-                          {toTitleCase(booking.dogs?.name) || "Dog"}
-                        </h3>
-
-                        <p className="mt-1 text-xs font-semibold text-[#8B6A4E] md:text-sm">
-                          Booking reference: {booking.booking_reference}
-                        </p>
-
-                        {booking.dogs?.breed && (
-                          <p className="mt-1 text-sm md:text-base text-[#8B6A4E]">
-                            {toTitleCase(booking.dogs.breed)}
-                          </p>
-                        )}
-
-                        <p className="mt-2 md:mt-3 text-sm md:text-base text-[#5C4033] font-medium">
-                          Stay dates: {formatDisplayDate(booking.start_date)} →{" "}
-                          {formatDisplayDate(booking.end_date)}
-                        </p>
-
-                        <CustomerBookingPricing
-                          booking={booking}
-                        />
-
-                        {booking.notes && (
-                          <p className="mt-2 md:mt-3 text-sm md:text-base text-[#8B6A4E]">
-                            Notes: {booking.notes}
-                          </p>
-                        )}
-                      </div>
-
-                      <div className="flex flex-wrap md:flex-col gap-2 md:gap-3 md:items-end">
-                        <BookingStatusBadge booking={booking} />
-
-                        {[
-                          "Pending",
-                          "Deposit Pending",
-                          "Balance Pending",
-                          "Balance Paid",
-                        ].includes(booking.status) && (
-                          <button
-                            type="button"
-                            onClick={() => cancelBooking(booking)}
-                            className="inline-flex w-fit items-center justify-center border border-red-400 text-red-600 px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-base rounded-lg font-semibold hover:bg-red-50 hover:scale-105 transition-all duration-300 cursor-pointer"                          >
-                            Cancel Booking
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  {upcomingBookings.map((booking) => (
+                    <CustomerBookingCard
+                      key={booking.id}
+                      booking={booking}
+                      variant="upcoming"
+                      onCancel={cancelBooking}
+                    />
+                  ))}
               </div>
             )}
           </section>
@@ -324,41 +258,11 @@ return (
             ) : (
               <div className="space-y-4 md:space-y-6">
                 {historicBookings.map((booking) => (
-                  <div
+                  <CustomerBookingCard
                     key={booking.id}
-                    className="bg-white border border-[#D9CBB8] rounded-xl p-4 md:p-6 shadow"
-                  >
-                    <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 md:gap-4">
-                      <div>
-                        <h3 className="text-xl md:text-2xl font-semibold text-[#5C4033]">
-                          {toTitleCase(booking.dogs?.name) || "Dog"}
-                        </h3>
-
-                        <p className="mt-1 text-xs font-semibold text-[#8B6A4E] md:text-sm">
-                          Booking reference: {booking.booking_reference}
-                        </p>
-
-                        {booking.dogs?.breed && (
-                          <p className="mt-1 text-sm md:text-base text-[#8B6A4E]">
-                            {toTitleCase(booking.dogs.breed)}
-                          </p>
-                        )}
-
-                        <p className="mt-2 md:mt-3 text-sm md:text-base text-[#5C4033] font-medium">
-                          Stay dates: {formatDisplayDate(booking.start_date)} →{" "}
-                          {formatDisplayDate(booking.end_date)}
-                        </p>
-
-                        {booking.notes && (
-                          <p className="mt-2 md:mt-3 text-sm md:text-base text-[#8B6A4E]">
-                            Notes: {booking.notes}
-                          </p>
-                        )}
-                      </div>
-
-                      <BookingStatusBadge booking={booking} />
-                    </div>
-                  </div>
+                    booking={booking}
+                    variant="historic"
+                  />
                 ))}
               </div>
             )}
