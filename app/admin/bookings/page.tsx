@@ -23,10 +23,7 @@ import {
   type BookingFilter,
   type BookingWithCustomer,
 } from "@/types/booking";
-import {
-  getBookingDisplayStatus,
-  getBookingStatusStyle,
-} from "@/lib/booking-status";
+import BookingStatusBadge from "@/components/bookings/BookingStatusBadge";
 
 
 export default function AdminBookingsPage() {
@@ -884,13 +881,7 @@ async function autoCompleteEligibleBookings() {
 
 
           <div className="flex flex-wrap md:flex-col gap-2 md:gap-3 md:items-end pt-1">
-            <span
-              className={`inline-flex w-fit items-center border px-3 py-1.5 md:px-4 md:py-2 rounded-lg text-xs md:text-base font-semibold ${getBookingStatusStyle(
-                booking.status
-              )}`}
-            >
-              {getBookingDisplayStatus(booking)}
-            </span>
+            <BookingStatusBadge booking={booking} />
 
             {booking.status === "Pending" && (
               <div className="flex flex-wrap md:flex-col gap-2">
