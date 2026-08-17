@@ -5,7 +5,6 @@ import { supabase } from "@/lib/supabase";
 import { ensureActiveAdminUser } from "@/lib/appActions";
 import AdminPageLayout from "@/components/AdminPageLayout";
 import PageCard from "@/components/PageCard";
-import Button from "@/components/Buttons";
 import MessageBox from "@/components/MessageBox";
 import LoadingScreen from "@/components/LoadingScreen";
 import {
@@ -20,8 +19,8 @@ import {
   type BookingFilter,
   type BookingWithCustomer,
 } from "@/types/booking";
-import BookingStatusBadge from "@/components/bookings/BookingStatusBadge";
 import BookingPricingPanel from "@/components/bookings/BookingPricingPanel";
+import AdminBookingActions from "@/components/bookings/AdminBookingActions";
 
 
 export default function AdminBookingsPage() {
@@ -839,102 +838,13 @@ async function autoCompleteEligibleBookings() {
             )}
           </div>
 
-          {booking.status === "Balance Pending" && (
-            <p className="mt-2 text-xs md:text-sm text-amber-700 font-medium">
-              {booking.deposit_amount && booking.deposit_amount > 0
-                ? "Deposit received. Awaiting remaining balance."
-                : "Full balance due. No deposit required."}
-            </p>
-          )}
-
-
-          <div className="flex flex-wrap md:flex-col gap-2 md:gap-3 md:items-end pt-1">
-            <BookingStatusBadge booking={booking} />
-
-            {booking.status === "Pending" && (
-              <div className="flex flex-wrap md:flex-col gap-2">
-                <Button
-                  type="button"
-                  variant="dark"
-                  onClick={() => confirmBooking(booking)}
-                >
-                  Confirm Booking
-                </Button>
-
-                <button
-                  type="button"
-                  onClick={() => cancelBooking(booking)}
-                  className="inline-flex w-fit items-center justify-center border border-red-400 text-red-600 px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-base rounded-lg font-semibold hover:bg-red-50 hover:scale-105 transition-all duration-300 cursor-pointer"
-                >
-                  Cancel Booking
-                </button>
-              </div>
-            )}
-
-              {booking.status === "Deposit Pending" && (
-                <div className="flex flex-wrap gap-2 md:flex-col md:items-end">
-                  <button
-                    type="button"
-                    onClick={() => markDepositPaid(booking)}
-                    className="inline-flex w-fit items-center justify-center bg-green-600 text-white px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-base rounded-lg font-semibold hover:bg-green-700 hover:scale-105 transition-all duration-300 cursor-pointer"
-                  >
-                    Mark Deposit Paid
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => cancelBooking(booking)}
-                    className="inline-flex w-fit items-center justify-center border border-red-400 text-red-600 px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-base rounded-lg font-semibold hover:bg-red-50 hover:scale-105 transition-all duration-300 cursor-pointer"
-                  >
-                    Cancel Booking
-                  </button>
-                </div>
-              )}
-
-
-            {booking.status === "Balance Pending" && (
-              <div className="flex flex-wrap gap-2 md:flex-col md:items-end">
-
-                <button
-                  type="button"
-                  onClick={() => markBalancePaid(booking)}
-                  className="inline-flex w-fit items-center justify-center bg-green-600 text-white px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-base rounded-lg font-semibold hover:bg-green-700 hover:scale-105 transition-all duration-300 cursor-pointer"
-                >
-                  Mark Balance Paid
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => cancelBooking(booking)}
-                  className="inline-flex w-fit items-center justify-center border border-red-400 text-red-600 px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-base rounded-lg font-semibold hover:bg-red-50 hover:scale-105 transition-all duration-300 cursor-pointer"
-                >
-                  Cancel Booking
-                </button>
-              </div>
-            )}
-
-            {booking.status === "Balance Paid" && (
-              <div className="flex flex-wrap gap-2 md:flex-col md:items-end">
-                <p className="text-xs md:text-sm text-[#8B6A4E] font-medium md:text-right">
-                  Awaiting stay completion.
-                </p>
-
-                <button
-                  type="button"
-                  onClick={() => cancelBooking(booking)}
-                  className="inline-flex w-fit items-center justify-center border border-red-400 text-red-600 px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-base rounded-lg font-semibold hover:bg-red-50 hover:scale-105 transition-all duration-300 cursor-pointer"
-                >
-                  Cancel Booking
-                </button>
-              </div>
-            )}
-
-            {booking.status === "Completed" && (
-              <p className="text-xs md:text-sm text-blue-700 font-medium md:text-right">
-                Booking completed.
-              </p>
-            )}
-          </div>
+          <AdminBookingActions
+            booking={booking}
+            onConfirm={confirmBooking}
+            onCancel={cancelBooking}
+            onMarkDepositPaid={markDepositPaid}
+            onMarkBalancePaid={markBalancePaid}
+          />
         </div>
       </div>
     );
