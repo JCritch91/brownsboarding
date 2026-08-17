@@ -143,7 +143,7 @@ export default function EditAdminCustomerPage() {
   ) {
     setForm((current) => ({
       ...current,
-      value,
+      [field]:value,
     }));
   }
 
