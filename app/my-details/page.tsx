@@ -19,6 +19,9 @@ import CustomerPageLayout from "@/components/CustomerPageLayout";
 import PageCard from "@/components/PageCard";
 import Button from "@/components/Buttons";
 import LoadingScreen from "@/components/LoadingScreen";
+import {
+  ACTIVE_BOOKING_STATUSES,
+} from "@/types/booking";
 
 export default function MyDetailsPage() {
   const [loading, setLoading] = useState(true);
@@ -186,7 +189,10 @@ const [form, setForm] = useState<CustomerFormValues>({
       .from("bookings")
       .select("id")
       .eq("owner_id", user.id)
-      .in("status", ["Pending", "Confirmed"]);
+      .in(
+        "status",
+        ACTIVE_BOOKING_STATUSES
+      );
 
     if (bookingError) {
       setIsError(true);
