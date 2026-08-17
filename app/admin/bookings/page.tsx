@@ -23,6 +23,10 @@ import {
   type BookingFilter,
   type BookingWithCustomer,
 } from "@/types/booking";
+import {
+  getBookingDisplayStatus,
+  getBookingStatusStyle,
+} from "@/lib/booking-status";
 
 
 export default function AdminBookingsPage() {
@@ -143,55 +147,6 @@ const [selectedFilter, setSelectedFilter] =
     const fullName = `${firstName} ${lastName}`.trim();
 
     return fullName || booking.customer?.email || "Customer";
-  }
-
-  function getStatusStyle(status: string) {
-    switch (status) {
-      case "Pending":
-        return "bg-amber-50 text-amber-800 border-amber-300";
-
-      case "Deposit Pending":
-        return "bg-green-50 text-green-800 border-green-300";
-
-      case "Balance Pending":
-        return "bg-blue-50 text-blue-800 border-blue-300";
-
-      case "Balance Paid":
-        return "bg-teal-50 text-teal-800 border-teal-300";
-
-      case "Completed":
-        return "bg-gray-50 text-gray-700 border-gray-300";
-
-      case "Cancelled":
-        return "bg-red-50 text-red-700 border-red-300";
-
-      default:
-        return "bg-gray-50 text-gray-700 border-gray-300";
-    }
-  }
-
-  function getDisplayStatus(booking: BookingWithCustomer) {
-    switch (booking.status) {
-      case "Deposit Pending":
-        return "Confirmed";
-
-      case "Balance Pending":
-        return booking.deposit_amount && booking.deposit_amount > 0
-          ? "Deposit received"
-          : "Balance due";
-
-      case "Balance Paid":
-        return "Full balance paid";
-
-      case "Completed":
-        return "Completed";
-
-      case "Cancelled":
-        return "Cancelled";
-
-      default:
-        return booking.status;
-    }
   }
 
   async function confirmBooking(
@@ -930,11 +885,11 @@ async function autoCompleteEligibleBookings() {
 
           <div className="flex flex-wrap md:flex-col gap-2 md:gap-3 md:items-end pt-1">
             <span
-              className={`inline-flex w-fit items-center border px-3 py-1.5 md:px-4 md:py-2 rounded-lg text-xs md:text-base font-semibold ${getStatusStyle(
+              className={`inline-flex w-fit items-center border px-3 py-1.5 md:px-4 md:py-2 rounded-lg text-xs md:text-base font-semibold ${getBookingStatusStyle(
                 booking.status
               )}`}
             >
-              {getDisplayStatus(booking)}
+              {getBookingDisplayStatus(booking)}
             </span>
 
             {booking.status === "Pending" && (
