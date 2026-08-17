@@ -20,6 +20,10 @@ import LoadingScreen from "@/components/LoadingScreen";
 import CustomerForm, {
   type CustomerFormValues,
 } from "@/components/customer/CustomerForm";
+import {
+  authenticatedApiRequest,
+} from "@/lib/client/authenticated-api";
+
 
 const emptyForm: CustomerFormValues = {
   first_name: "",
@@ -35,6 +39,31 @@ const emptyForm: CustomerFormValues = {
   vet_name: "",
   vet_phone: "",
   vet_address: "",
+};
+
+type UpdateCustomerResponse = {
+  success: boolean;
+  customerUpdated: boolean;
+  customer?: {
+    id: string;
+    first_name: string | null;
+    last_name: string | null;
+    email: string | null;
+    phone: string | null;
+    address_line_1: string | null;
+    address_line_2: string | null;
+    town: string | null;
+    postcode: string | null;
+    emergency_contact_name: string | null;
+    emergency_contact_phone: string | null;
+    vet_name: string | null;
+    vet_phone: string | null;
+    vet_address: string | null;
+    active: boolean;
+    is_admin: boolean | null;
+  };
+  message?: string;
+  error?: string;
 };
 
 export default function EditAdminCustomerPage() {
@@ -147,62 +176,80 @@ export default function EditAdminCustomerPage() {
     }));
   }
 
-  async function handleSave(
-    event: FormEvent<HTMLFormElement>
-  ) {
-    event.preventDefault();
+async function handleSave(
+  event: FormEvent<HTMLFormElement>
+) {
+  event.preventDefault();
 
-    setSaving(true);
-    setMessage("");
-    setIsError(false);
-
-    const firstName = formatName(form.first_name);
-    const lastName = formatName(form.last_name);
-
-    if (!firstName || !lastName) {
-      setSaving(false);
-      setIsError(true);
-      setMessage("First name and last name are required.");
-      return;
-    }
-
-    const { error } = await supabase
-      .from("profiles")
-      .update({
-        first_name: firstName,
-        last_name: lastName,
-        phone: formatUkPhone(form.phone),
-        address_line_1: formatAddressLine(
-          form.address_line_1
-        ),
-        address_line_2: formatAddressLine(
-          form.address_line_2
-        ),
-        town: formatName(form.town),
-        postcode: formatPostcode(form.postcode),
-        emergency_contact_name: formatName(
-          form.emergency_contact_name
-        ),
-        emergency_contact_phone: formatUkPhone(
-          form.emergency_contact_phone
-        ),
-        vet_name: formatName(form.vet_name),
-        vet_phone: formatUkPhone(form.vet_phone),
-        vet_address: formatAddressLine(form.vet_address),
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", customerId);
-
-    setSaving(false);
-
-    if (error) {
-      setIsError(true);
-      setMessage(error.message);
-      return;
-    }
-
-    window.location.href = `/admin/customers/${customerId}`;
+  if (saving) {
+    return;
   }
+
+  setMessage("");
+  setIsError(false);
+
+  const firstName =
+    formatName(form.first_name);
+
+  const lastName =
+    formatName(form.last_name);
+
+  if (!firstName || !lastName) {
+    setIsError(true);
+    setMessage(
+      "First name and last name are required."
+    );
+    return;
+  }
+
+  setSaving(true);
+
+  const result =
+    await authenticatedApiRequest<UpdateCustomerResponse>(
+      `/api/admin/customers/${customerId}/update`,
+      {
+        method: "PATCH",
+        body: {
+          ...form,
+          first_name: firstName,
+          last_name: lastName,
+        },
+      }
+    );
+
+  setSaving(false);
+
+  if (result.unauthenticated) {
+    window.location.href = "/login";
+    return;
+  }
+
+  if (!result.ok) {
+    setIsError(true);
+    setMessage(
+      result.error ||
+        "The customer details could not be updated."
+    );
+    return;
+  }
+
+  if (
+    !result.data ||
+    !result.data.customerUpdated
+  ) {
+    setIsError(true);
+    setMessage(
+      result.data?.error ||
+        "The customer service did not update the customer."
+    );
+    return;
+  }
+
+  setIsError(false);
+
+  window.location.href =
+    `/admin/customers/${customerId}`;
+}
 
   if (loading) {
     return <LoadingScreen message="Loading customer details..." />;
