@@ -17,7 +17,20 @@ import type {
 import AdminBookingCard from "@/components/bookings/AdminBookingCard";
 import BookingStatusSummary from "@/components/bookings/BookingStatusSummary";
 import BookingStatusFilters from "@/components/bookings/BookingStatusFilters";
+import {
+  authenticatedApiRequest,
+} from "@/lib/client/authenticated-api";
 
+type BookingCompletionResponse = {
+  success: boolean;
+  databaseCompleted?: boolean;
+  processed: number;
+  completed: number;
+  calendarUpdated: number;
+  followUpRequired: boolean;
+  message?: string;
+  error?: string;
+};
 
 export default function AdminBookingsPage() {
 const [loading, setLoading] = useState(true);
@@ -693,67 +706,47 @@ async function markBalancePaid(
 }
 
 async function autoCompleteEligibleBookings() {
-  const {
-    data: { session },
-    error: sessionError,
-  } = await supabase.auth.getSession();
+  const result =
+    await authenticatedApiRequest<BookingCompletionResponse>(
+      "/api/admin/bookings/complete"
+    );
 
-  if (sessionError || !session) {
+  if (result.unauthenticated) {
     window.location.href = "/login";
     return;
   }
 
-  let response: Response;
-
-  try {
-    response = await fetch(
-      "/api/admin/bookings/complete",
-      {
-        method: "POST",
-        headers: {
-          Authorization:
-            `Bearer ${session.access_token}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-  } catch (requestError) {
+  if (!result.ok) {
     setIsError(true);
     setMessage(
-      requestError instanceof Error
-        ? requestError.message
-        : "Unable to contact the booking completion service."
-    );
-    return;
-  }
-
-  const result = await response
-    .json()
-    .catch(() => null);
-
-  if (!response.ok) {
-    setIsError(true);
-    setMessage(
-      result?.error ||
+      result.error ||
         "Eligible bookings could not be completed."
     );
     return;
   }
 
-  if (result.followUpRequired) {
+  if (!result.data) {
     setIsError(true);
     setMessage(
-      result.message ||
+      "The booking completion service returned no result."
+    );
+    return;
+  }
+
+  if (result.data.followUpRequired) {
+    setIsError(true);
+    setMessage(
+      result.data.message ||
         "Bookings were completed, but one or more Google Calendar events could not be updated."
     );
     return;
   }
 
-  if (result.completed > 0) {
+  if (result.data.completed > 0) {
     setIsError(false);
     setMessage(
-      result.message ||
-        `${result.completed} booking(s) completed successfully.`
+      result.data.message ||
+        `${result.data.completed} booking(s) completed successfully.`
     );
   }
 }
