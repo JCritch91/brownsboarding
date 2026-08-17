@@ -9,7 +9,6 @@ import {
   getCurrentUser,
 } from "@/lib/appActions";
 import {
-  formatMoney,
   formatDisplayDate,
   formatDateForDatabase,
   getDatesInRange,
@@ -17,23 +16,16 @@ import {
   isWithinTwoWeeks,
   validateBookingDates,
 } from "@/lib/helpers";
-import {
-  calculateBookingPricing
-} from "@/lib/services/booking-confirmation-service";
-
-import {
-  buildBookingConfirmationEmailPayload,
-} from "@/lib/services/booking-payloads";
-
 import CustomerPageLayout from "@/components/CustomerPageLayout";
 import PageCard from "@/components/PageCard";
-import Button from "@/components/Buttons";
-import MessageBox from "@/components/MessageBox";
+import Button from "@/components/Buttons";;
 import LoadingScreen from "@/components/LoadingScreen";
 import BookingForm, {
-  type BookingFormAvailability,
   type BookingFormDog,
 } from "@/components/bookings/BookingForm";
+import type {
+  Availability,
+} from "@/types/availability";
 
 
 export default function BookingsPage() {
@@ -44,8 +36,8 @@ export default function BookingsPage() {
 
   const [dogs, setDogs] = useState<BookingFormDog[]>([]);
 
-  const [availability, setAvailability] =
-    useState<BookingFormAvailability[]>([]);
+const [availability, setAvailability] =
+  useState<Availability[]>([]);
 
   const [selectedDog, setSelectedDog] = useState("");
   const [startDate, setStartDate] = useState("");
