@@ -11,6 +11,12 @@ import Button from "@/components/Buttons";
 import MessageBox from "@/components/MessageBox";
 import LoadingScreen from "@/components/LoadingScreen";
 import { authenticatedApiRequest } from "@/lib/client/authenticated-api";
+import ConfirmationModal from "@/components/modals/ConfirmationModal";
+
+type CustomerConfirmationAction =
+  | "toggle-admin"
+  | "toggle-active"
+  | "resend-activation";
 
 type ResendActivationEmailResponse = {
   success: boolean;
@@ -118,91 +124,99 @@ export default function AdminCustomerDetailsPage() {
   const [currentUserId, setCurrentUserId] = useState("");
 
   const [accountActionLoading, setAccountActionLoading] = useState(false);
+  const [confirmationAction, setConfirmationAction] =
+  useState<CustomerConfirmationAction | null>(null);
 
   useEffect(() => {
     checkAdminAndLoadCustomer();
   }, [customerId]);
 
-  async function toggleAdminStatus() {
-    if (!customer || accountActionLoading) {
-      return;
-    }
-
-    const makingAdmin = !customer.is_admin;
-
-    if (customer.id === currentUserId && !makingAdmin) {
-      setIsError(true);
-      setMessage("You cannot remove your own administrator access.");
-      return;
-    }
-
-    const confirmed = window.confirm(
-      makingAdmin
-        ? `Grant administrator access to ${getCustomerName()}?`
-        : `Remove administrator access from ${getCustomerName()}?`,
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    setAccountActionLoading(true);
-    setMessage("");
-    setIsError(false);
-
-    const result = await authenticatedApiRequest<UpdateAdminStatusResponse>(
-      `/api/admin/customers/${customerId}/admin-status`,
-      {
-        method: "PATCH",
-        body: {
-          isAdmin: makingAdmin,
-        },
-      },
-    );
-
-    if (result.unauthenticated) {
-      setAccountActionLoading(false);
-      window.location.href = "/login";
-      return;
-    }
-
-    if (!result.ok) {
-      setAccountActionLoading(false);
-      setIsError(true);
-      setMessage(result.error || "Administrator access could not be updated.");
-      return;
-    }
-
-    if (!result.data || !result.data.adminStatusUpdated) {
-      setAccountActionLoading(false);
-      setIsError(true);
-      setMessage(
-        result.data?.error ||
-          "The role-management service did not update administrator access.",
-      );
-      return;
-    }
-
-    const updatedAdminStatus = result.data.profile?.isAdmin ?? makingAdmin;
-
-    setCustomer((current) =>
-      current
-        ? {
-            ...current,
-            is_admin: updatedAdminStatus,
-          }
-        : current,
-    );
-
-    setAccountActionLoading(false);
-    setIsError(false);
-    setMessage(
-      result.data.message ||
-        (updatedAdminStatus
-          ? "Administrator access granted."
-          : "Administrator access removed."),
-    );
+function requestAdminStatusChange() {
+  if (!customer || accountActionLoading) {
+    return;
   }
+
+  const makingAdmin = !customer.is_admin;
+
+  if (customer.id === currentUserId && !makingAdmin) {
+    setIsError(true);
+    setMessage("You cannot remove your own administrator access.");
+    return;
+  }
+
+  setMessage("");
+  setIsError(false);
+  setConfirmationAction("toggle-admin");
+}
+
+async function toggleAdminStatus() {
+  if (!customer || accountActionLoading) {
+    return;
+  }
+
+  const makingAdmin = !customer.is_admin;
+
+  setAccountActionLoading(true);
+  setMessage("");
+  setIsError(false);
+
+  const result = await authenticatedApiRequest<UpdateAdminStatusResponse>(
+    `/api/admin/customers/${customerId}/admin-status`,
+    {
+      method: "PATCH",
+      body: {
+        isAdmin: makingAdmin,
+      },
+    },
+  );
+
+  if (result.unauthenticated) {
+    setAccountActionLoading(false);
+    setConfirmationAction(null);
+    window.location.href = "/login";
+    return;
+  }
+
+  if (!result.ok) {
+    setAccountActionLoading(false);
+    setConfirmationAction(null);
+    setIsError(true);
+    setMessage(result.error || "Administrator access could not be updated.");
+    return;
+  }
+
+  if (!result.data || !result.data.adminStatusUpdated) {
+    setAccountActionLoading(false);
+    setConfirmationAction(null);
+    setIsError(true);
+    setMessage(
+      result.data?.error ||
+        "The role-management service did not update administrator access.",
+    );
+    return;
+  }
+
+  const updatedAdminStatus = result.data.profile?.isAdmin ?? makingAdmin;
+
+  setCustomer((current) =>
+    current
+      ? {
+          ...current,
+          is_admin: updatedAdminStatus,
+        }
+      : current,
+  );
+
+  setAccountActionLoading(false);
+  setConfirmationAction(null);
+  setIsError(false);
+  setMessage(
+    result.data.message ||
+      (updatedAdminStatus
+        ? "Administrator access granted."
+        : "Administrator access removed."),
+  );
+}
 
   async function checkAdminAndLoadCustomer() {
     setLoading(true);
@@ -354,135 +368,165 @@ export default function AdminCustomerDetailsPage() {
     });
   }
 
-  async function toggleCustomerActiveStatus() {
-    if (!customer || accountActionLoading) {
-      return;
-    }
+function requestCustomerActiveStatusChange() {
+  if (!customer || accountActionLoading) {
+    return;
+  }
 
-    const requestedActiveStatus = !customer.active;
+  setMessage("");
+  setIsError(false);
+  setConfirmationAction("toggle-active");
+}
 
-    const confirmed = window.confirm(
-      requestedActiveStatus
-        ? "Are you sure you want to activate this customer account?"
-        : "Are you sure you want to deactivate this customer account?\n\nThe customer will no longer be able to access the customer portal.",
-    );
+async function toggleCustomerActiveStatus() {
+  if (!customer || accountActionLoading) {
+    return;
+  }
 
-    if (!confirmed) {
-      return;
-    }
+  const requestedActiveStatus = !customer.active;
 
-    setAccountActionLoading(true);
-    setMessage("");
-    setIsError(false);
+  setAccountActionLoading(true);
+  setMessage("");
+  setIsError(false);
 
-    const result =
-      await authenticatedApiRequest<UpdateCustomerActiveStatusResponse>(
-        `/api/admin/customers/${customerId}/active-status`,
-        {
-          method: "PATCH",
-          body: {
-            active: requestedActiveStatus,
-          },
+  const result =
+    await authenticatedApiRequest<UpdateCustomerActiveStatusResponse>(
+      `/api/admin/customers/${customerId}/active-status`,
+      {
+        method: "PATCH",
+        body: {
+          active: requestedActiveStatus,
         },
-      );
+      },
+    );
 
-    if (result.unauthenticated) {
-      setAccountActionLoading(false);
-      window.location.href = "/login";
-      return;
-    }
-
-    if (!result.ok) {
-      setAccountActionLoading(false);
-      setIsError(true);
-      setMessage(
-        result.error || "The customer account status could not be updated.",
-      );
-      return;
-    }
-
-    if (!result.data || !result.data.customerStatusUpdated) {
-      setAccountActionLoading(false);
-      setIsError(true);
-      setMessage(
-        result.data?.error ||
-          "The customer service did not update the account status.",
-      );
-      return;
-    }
-
-    await loadCustomerData();
-
+  if (result.unauthenticated) {
     setAccountActionLoading(false);
-    setIsError(false);
+    setConfirmationAction(null);
+    window.location.href = "/login";
+    return;
+  }
+
+  if (!result.ok) {
+    setAccountActionLoading(false);
+    setConfirmationAction(null);
+    setIsError(true);
     setMessage(
-      result.data.message ||
-        (requestedActiveStatus
-          ? "Customer account activated successfully."
-          : "Customer account deactivated successfully."),
+      result.error || "The customer account status could not be updated.",
     );
+    return;
   }
 
-  async function resendActivationEmail() {
-    if (!customer || accountActionLoading) {
-      return;
-    }
-
-    if (customer.was_activated) {
-      setIsError(true);
-      setMessage("This customer has already activated their account.");
-      return;
-    }
-
-    if (!customer.email) {
-      setIsError(true);
-      setMessage("This customer does not have an email address.");
-      return;
-    }
-
-    const confirmed = window.confirm(
-      `Send a new activation email to ${customer.email}?`,
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    setAccountActionLoading(true);
-    setMessage("");
-    setIsError(false);
-
-    const result = await authenticatedApiRequest<ResendActivationEmailResponse>(
-      `/api/admin/customers/${customerId}/resend-activation`,
-    );
-
-    if (result.unauthenticated) {
-      setAccountActionLoading(false);
-      window.location.href = "/login";
-      return;
-    }
-
-    if (!result.ok) {
-      setAccountActionLoading(false);
-      setIsError(true);
-      setMessage(result.error || "Unable to resend the activation email.");
-      return;
-    }
-
-    if (!result.data || !result.data.activationEmailSent) {
-      setAccountActionLoading(false);
-      setIsError(true);
-      setMessage(
-        result.data?.error ||
-          "The activation service did not send a new email.",
-      );
-      return;
-    }
-
+  if (!result.data || !result.data.customerStatusUpdated) {
     setAccountActionLoading(false);
-    setIsError(false);
-    setMessage(result.data.message || "A new activation email has been sent.");
+    setConfirmationAction(null);
+    setIsError(true);
+    setMessage(
+      result.data?.error ||
+        "The customer service did not update the account status.",
+    );
+    return;
   }
+
+  await loadCustomerData();
+
+  setAccountActionLoading(false);
+  setConfirmationAction(null);
+  setIsError(false);
+  setMessage(
+    result.data.message ||
+      (requestedActiveStatus
+        ? "Customer account activated successfully."
+        : "Customer account deactivated successfully."),
+  );
+}
+
+function requestActivationEmailResend() {
+  if (!customer || accountActionLoading) {
+    return;
+  }
+
+  if (customer.was_activated) {
+    setIsError(true);
+    setMessage("This customer has already activated their account.");
+    return;
+  }
+
+  if (!customer.email) {
+    setIsError(true);
+    setMessage("This customer does not have an email address.");
+    return;
+  }
+
+  setMessage("");
+  setIsError(false);
+  setConfirmationAction("resend-activation");
+}
+
+async function resendActivationEmail() {
+  if (!customer || accountActionLoading || !customer.email) {
+    return;
+  }
+
+  setAccountActionLoading(true);
+  setMessage("");
+  setIsError(false);
+
+  const result = await authenticatedApiRequest<ResendActivationEmailResponse>(
+    `/api/admin/customers/${customerId}/resend-activation`,
+  );
+
+  if (result.unauthenticated) {
+    setAccountActionLoading(false);
+    setConfirmationAction(null);
+    window.location.href = "/login";
+    return;
+  }
+
+  if (!result.ok) {
+    setAccountActionLoading(false);
+    setConfirmationAction(null);
+    setIsError(true);
+    setMessage(result.error || "Unable to resend the activation email.");
+    return;
+  }
+
+  if (!result.data || !result.data.activationEmailSent) {
+    setAccountActionLoading(false);
+    setConfirmationAction(null);
+    setIsError(true);
+    setMessage(
+      result.data?.error ||
+        "The activation service did not send a new email.",
+    );
+    return;
+  }
+
+  setAccountActionLoading(false);
+  setConfirmationAction(null);
+  setIsError(false);
+  setMessage(result.data.message || "A new activation email has been sent.");
+}
+
+async function confirmCustomerAction() {
+  switch (confirmationAction) {
+    case "toggle-admin":
+      await toggleAdminStatus();
+      break;
+
+    case "toggle-active":
+      await toggleCustomerActiveStatus();
+      break;
+
+    case "resend-activation":
+      await resendActivationEmail();
+      break;
+
+    default:
+      break;
+  }
+}
+
 
   function getCustomerName() {
     if (!customer) {
@@ -724,7 +768,8 @@ export default function AdminCustomerDetailsPage() {
                         {customer.active ? (
                           <button
                             type="button"
-                            onClick={toggleCustomerActiveStatus}
+                            onClick={requestCustomerActiveStatusChange}
+
                             disabled={accountActionLoading}
                             className="inline-flex min-h-11 w-fit items-center justify-center rounded-lg border border-red-400 px-4 py-2 text-sm font-semibold text-red-600 transition-all duration-300 hover:scale-105 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100 md:text-base"
                           >
@@ -736,7 +781,8 @@ export default function AdminCustomerDetailsPage() {
                           <Button
                             type="button"
                             variant="dark"
-                            onClick={toggleCustomerActiveStatus}
+                            onClick={requestCustomerActiveStatusChange}
+
                             disabled={accountActionLoading}
                             className="disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
                           >
@@ -776,7 +822,7 @@ export default function AdminCustomerDetailsPage() {
                       <Button
                         type="button"
                         variant="dark"
-                        onClick={resendActivationEmail}
+                        onClick={requestActivationEmailResend}
                         disabled={accountActionLoading}
                         className="disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
                       >
@@ -807,7 +853,7 @@ export default function AdminCustomerDetailsPage() {
                     {customer.is_admin ? (
                       <button
                         type="button"
-                        onClick={toggleAdminStatus}
+                        onClick={requestAdminStatusChange}
                         disabled={accountActionLoading}
                         className="inline-flex min-h-11 items-center rounded-lg border border-red-400 px-4 py-2 font-semibold text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
                       >
@@ -819,7 +865,7 @@ export default function AdminCustomerDetailsPage() {
                       <Button
                         type="button"
                         variant="dark"
-                        onClick={toggleAdminStatus}
+                        onClick={requestAdminStatusChange}
                         disabled={accountActionLoading}
                         className="disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
                       >
@@ -1188,6 +1234,129 @@ export default function AdminCustomerDetailsPage() {
           )}
         </div>
       </PageCard>
+
+      <ConfirmationModal
+        isOpen={confirmationAction !== null}
+        title={
+          confirmationAction === "toggle-admin"
+            ? customer?.is_admin
+              ? "Remove Administrator Access"
+              : "Grant Administrator Access"
+            : confirmationAction === "toggle-active"
+              ? customer?.active
+                ? "Deactivate Customer"
+                : "Activate Customer"
+              : "Resend Activation Email"
+        }
+        confirmText={
+          confirmationAction === "toggle-admin"
+            ? customer?.is_admin
+              ? "Remove Admin Access"
+              : "Grant Admin Access"
+            : confirmationAction === "toggle-active"
+              ? customer?.active
+                ? "Deactivate Customer"
+                : "Activate Customer"
+              : "Send Activation Email"
+        }
+        cancelText="Go Back"
+        isConfirming={accountActionLoading}
+        variant={
+          confirmationAction === "toggle-admin" && !customer?.is_admin
+            ? "primary"
+            : confirmationAction === "toggle-active" && !customer?.active
+              ? "primary"
+              : confirmationAction === "resend-activation"
+                ? "primary"
+                : "danger"
+        }
+        onConfirm={confirmCustomerAction}
+        onCancel={() => {
+          if (!accountActionLoading) {
+            setConfirmationAction(null);
+          }
+        }}
+      >
+        {customer && (
+          <div className="space-y-4">
+            <dl className="grid gap-3 rounded-xl border border-[#D9CBB8] bg-[#FFFDF9] p-4 sm:grid-cols-2">
+              <div>
+                <dt className="text-xs font-semibold text-[#8B6A4E]">
+                  Customer
+                </dt>
+                <dd className="mt-1 font-semibold text-[#5C4033]">
+                  {getCustomerName()}
+                </dd>
+              </div>
+
+              <div>
+                <dt className="text-xs font-semibold text-[#8B6A4E]">
+                  Email
+                </dt>
+                <dd className="mt-1 break-all text-[#5C4033]">
+                  {customer.email || "Not provided"}
+                </dd>
+              </div>
+            </dl>
+
+            {confirmationAction === "toggle-admin" && (
+              <div
+                className={`rounded-lg border p-3 ${
+                  customer.is_admin
+                    ? "border-red-300 bg-red-50 text-red-800"
+                    : "border-blue-300 bg-blue-50 text-blue-800"
+                }`}
+              >
+                {customer.is_admin ? (
+                  <p>
+                    This customer will immediately lose access to all
+                    administrator pages and administrative actions.
+                  </p>
+                ) : (
+                  <p>
+                    This customer will receive access to administrator pages,
+                    customer records, bookings, payments and availability
+                    management.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {confirmationAction === "toggle-active" && (
+              <div
+                className={`rounded-lg border p-3 ${
+                  customer.active
+                    ? "border-red-300 bg-red-50 text-red-800"
+                    : "border-green-300 bg-green-50 text-green-800"
+                }`}
+              >
+                {customer.active ? (
+                  <p>
+                    The customer will no longer be able to access the customer
+                    portal or request new bookings. Historical records will be
+                    retained.
+                  </p>
+                ) : (
+                  <p>
+                    The customer will regain access to the customer portal and
+                    will be able to request new bookings.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {confirmationAction === "resend-activation" && (
+              <div className="rounded-lg border border-blue-300 bg-blue-50 p-3 text-blue-800">
+                <p>
+                  A new account-activation email will be sent to{" "}
+                  <strong>{customer.email}</strong>. Any previous activation
+                  email should no longer be used.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </ConfirmationModal>
     </AdminPageLayout>
   );
 }
