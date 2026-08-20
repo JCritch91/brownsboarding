@@ -2,24 +2,35 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-
 import { supabase } from "@/lib/supabase";
 import {
   formatDisplayDate,
   formatMoney,
   formatName,
 } from "@/lib/helpers";
-
 import {
   ensureActiveAdminUser,
   getCurrentUser,
 } from "@/lib/appActions";
-
 import AdminPageLayout from "@/components/AdminPageLayout";
 import PageCard from "@/components/PageCard";
 import Button from "@/components/Buttons";
 import MessageBox from "@/components/MessageBox";
 import LoadingScreen from "@/components/LoadingScreen";
+import {
+  authenticatedApiRequest,
+} from "@/lib/client/authenticated-api";
+
+type UpdateCustomerActiveStatusResponse = {
+  success: boolean;
+  customerStatusUpdated: boolean;
+  customer?: {
+    id: string;
+    active: boolean;
+  };
+  message?: string;
+  error?: string;
+};
 
 type CustomerProfile = {
   id: string;
@@ -320,57 +331,74 @@ function formatAccountDate(dateString: string | null) {
 }
 
 async function toggleCustomerActiveStatus() {
-  if (!customer || accountActionLoading) {
+  if (!customer) {
     return;
   }
 
-  const newActiveStatus = !customer.active;
+  const requestedActiveStatus =
+    !customer.active;
 
   const confirmed = window.confirm(
-    newActiveStatus
-      ? `Activate ${getCustomerName()}'s account?`
-      : `Deactivate ${getCustomerName()}'s account?\n\nThe customer will no longer be able to access the customer portal.`
+    requestedActiveStatus
+      ? "Are you sure you want to activate this customer account?"
+      : "Are you sure you want to deactivate this customer account?\n\nThe customer will no longer be able to access the customer portal."
   );
 
   if (!confirmed) {
     return;
   }
 
-  setAccountActionLoading(true);
   setMessage("");
   setIsError(false);
 
-  const { error } = await supabase
-    .from("profiles")
-    .update({
-      active: newActiveStatus,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", customer.id);
+  const result =
+    await authenticatedApiRequest<UpdateCustomerActiveStatusResponse>(
+      `/api/admin/customers/${customerId}/active-status`,
+      {
+        method: "PATCH",
+        body: {
+          active:
+            requestedActiveStatus,
+        },
+      }
+    );
 
-  if (error) {
-    setAccountActionLoading(false);
-    setIsError(true);
-    setMessage(error.message);
+  if (result.unauthenticated) {
+    window.location.href = "/login";
     return;
   }
 
-  setCustomer((currentCustomer) =>
-    currentCustomer
-      ? {
-          ...currentCustomer,
-          active: newActiveStatus,
-        }
-      : currentCustomer
+  if (!result.ok) {
+    setIsError(true);
+    setMessage(
+      result.error ||
+        "The customer account status could not be updated."
+    );
+    return;
+  }
+
+  if (
+    !result.data ||
+    !result.data.customerStatusUpdated
+  ) {
+    setIsError(true);
+    setMessage(
+      result.data?.error ||
+        "The customer service did not update the account status."
+    );
+    return;
+  }
+
+  setIsError(false);
+
+  setMessage(
+    result.data.message ||
+      (requestedActiveStatus
+        ? "Customer account activated successfully."
+        : "Customer account deactivated successfully.")
   );
 
-  setAccountActionLoading(false);
-  setIsError(false);
-  setMessage(
-    newActiveStatus
-      ? "Customer account activated successfully."
-      : "Customer account deactivated successfully."
-  );
+  await loadCustomerData();
 }
 
 async function toggleMeetAndGreetApproval() {
