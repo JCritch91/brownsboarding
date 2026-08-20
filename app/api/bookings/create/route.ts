@@ -225,18 +225,6 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!dog.meet_and_greet_completed) {
-      return NextResponse.json(
-        {
-          error:
-            "The selected dog must complete a meet and greet before a booking can be requested.",
-        },
-        {
-          status: 400,
-        },
-      );
-    }
-
     if (!dog.vaccinated) {
       return NextResponse.json(
         {
