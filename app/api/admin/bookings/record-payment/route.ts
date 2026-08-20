@@ -4,6 +4,11 @@ import { createClient } from "@supabase/supabase-js";
 import { formatDisplayDate, formatMoney, formatName } from "@/lib/helpers";
 import { updateBookingCalendarEvent } from "@/lib/services/booking-calendar-service";
 
+import {
+  sendBalanceReceivedEmail,
+  sendDepositReceivedEmail,
+} from "@/lib/services/booking-payment-email-service";
+
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -31,22 +36,6 @@ function isValidDatabaseDate(value: unknown): value is string {
   return (
     !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
   );
-}
-
-async function getResponseError(response: Response, fallbackMessage: string) {
-  const responseText = await response.text();
-
-  if (!responseText) {
-    return fallbackMessage;
-  }
-
-  try {
-    const responseData = JSON.parse(responseText);
-
-    return responseData.error || fallbackMessage;
-  } catch {
-    return responseText;
-  }
 }
 
 export async function POST(request: Request) {
@@ -454,8 +443,6 @@ export async function POST(request: Request) {
         ? "Deposit received, balance outstanding"
         : "Fully paid";
 
-    const requestOrigin = new URL(request.url).origin;
-
     /*
      * Calendar and email are independent follow-up
      * operations, so run both concurrently.
@@ -484,72 +471,33 @@ export async function POST(request: Request) {
         throw new Error("The customer does not have an email address.");
       }
 
-      if (paymentType === "Deposit") {
-        const emailResponse = await fetch(
-          `${requestOrigin}/api/send-deposit-received-email`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              bookingId: booking.id,
-              bookingReference: booking.booking_reference,
-              customerEmail: customer.email,
-              customerName,
-              dogName,
-              startDate: formatDisplayDate(booking.start_date),
-              endDate: formatDisplayDate(booking.end_date),
-              depositPaidDate: formatDisplayDate(paymentDate),
-              invoiceNumber: paymentResult.invoice_number,
-              depositAmount: formatMoney(Number(paymentResult.payment_amount)),
-            }),
-          },
-        );
+      const emailBase = {
+        bookingReference: booking.booking_reference,
+        customerEmail: customer.email,
+        customerName,
+        dogName,
+        startDate: formatDisplayDate(booking.start_date),
+        endDate: formatDisplayDate(booking.end_date),
+        invoiceNumber: paymentResult.invoice_number,
+      };
 
-        if (!emailResponse.ok) {
-          throw new Error(
-            await getResponseError(
-              emailResponse,
-              "The deposit receipt email could not be sent.",
-            ),
-          );
-        }
+      if (paymentType === "Deposit") {
+        await sendDepositReceivedEmail({
+          ...emailBase,
+          depositPaidDate: formatDisplayDate(paymentDate),
+          depositAmount: formatMoney(Number(booking.deposit_amount || 0)),
+        });
 
         return;
       }
 
-      const emailResponse = await fetch(
-        `${requestOrigin}/api/send-balance-received-email`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            bookingId: booking.id,
-            bookingReference: booking.booking_reference,
-            customerEmail: customer.email,
-            customerName,
-            dogName,
-            startDate: formatDisplayDate(booking.start_date),
-            endDate: formatDisplayDate(booking.end_date),
-            balancePaidDate: formatDisplayDate(paymentDate),
-            balanceAmount: formatMoney(Number(paymentResult.payment_amount)),
-            invoiceNumber: paymentResult.invoice_number,
-          }),
-        },
-      );
-
-      if (!emailResponse.ok) {
-        throw new Error(
-          await getResponseError(
-            emailResponse,
-            "The balance receipt email could not be sent.",
-          ),
-        );
-      }
+      await sendBalanceReceivedEmail({
+        ...emailBase,
+        balancePaidDate: formatDisplayDate(paymentDate),
+        balanceAmount: formatMoney(Number(booking.balance_amount || 0)),
+      });
     };
+    ``;
 
     const [calendarResult, emailResult] = await Promise.allSettled([
       calendarOperation(),
