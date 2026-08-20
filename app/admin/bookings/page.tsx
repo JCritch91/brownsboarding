@@ -7,7 +7,13 @@ import AdminPageLayout from "@/components/AdminPageLayout";
 import PageCard from "@/components/PageCard";
 import MessageBox from "@/components/MessageBox";
 import LoadingScreen from "@/components/LoadingScreen";
-import { formatDisplayDate, formatName, isWithinTwoWeeks } from "@/lib/helpers";
+import {
+  formatDisplayDate,
+  formatMoney,
+  formatName,
+  getTodayForDateInput,
+  isWithinTwoWeeks,
+} from "@/lib/helpers";
 import type {
   Booking,
   BookingCustomerSummary,
@@ -56,6 +62,11 @@ type BookingCompletionResponse = {
   error?: string;
 };
 
+type PaymentAction = {
+  booking: BookingWithCustomer;
+  paymentType: "Deposit" | "Balance";
+};
+
 export default function AdminBookingsPage() {
   const [loading, setLoading] = useState(true);
 
@@ -72,6 +83,12 @@ export default function AdminBookingsPage() {
   const [bookingToConfirm, setBookingToConfirm] =
     useState<BookingWithCustomer | null>(null);
   const [confirmingBooking, setConfirmingBooking] = useState(false);
+
+  const [paymentAction, setPaymentAction] = useState<PaymentAction | null>(
+    null,
+  );
+  const [paymentDate, setPaymentDate] = useState("");
+  const [recordingPayment, setRecordingPayment] = useState(false);
 
   useEffect(() => {
     checkAdminAndLoadBookings();
@@ -390,148 +407,94 @@ export default function AdminBookingsPage() {
     return true;
   }
 
-  async function markDepositPaid(booking: BookingWithCustomer) {
+  function markDepositPaid(booking: BookingWithCustomer) {
+    if (recordingPayment) {
+      return;
+    }
+
     if (booking.status !== "Deposit Pending") {
       setIsError(true);
       setMessage("This booking is no longer awaiting a deposit.");
       return;
     }
 
-    const today = new Date();
-
-    const todayFormatted = [
-      String(today.getDate()).padStart(2, "0"),
-      String(today.getMonth() + 1).padStart(2, "0"),
-      today.getFullYear(),
-    ].join("/");
-
-    const depositPaidDateDisplay = window.prompt(
-      "Enter the date the deposit was paid (DD/MM/YYYY):",
-      todayFormatted,
-    );
-
-    if (!depositPaidDateDisplay) {
-      return;
-    }
-
-    const datePattern = /^\d{2}\/\d{2}\/\d{4}$/;
-
-    if (!datePattern.test(depositPaidDateDisplay)) {
-      setIsError(true);
-      setMessage("Please enter the deposit paid date in DD/MM/YYYY format.");
-      return;
-    }
-
-    const [day, month, year] = depositPaidDateDisplay.split("/");
-
-    const depositPaidDate = new Date(`${year}-${month}-${day}T00:00:00Z`);
-
-    if (
-      Number.isNaN(depositPaidDate.getTime()) ||
-      depositPaidDate.getUTCDate() !== Number(day) ||
-      depositPaidDate.getUTCMonth() + 1 !== Number(month) ||
-      depositPaidDate.getUTCFullYear() !== Number(year)
-    ) {
-      setIsError(true);
-      setMessage("Please enter a valid deposit paid date.");
-      return;
-    }
-
-    const todayDate = new Date();
-    todayDate.setHours(23, 59, 59, 999);
-
-    if (depositPaidDate > todayDate) {
-      setIsError(true);
-      setMessage("The deposit paid date cannot be in the future.");
-      return;
-    }
-
-    const depositPaidDateDb = `${year}-${month}-${day}`;
-
-    const confirmed = window.confirm(
-      `Confirm the deposit was paid on ${depositPaidDateDisplay}?\n\nThis will move the booking to Balance Pending, create the payment record, update Google Calendar and send a deposit receipt to the customer.`,
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
     setMessage("");
     setIsError(false);
-
-    await recordBookingPayment(booking, "Deposit", depositPaidDateDb);
+    setPaymentDate(getTodayForDateInput());
+    setPaymentAction({
+      booking,
+      paymentType: "Deposit",
+    });
   }
 
-  async function markBalancePaid(booking: BookingWithCustomer) {
+  function markBalancePaid(booking: BookingWithCustomer) {
+    if (recordingPayment) {
+      return;
+    }
+
     if (booking.status !== "Balance Pending") {
       setIsError(true);
       setMessage("This booking is no longer awaiting its balance.");
       return;
     }
 
+    setMessage("");
+    setIsError(false);
+    setPaymentDate(getTodayForDateInput());
+    setPaymentAction({
+      booking,
+      paymentType: "Balance",
+    });
+  }
+
+  async function confirmPayment() {
+    if (!paymentAction || recordingPayment) {
+      return;
+    }
+
+    if (!paymentDate) {
+      setIsError(true);
+      setMessage("Please select the date the payment was received.");
+      return;
+    }
+
+    const selectedPaymentDate = new Date(`${paymentDate}T00:00:00`);
     const today = new Date();
 
-    const todayFormatted = [
-      String(today.getDate()).padStart(2, "0"),
-      String(today.getMonth() + 1).padStart(2, "0"),
-      today.getFullYear(),
-    ].join("/");
-
-    const balancePaidDateDisplay = window.prompt(
-      "Enter the date the balance was paid (DD/MM/YYYY):",
-      todayFormatted,
-    );
-
-    if (!balancePaidDateDisplay) {
-      return;
-    }
-
-    const datePattern = /^\d{2}\/\d{2}\/\d{4}$/;
-
-    if (!datePattern.test(balancePaidDateDisplay)) {
-      setIsError(true);
-      setMessage("Please enter the balance paid date in DD/MM/YYYY format.");
-      return;
-    }
-
-    const [day, month, year] = balancePaidDateDisplay.split("/");
-
-    const balancePaidDate = new Date(`${year}-${month}-${day}T00:00:00Z`);
+    selectedPaymentDate.setHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0);
 
     if (
-      Number.isNaN(balancePaidDate.getTime()) ||
-      balancePaidDate.getUTCDate() !== Number(day) ||
-      balancePaidDate.getUTCMonth() + 1 !== Number(month) ||
-      balancePaidDate.getUTCFullYear() !== Number(year)
+      Number.isNaN(selectedPaymentDate.getTime()) ||
+      selectedPaymentDate > today
     ) {
       setIsError(true);
-      setMessage("Please enter a valid balance paid date.");
+      setMessage(
+        "The payment date must be a valid date and cannot be in the future.",
+      );
       return;
     }
 
-    const todayDate = new Date();
-    todayDate.setHours(23, 59, 59, 999);
+    const { booking, paymentType } = paymentAction;
 
-    if (balancePaidDate > todayDate) {
-      setIsError(true);
-      setMessage("The balance paid date cannot be in the future.");
-      return;
-    }
-
-    const balancePaidDateDb = `${year}-${month}-${day}`;
-
-    const confirmed = window.confirm(
-      `Confirm the remaining balance was paid on ${balancePaidDateDisplay}?\n\nThis will move the booking to Balance Paid, create the payment record, update Google Calendar and send a balance receipt to the customer.`,
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
+    setRecordingPayment(true);
     setMessage("");
     setIsError(false);
 
-    await recordBookingPayment(booking, "Balance", balancePaidDateDb);
+    const paymentRecorded = await recordBookingPayment(
+      booking,
+      paymentType,
+      paymentDate,
+    );
+
+    setRecordingPayment(false);
+
+    if (!paymentRecorded) {
+      return;
+    }
+
+    setPaymentAction(null);
+    setPaymentDate("");
   }
 
   async function autoCompleteEligibleBookings() {
@@ -816,6 +779,113 @@ export default function AdminBookingsPage() {
                   Availability will be restored for each occupied night. The
                   configured calendar and cancellation-email operations will
                   also be attempted.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+      </ConfirmationModal>
+
+      <ConfirmationModal
+        isOpen={paymentAction !== null}
+        title={
+          paymentAction?.paymentType === "Deposit"
+            ? "Record Deposit Payment"
+            : "Record Balance Payment"
+        }
+        confirmText={
+          paymentAction?.paymentType === "Deposit"
+            ? "Record Deposit"
+            : "Record Balance"
+        }
+        cancelText="Cancel"
+        isConfirming={recordingPayment}
+        variant="primary"
+        onConfirm={confirmPayment}
+        onCancel={() => {
+          if (!recordingPayment) {
+            setPaymentAction(null);
+            setPaymentDate("");
+          }
+        }}
+      >
+        {paymentAction && (
+          <div className="space-y-4">
+            <p>Confirm the payment details before updating this booking.</p>
+
+            <dl className="grid gap-3 rounded-xl border border-[#D9CBB8] bg-[#FFFDF9] p-4 sm:grid-cols-2">
+              <div>
+                <dt className="text-xs font-semibold text-[#8B6A4E]">
+                  Booking reference
+                </dt>
+                <dd className="mt-1 font-semibold text-[#5C4033]">
+                  {paymentAction.booking.booking_reference}
+                </dd>
+              </div>
+
+              <div>
+                <dt className="text-xs font-semibold text-[#8B6A4E]">Dog</dt>
+                <dd className="mt-1 font-semibold text-[#5C4033]">
+                  {formatName(paymentAction.booking.dogs?.name || "Dog")}
+                </dd>
+              </div>
+
+              <div>
+                <dt className="text-xs font-semibold text-[#8B6A4E]">
+                  Payment type
+                </dt>
+                <dd className="mt-1 text-[#5C4033]">
+                  {paymentAction.paymentType}
+                </dd>
+              </div>
+
+              <div>
+                <dt className="text-xs font-semibold text-[#8B6A4E]">Amount</dt>
+                <dd className="mt-1 font-semibold text-[#5C4033]">
+                  {formatMoney(
+                    paymentAction.paymentType === "Deposit"
+                      ? paymentAction.booking.deposit_amount || 0
+                      : paymentAction.booking.balance_amount || 0,
+                  )}
+                </dd>
+              </div>
+            </dl>
+
+            <div>
+              <label
+                htmlFor="paymentDate"
+                className="mb-2 block text-sm font-medium text-[#5C4033]"
+              >
+                Date payment received
+              </label>
+
+              <input
+                id="paymentDate"
+                type="date"
+                value={paymentDate}
+                max={getTodayForDateInput()}
+                onChange={(event) => {
+                  setPaymentDate(event.target.value);
+                  setMessage("");
+                  setIsError(false);
+                }}
+                disabled={recordingPayment}
+                className="min-h-11 w-full rounded-lg border border-[#D9CBB8] bg-white px-3 py-2 text-sm text-[#5C4033] outline-none transition-colors focus:border-[#8B6A4E] focus:ring-2 focus:ring-[#8B6A4E]/20 disabled:cursor-not-allowed disabled:opacity-60 md:text-base"
+              />
+            </div>
+
+            <div className="rounded-lg border border-blue-300 bg-blue-50 p-3 text-blue-800">
+              {paymentAction.paymentType === "Deposit" ? (
+                <p>
+                  Recording the deposit will move the booking to Balance
+                  Pending, create the payment record, update Google Calendar and
+                  send the customer a deposit receipt.
+                </p>
+              ) : (
+                <p>
+                  Recording the balance will move the booking to Balance Paid,
+                  create the payment record, update Google Calendar and send the
+                  customer a balance receipt.
                 </p>
               )}
             </div>
