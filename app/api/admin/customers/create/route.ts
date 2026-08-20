@@ -172,7 +172,6 @@ export async function POST(request: Request) {
         vet_name: body.vet_name?.trim() || null,
         vet_phone: body.vet_phone?.trim() || null,
         vet_address: body.vet_address?.trim() || null,
-        meet_and_greet_approved: false,
         is_admin: false,
         active: false,
         was_activated: false,

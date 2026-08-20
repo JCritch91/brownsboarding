@@ -34,17 +34,6 @@ type UpdateAdminStatusResponse = {
   error?: string;
 };
 
-type UpdateMeetAndGreetApprovalResponse = {
-  success: boolean;
-  meetAndGreetApprovalUpdated: boolean;
-  customer?: {
-    id: string;
-    meetAndGreetApproved: boolean;
-  };
-  message?: string;
-  error?: string;
-};
-
 type UpdateCustomerActiveStatusResponse = {
   success: boolean;
   customerStatusUpdated: boolean;
@@ -71,7 +60,6 @@ type CustomerProfile = {
   vet_name: string | null;
   vet_phone: string | null;
   vet_address: string | null;
-  meet_and_greet_approved: boolean | null;
   active: boolean;
   was_activated: boolean;
   activated_at: string | null;
@@ -262,7 +250,6 @@ export default function AdminCustomerDetailsPage() {
           vet_name,
           vet_phone,
           vet_address,
-          meet_and_greet_approved,
           active,
           was_activated,
           activated_at,
@@ -433,73 +420,6 @@ export default function AdminCustomerDetailsPage() {
         (requestedActiveStatus
           ? "Customer account activated successfully."
           : "Customer account deactivated successfully."),
-    );
-  }
-
-  async function toggleMeetAndGreetApproval() {
-    if (!customer || accountActionLoading) {
-      return;
-    }
-
-    const newApprovalStatus = !customer.meet_and_greet_approved;
-
-    const confirmed = window.confirm(
-      newApprovalStatus
-        ? `Mark ${getCustomerName()} as Meet & Greet approved?`
-        : `Remove Meet & Greet approval for ${getCustomerName()}?`,
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    setAccountActionLoading(true);
-    setMessage("");
-    setIsError(false);
-
-    const result =
-      await authenticatedApiRequest<UpdateMeetAndGreetApprovalResponse>(
-        `/api/admin/customers/${customerId}/meet-and-greet`,
-        {
-          method: "PATCH",
-          body: {
-            approved: newApprovalStatus,
-          },
-        },
-      );
-
-    if (result.unauthenticated) {
-      setAccountActionLoading(false);
-      window.location.href = "/login";
-      return;
-    }
-
-    if (!result.ok) {
-      setAccountActionLoading(false);
-      setIsError(true);
-      setMessage(result.error || "Meet & Greet approval could not be updated.");
-      return;
-    }
-
-    if (!result.data || !result.data.meetAndGreetApprovalUpdated) {
-      setAccountActionLoading(false);
-      setIsError(true);
-      setMessage(
-        result.data?.error ||
-          "The customer service did not update the Meet & Greet approval.",
-      );
-      return;
-    }
-
-    await loadCustomerData();
-
-    setAccountActionLoading(false);
-    setIsError(false);
-    setMessage(
-      result.data.message ||
-        (newApprovalStatus
-          ? "Meet & Greet approval added successfully."
-          : "Meet & Greet approval removed successfully."),
     );
   }
 
@@ -721,16 +641,6 @@ export default function AdminCustomerDetailsPage() {
                         Inactive
                       </span>
                     )}
-
-                    {customer.meet_and_greet_approved ? (
-                      <span className="inline-flex w-fit items-center rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-800 md:text-sm">
-                        Meet & Greet Approved
-                      </span>
-                    ) : (
-                      <span className="inline-flex w-fit items-center rounded-lg border border-gray-300 bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-700 md:text-sm">
-                        Meet & Greet Pending
-                      </span>
-                    )}
                   </div>
                 </div>
 
@@ -792,7 +702,7 @@ export default function AdminCustomerDetailsPage() {
                 </h2>
 
                 <div className="rounded-xl border border-[#D9CBB8] bg-white p-4 shadow-sm md:p-6">
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
                     <div className="rounded-lg border border-[#D9CBB8] bg-[#FFFDF9] p-3 md:p-4">
                       <p className="text-xs font-semibold text-[#8B6A4E] md:text-sm">
                         Account Status
@@ -840,24 +750,6 @@ export default function AdminCustomerDetailsPage() {
 
                     <div className="rounded-lg border border-[#D9CBB8] bg-[#FFFDF9] p-3 md:p-4">
                       <p className="text-xs font-semibold text-[#8B6A4E] md:text-sm">
-                        Meet & Greet
-                      </p>
-
-                      <div className="mt-2">
-                        {customer.meet_and_greet_approved ? (
-                          <span className="inline-flex w-fit items-center rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-800 md:text-sm">
-                            Approved
-                          </span>
-                        ) : (
-                          <span className="inline-flex w-fit items-center rounded-lg border border-gray-300 bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-700 md:text-sm">
-                            Pending
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="rounded-lg border border-[#D9CBB8] bg-[#FFFDF9] p-3 md:p-4">
-                      <p className="text-xs font-semibold text-[#8B6A4E] md:text-sm">
                         Account Created
                       </p>
 
@@ -880,31 +772,6 @@ export default function AdminCustomerDetailsPage() {
                   )}
 
                   <div className="mt-5 flex flex-wrap justify-center gap-3 sm:justify-end">
-                    {customer.meet_and_greet_approved ? (
-                      <button
-                        type="button"
-                        onClick={toggleMeetAndGreetApproval}
-                        disabled={accountActionLoading}
-                        className="inline-flex min-h-11 w-fit items-center justify-center rounded-lg border border-amber-400 px-4 py-2 text-sm font-semibold text-amber-700 transition-all duration-300 hover:scale-105 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100 md:text-base"
-                      >
-                        {accountActionLoading
-                          ? "Updating..."
-                          : "Remove Meet & Greet Approval"}
-                      </button>
-                    ) : (
-                      <Button
-                        type="button"
-                        variant="dark"
-                        onClick={toggleMeetAndGreetApproval}
-                        disabled={accountActionLoading}
-                        className="disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
-                      >
-                        {accountActionLoading
-                          ? "Updating..."
-                          : "Approve Meet & Greet"}
-                      </Button>
-                    )}
-
                     {!customer.was_activated && (
                       <Button
                         type="button"

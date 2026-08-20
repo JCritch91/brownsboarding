@@ -17,8 +17,6 @@ export type CustomerProfile = {
   vet_phone: string | null;
   vet_address: string | null;
 
-  meet_and_greet_approved: boolean | null;
-
   active: boolean;
   was_activated: boolean;
   activation_token: string | null;

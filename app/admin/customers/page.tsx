@@ -27,7 +27,6 @@ type CustomerProfile = {
   vet_name: string | null;
   vet_phone: string | null;
   vet_address: string | null;
-  meet_and_greet_approved: boolean | null;
   active: boolean;
   was_activated: boolean;
   activated_at: string | null;
@@ -93,7 +92,6 @@ export default function AdminCustomersPage() {
         vet_name,
         vet_phone,
         vet_address,
-        meet_and_greet_approved,
         active,
         was_activated,
         activated_at,
@@ -443,16 +441,6 @@ export default function AdminCustomersPage() {
                           ) : (
                             <span className="inline-flex w-fit items-center rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 md:text-sm">
                               Inactive
-                            </span>
-                          )}
-
-                          {customer.meet_and_greet_approved ? (
-                            <span className="inline-flex w-fit items-center rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-800 md:text-sm">
-                              Meet & Greet Approved
-                            </span>
-                          ) : (
-                            <span className="inline-flex w-fit items-center rounded-lg border border-gray-300 bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-700 md:text-sm">
-                              Meet & Greet Pending
                             </span>
                           )}
                         </div>
