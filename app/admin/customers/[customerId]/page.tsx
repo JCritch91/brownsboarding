@@ -21,6 +21,17 @@ import {
   authenticatedApiRequest,
 } from "@/lib/client/authenticated-api";
 
+type ResendActivationEmailResponse = {
+  success: boolean;
+  activationEmailSent: boolean;
+  customer?: {
+    id: string;
+    email: string;
+  };
+  message?: string;
+  error?: string;
+};
+
 type UpdateAdminStatusResponse = {
   success: boolean;
   adminStatusUpdated: boolean;
@@ -72,7 +83,6 @@ type CustomerProfile = {
   meet_and_greet_approved: boolean | null;
   active: boolean;
   was_activated: boolean;
-  activation_token: string | null;
   activated_at: string | null;
   created_at: string | null;
   is_admin: boolean | null;
@@ -283,7 +293,6 @@ async function toggleAdminStatus() {
           meet_and_greet_approved,
           active,
           was_activated,
-          activation_token,
           activated_at,
           created_at,
           is_admin
@@ -541,22 +550,22 @@ async function resendActivationEmail() {
 
   if (customer.was_activated) {
     setIsError(true);
-    setMessage("This customer has already activated their account.");
+    setMessage(
+      "This customer has already activated their account."
+    );
     return;
   }
 
-  if (!customer.activation_token) {
+  if (!customer.email) {
     setIsError(true);
     setMessage(
-      "This customer does not currently have an activation token."
+      "This customer does not have an email address."
     );
     return;
   }
 
   const confirmed = window.confirm(
-    `Send a new activation email to ${
-      customer.email || getCustomerName()
-    }?`
+    `Send a new activation email to ${customer.email}?`
   );
 
   if (!confirmed) {
@@ -567,23 +576,36 @@ async function resendActivationEmail() {
   setMessage("");
   setIsError(false);
 
-  const response = await fetch("/api/resend-activation", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      token: customer.activation_token,
-    }),
-  });
+  const result =
+    await authenticatedApiRequest<ResendActivationEmailResponse>(
+      `/api/admin/customers/${customerId}/resend-activation`
+    );
 
-  const result = await response.json().catch(() => null);
+  if (result.unauthenticated) {
+    setAccountActionLoading(false);
+    window.location.href = "/login";
+    return;
+  }
 
-  if (!response.ok) {
+  if (!result.ok) {
     setAccountActionLoading(false);
     setIsError(true);
     setMessage(
-      result?.error || "Unable to resend the activation email."
+      result.error ||
+        "Unable to resend the activation email."
+    );
+    return;
+  }
+
+  if (
+    !result.data ||
+    !result.data.activationEmailSent
+  ) {
+    setAccountActionLoading(false);
+    setIsError(true);
+    setMessage(
+      result.data?.error ||
+        "The activation service did not send a new email."
     );
     return;
   }
@@ -591,10 +613,9 @@ async function resendActivationEmail() {
   setAccountActionLoading(false);
   setIsError(false);
   setMessage(
-    result?.message || "A new activation email has been sent."
+    result.data.message ||
+      "A new activation email has been sent."
   );
-
-  await loadCustomerData();
 }
 
 
