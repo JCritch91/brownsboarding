@@ -279,9 +279,9 @@ export default function AdminCustomersPage() {
             <button
               type="button"
               onClick={() => setSelectedFilter("All")}
-              className={`rounded-lg border p-3 text-left transition-all duration-200 md:p-4 ${
+              className={`rounded-lg border p-3 text-left transition-all duration-200 md:p-4 hover:-translate-y-0.5 cursor-pointer ${
                 selectedFilter === "All"
-                  ? "border-[#8B6A4E] bg-[#F5EFE6] ring-2 ring-[#8B6A4E]/20"
+                  ? "border-[#8B6A4E] bg-[#F5EFE6] ring-2 ring-[#8B6A4E]/20 "
                   : "border-[#D9CBB8] bg-white hover:bg-[#FFFDF9]"
               }`}
             >
@@ -297,7 +297,7 @@ export default function AdminCustomersPage() {
             <button
               type="button"
               onClick={() => setSelectedFilter("Active")}
-              className={`rounded-lg border p-3 text-left transition-all duration-200 md:p-4 ${
+              className={`rounded-lg border p-3 text-left transition-all duration-200 md:p-4 hover:-translate-y-0.5 cursor-pointer ${
                 selectedFilter === "Active"
                   ? "border-green-400 bg-green-50 ring-2 ring-green-200"
                   : "border-green-200 bg-green-50/50 hover:bg-green-50"
@@ -315,7 +315,7 @@ export default function AdminCustomersPage() {
             <button
               type="button"
               onClick={() => setSelectedFilter("Inactive")}
-              className={`rounded-lg border p-3 text-left transition-all duration-200 md:p-4 ${
+              className={`rounded-lg border p-3 text-left transition-all duration-200 md:p-4 hover:-translate-y-0.5 cursor-pointer ${
                 selectedFilter === "Inactive"
                   ? "border-red-400 bg-red-50 ring-2 ring-red-200"
                   : "border-red-200 bg-red-50/50 hover:bg-red-50"
@@ -333,7 +333,7 @@ export default function AdminCustomersPage() {
             <button
               type="button"
               onClick={() => setSelectedFilter("Not Activated")}
-              className={`rounded-lg border p-3 text-left transition-all duration-200 md:p-4 ${
+              className={`rounded-lg border p-3 text-left transition-all duration-200 md:p-4 hover:-translate-y-0.5 cursor-pointer ${
                 selectedFilter === "Not Activated"
                   ? "border-amber-400 bg-amber-50 ring-2 ring-amber-200"
                   : "border-amber-200 bg-amber-50/50 hover:bg-amber-50"
