@@ -7,7 +7,7 @@ import AdminPageLayout from "@/components/AdminPageLayout";
 import PageCard from "@/components/PageCard";
 import MessageBox from "@/components/MessageBox";
 import LoadingScreen from "@/components/LoadingScreen";
-import { isWithinTwoWeeks } from "@/lib/helpers";
+import { formatDisplayDate, formatName, isWithinTwoWeeks } from "@/lib/helpers";
 import type {
   Booking,
   BookingCustomerSummary,
@@ -19,6 +19,7 @@ import AdminBookingCard from "@/components/bookings/AdminBookingCard";
 import BookingStatusSummary from "@/components/bookings/BookingStatusSummary";
 import BookingStatusFilters from "@/components/bookings/BookingStatusFilters";
 import { authenticatedApiRequest } from "@/lib/client/authenticated-api";
+import ConfirmationModal from "@/components/modals/ConfirmationModal";
 
 type BookingPaymentResponse = {
   success: boolean;
@@ -64,6 +65,10 @@ export default function AdminBookingsPage() {
   const [isError, setIsError] = useState(false);
 
   const [selectedFilter, setSelectedFilter] = useState<BookingFilter>("Live");
+
+  const [bookingToCancel, setBookingToCancel] =
+    useState<BookingWithCustomer | null>(null);
+  const [cancellingBooking, setCancellingBooking] = useState(false);
 
   useEffect(() => {
     checkAdminAndLoadBookings();
@@ -229,19 +234,22 @@ export default function AdminBookingsPage() {
     await loadBookings();
   }
 
-  async function cancelBooking(booking: BookingWithCustomer) {
-    const confirmed = window.confirm(
-      `Are you sure you want to cancel booking ${booking.booking_reference}?\n\n${
-        booking.status === "Pending"
-          ? "This Pending booking has not reduced availability."
-          : "Availability will be restored for each occupied night."
-      }`,
-    );
-
-    if (!confirmed) {
+  function requestBookingCancellation(booking: BookingWithCustomer) {
+    if (cancellingBooking) {
       return;
     }
 
+    setBookingToCancel(booking);
+  }
+
+  async function confirmBookingCancellation() {
+    if (!bookingToCancel || cancellingBooking) {
+      return;
+    }
+
+    const booking = bookingToCancel;
+
+    setCancellingBooking(true);
     setMessage("");
     setIsError(false);
 
@@ -255,43 +263,49 @@ export default function AdminBookingsPage() {
     );
 
     if (result.unauthenticated) {
+      setCancellingBooking(false);
+      setBookingToCancel(null);
       window.location.href = "/login";
       return;
     }
 
     if (!result.ok) {
+      setCancellingBooking(false);
+      setBookingToCancel(null);
       setIsError(true);
       setMessage(result.error || "The booking could not be cancelled.");
-
       await loadBookings();
       return;
     }
 
     if (!result.data || !result.data.databaseCancelled) {
+      setCancellingBooking(false);
+      setBookingToCancel(null);
       setIsError(true);
       setMessage(
         result.data?.error ||
           "The cancellation service did not cancel the booking.",
       );
-
       await loadBookings();
       return;
     }
 
     if (result.data.followUpRequired) {
+      setCancellingBooking(false);
+      setBookingToCancel(null);
       setIsError(true);
       setMessage(
         result.data.message ||
           "The booking was cancelled, but one or more calendar or email operations could not be completed.",
       );
-
       await loadBookings();
       return;
     }
 
+    setCancellingBooking(false);
+    setBookingToCancel(null);
     setIsError(false);
     setMessage(result.data.message || "Booking cancelled successfully.");
-
     await loadBookings();
   }
 
@@ -634,7 +648,7 @@ export default function AdminBookingsPage() {
                   key={booking.id}
                   booking={booking}
                   onConfirm={confirmBooking}
-                  onCancel={cancelBooking}
+                  onCancel={requestBookingCancellation}
                   onMarkDepositPaid={markDepositPaid}
                   onMarkBalancePaid={markBalancePaid}
                 />
@@ -643,6 +657,81 @@ export default function AdminBookingsPage() {
           )}
         </div>
       </PageCard>
+
+      <ConfirmationModal
+        isOpen={bookingToCancel !== null}
+        title="Cancel Booking"
+        confirmText="Cancel Booking"
+        cancelText="Keep Booking"
+        isConfirming={cancellingBooking}
+        variant="danger"
+        onConfirm={confirmBookingCancellation}
+        onCancel={() => {
+          if (!cancellingBooking) {
+            setBookingToCancel(null);
+          }
+        }}
+      >
+        {bookingToCancel && (
+          <div className="space-y-4">
+            <p>
+              Please confirm that you want to cancel this booking. This action
+              cannot be undone.
+            </p>
+
+            <dl className="grid gap-3 rounded-xl border border-[#D9CBB8] bg-[#FFFDF9] p-4 sm:grid-cols-2">
+              <div>
+                <dt className="text-xs font-semibold text-[#8B6A4E]">
+                  Booking reference
+                </dt>
+                <dd className="mt-1 font-semibold text-[#5C4033]">
+                  {bookingToCancel.booking_reference}
+                </dd>
+              </div>
+
+              <div>
+                <dt className="text-xs font-semibold text-[#8B6A4E]">Dog</dt>
+                <dd className="mt-1 font-semibold text-[#5C4033]">
+                  {formatName(bookingToCancel.dogs?.name || "Dog")}
+                </dd>
+              </div>
+
+              <div>
+                <dt className="text-xs font-semibold text-[#8B6A4E]">
+                  Start date
+                </dt>
+                <dd className="mt-1 text-[#5C4033]">
+                  {formatDisplayDate(bookingToCancel.start_date)}
+                </dd>
+              </div>
+
+              <div>
+                <dt className="text-xs font-semibold text-[#8B6A4E]">
+                  End date
+                </dt>
+                <dd className="mt-1 text-[#5C4033]">
+                  {formatDisplayDate(bookingToCancel.end_date)}
+                </dd>
+              </div>
+            </dl>
+
+            <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-red-800">
+              {bookingToCancel.status === "Pending" ? (
+                <p>
+                  This booking is still Pending, so availability has not been
+                  reduced.
+                </p>
+              ) : (
+                <p>
+                  Availability will be restored for each occupied night. The
+                  configured calendar and cancellation-email operations will
+                  also be attempted.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+      </ConfirmationModal>
     </AdminPageLayout>
   );
 }
