@@ -11,6 +11,8 @@ import Button from "@/components/Buttons";
 import { authenticatedApiRequest } from "@/lib/client/authenticated-api";
 import type { Booking } from "@/types/booking";
 import CustomerBookingCard from "@/components/bookings/CustomerBookingCard";
+import ConfirmationModal from "@/components/modals/ConfirmationModal";
+import { formatDisplayDate, formatName } from "@/lib/helpers";
 
 type BookingCancellationResponse = {
   success: boolean;
@@ -25,6 +27,8 @@ export default function MyBookingsPage() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
+  const [bookingToCancel, setBookingToCancel] = useState<Booking | null>(null);
+  const [cancellingBooking, setCancellingBooking] = useState(false);
 
   useEffect(() => {
     loadBookings();
@@ -96,19 +100,22 @@ export default function MyBookingsPage() {
     return booking.end_date < today || booking.status === "Cancelled";
   }
 
-  async function cancelBooking(booking: Booking) {
-    const confirmed = window.confirm(
-      `Are you sure you want to cancel booking ${booking.booking_reference}?\n\n${
-        booking.status === "Pending"
-          ? "This booking request has not yet reduced availability."
-          : "The reserved availability will be restored."
-      }`,
-    );
-
-    if (!confirmed) {
+  function requestBookingCancellation(booking: Booking) {
+    if (cancellingBooking) {
       return;
     }
 
+    setBookingToCancel(booking);
+  }
+
+  async function confirmBookingCancellation() {
+    if (!bookingToCancel || cancellingBooking) {
+      return;
+    }
+
+    const booking = bookingToCancel;
+
+    setCancellingBooking(true);
     setMessage("");
     setIsError(false);
 
@@ -122,45 +129,51 @@ export default function MyBookingsPage() {
     );
 
     if (result.unauthenticated) {
+      setCancellingBooking(false);
+      setBookingToCancel(null);
       window.location.href = "/login";
       return;
     }
 
     if (!result.ok) {
+      setCancellingBooking(false);
+      setBookingToCancel(null);
       setIsError(true);
-      setMessage(result.error || "The booking could not be cancelled.");
-
+      setMessage(result.error || "Your booking could not be cancelled.");
       await loadBookings();
       return;
     }
 
     if (!result.data || !result.data.databaseCancelled) {
+      setCancellingBooking(false);
+      setBookingToCancel(null);
       setIsError(true);
       setMessage(
         result.data?.error ||
-          "The cancellation service did not cancel the booking.",
+          "The cancellation service did not cancel your booking.",
       );
-
       await loadBookings();
       return;
     }
 
     if (result.data.followUpRequired) {
+      setCancellingBooking(false);
+      setBookingToCancel(null);
       setIsError(true);
       setMessage(
         result.data.message ||
-          "The booking was cancelled, but one or more calendar or email operations could not be completed.",
+          "Your booking was cancelled, but one or more follow-up operations could not be completed.",
       );
-
       await loadBookings();
       return;
     }
 
+    setCancellingBooking(false);
+    setBookingToCancel(null);
     setIsError(false);
     setMessage(
-      result.data.message || "Your booking has been cancelled successfully.",
+      result.data.message || "Your booking was cancelled successfully.",
     );
-
     await loadBookings();
   }
 
@@ -211,7 +224,7 @@ export default function MyBookingsPage() {
                       key={booking.id}
                       booking={booking}
                       variant="upcoming"
-                      onCancel={cancelBooking}
+                      onCancel={requestBookingCancellation}
                     />
                   ))}
                 </div>
@@ -243,6 +256,72 @@ export default function MyBookingsPage() {
           </div>
         )}
       </PageCard>
+
+      <ConfirmationModal
+        isOpen={bookingToCancel !== null}
+        title="Cancel Booking"
+        confirmText="Cancel Booking"
+        cancelText="Keep Booking"
+        isConfirming={cancellingBooking}
+        variant="danger"
+        onConfirm={confirmBookingCancellation}
+        onCancel={() => {
+          if (!cancellingBooking) {
+            setBookingToCancel(null);
+          }
+        }}
+      >
+        {bookingToCancel && (
+          <div className="space-y-4">
+            <p>
+              Please confirm that you want to cancel this booking. This action
+              cannot be undone.
+            </p>
+
+            <dl className="grid gap-3 rounded-xl border border-[#D9CBB8] bg-[#FFFDF9] p-4 sm:grid-cols-2">
+              <div>
+                <dt className="text-xs font-semibold text-[#8B6A4E]">
+                  Booking reference
+                </dt>
+                <dd className="mt-1 font-semibold text-[#5C4033]">
+                  {bookingToCancel.booking_reference}
+                </dd>
+              </div>
+
+              <div>
+                <dt className="text-xs font-semibold text-[#8B6A4E]">Dog</dt>
+                <dd className="mt-1 font-semibold text-[#5C4033]">
+                  {formatName(bookingToCancel.dogs?.name || "Dog")}
+                </dd>
+              </div>
+
+              <div>
+                <dt className="text-xs font-semibold text-[#8B6A4E]">
+                  Start date
+                </dt>
+                <dd className="mt-1 text-[#5C4033]">
+                  {formatDisplayDate(bookingToCancel.start_date)}
+                </dd>
+              </div>
+
+              <div>
+                <dt className="text-xs font-semibold text-[#8B6A4E]">
+                  End date
+                </dt>
+                <dd className="mt-1 text-[#5C4033]">
+                  {formatDisplayDate(bookingToCancel.end_date)}
+                </dd>
+              </div>
+            </dl>
+
+            <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-red-800">
+              <p>
+                Browns Boarding will be notified.
+              </p>
+            </div>
+          </div>
+        )}
+      </ConfirmationModal>
     </CustomerPageLayout>
   );
 }
