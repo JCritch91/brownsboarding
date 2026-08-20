@@ -16,6 +16,8 @@ import {
 
 import { syncAvailabilityCalendarEvent } from "@/lib/services/availability-calendar-sync-service";
 
+import { createBookingCalendarEvent } from "@/lib/services/booking-calendar-service";
+
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -672,30 +674,9 @@ export async function POST(request: Request) {
     let bookingCalendarError: string | null = null;
 
     try {
-      const bookingCalendarResponse = await fetch(
-        `${requestOrigin}/api/google/create-booking-event`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(bookingCalendarPayload),
-        },
-      );
+      await createBookingCalendarEvent(bookingCalendarPayload);
 
-      if (!bookingCalendarResponse.ok) {
-        const responseText = await bookingCalendarResponse.text();
-
-        bookingCalendarError =
-          responseText || "Google Calendar returned an unsuccessful response.";
-
-        console.error(
-          `Booking calendar creation failed for ${booking.booking_reference}:`,
-          bookingCalendarError,
-        );
-      } else {
-        bookingCalendarCreated = true;
-      }
+      bookingCalendarCreated = true;
     } catch (calendarError) {
       bookingCalendarError =
         calendarError instanceof Error
