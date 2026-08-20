@@ -21,6 +21,17 @@ import {
   authenticatedApiRequest,
 } from "@/lib/client/authenticated-api";
 
+type UpdateAdminStatusResponse = {
+  success: boolean;
+  adminStatusUpdated: boolean;
+  profile?: {
+    id: string;
+    isAdmin: boolean;
+  };
+  message?: string;
+  error?: string;
+};
+
 type UpdateMeetAndGreetApprovalResponse = {
   success: boolean;
   meetAndGreetApprovalUpdated: boolean;
@@ -126,68 +137,102 @@ export default function AdminCustomerDetailsPage() {
     checkAdminAndLoadCustomer();
   }, [customerId]);
 
-  async function toggleAdminStatus() {
-    if (!customer || accountActionLoading) {
-      return;
-    }
-
-    const makingAdmin = !customer.is_admin;
-
-    if (customer.id === currentUserId && !makingAdmin) {
-      setIsError(true);
-      setMessage(
-        "You cannot remove your own administrator access."
-      );
-      return;
-    }
-
-    const confirmed = window.confirm(
-      makingAdmin
-        ? `Grant administrator access to ${getCustomerName()}?`
-        : `Remove administrator access from ${getCustomerName()}?`
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    setAccountActionLoading(true);
-    setMessage("");
-    setIsError(false);
-
-    const { error } = await supabase
-      .from("profiles")
-      .update({
-        is_admin: makingAdmin,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", customer.id);
-
-    if (error) {
-      setAccountActionLoading(false);
-      setIsError(true);
-      setMessage(error.message);
-      return;
-    }
-
-    setCustomer((current) =>
-      current
-        ? {
-            ...current,
-            is_admin: makingAdmin,
-          }
-        : current
-    );
-
-    setAccountActionLoading(false);
-    setIsError(false);
-
-    setMessage(
-      makingAdmin
-        ? "Administrator access granted."
-        : "Administrator access removed."
-    );
+async function toggleAdminStatus() {
+  if (!customer || accountActionLoading) {
+    return;
   }
+
+  const makingAdmin =
+    !customer.is_admin;
+
+  if (
+    customer.id === currentUserId &&
+    !makingAdmin
+  ) {
+    setIsError(true);
+    setMessage(
+      "You cannot remove your own administrator access."
+    );
+    return;
+  }
+
+  const confirmed = window.confirm(
+    makingAdmin
+      ? `Grant administrator access to ${getCustomerName()}?`
+      : `Remove administrator access from ${getCustomerName()}?`
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  setAccountActionLoading(true);
+  setMessage("");
+  setIsError(false);
+
+  const result =
+    await authenticatedApiRequest<UpdateAdminStatusResponse>(
+      `/api/admin/customers/${customerId}/admin-status`,
+      {
+        method: "PATCH",
+        body: {
+          isAdmin: makingAdmin,
+        },
+      }
+    );
+
+  if (result.unauthenticated) {
+    setAccountActionLoading(false);
+    window.location.href = "/login";
+    return;
+  }
+
+  if (!result.ok) {
+    setAccountActionLoading(false);
+    setIsError(true);
+    setMessage(
+      result.error ||
+        "Administrator access could not be updated."
+    );
+    return;
+  }
+
+  if (
+    !result.data ||
+    !result.data.adminStatusUpdated
+  ) {
+    setAccountActionLoading(false);
+    setIsError(true);
+    setMessage(
+      result.data?.error ||
+        "The role-management service did not update administrator access."
+    );
+    return;
+  }
+
+  const updatedAdminStatus =
+    result.data.profile?.isAdmin ??
+    makingAdmin;
+
+  setCustomer((current) =>
+    current
+      ? {
+          ...current,
+          is_admin:
+            updatedAdminStatus,
+        }
+      : current
+  );
+
+  setAccountActionLoading(false);
+  setIsError(false);
+  setMessage(
+    result.data.message ||
+      (updatedAdminStatus
+        ? "Administrator access granted."
+        : "Administrator access removed.")
+  );
+}
 
   async function checkAdminAndLoadCustomer() {
     setLoading(true);
@@ -342,7 +387,7 @@ function formatAccountDate(dateString: string | null) {
 }
 
 async function toggleCustomerActiveStatus() {
-  if (!customer) {
+  if (!customer || accountActionLoading) {
     return;
   }
 
@@ -359,6 +404,7 @@ async function toggleCustomerActiveStatus() {
     return;
   }
 
+  setAccountActionLoading(true);
   setMessage("");
   setIsError(false);
 
@@ -368,18 +414,19 @@ async function toggleCustomerActiveStatus() {
       {
         method: "PATCH",
         body: {
-          active:
-            requestedActiveStatus,
+          active: requestedActiveStatus,
         },
       }
     );
 
   if (result.unauthenticated) {
+    setAccountActionLoading(false);
     window.location.href = "/login";
     return;
   }
 
   if (!result.ok) {
+    setAccountActionLoading(false);
     setIsError(true);
     setMessage(
       result.error ||
@@ -392,6 +439,7 @@ async function toggleCustomerActiveStatus() {
     !result.data ||
     !result.data.customerStatusUpdated
   ) {
+    setAccountActionLoading(false);
     setIsError(true);
     setMessage(
       result.data?.error ||
@@ -400,16 +448,16 @@ async function toggleCustomerActiveStatus() {
     return;
   }
 
-  setIsError(false);
+  await loadCustomerData();
 
+  setAccountActionLoading(false);
+  setIsError(false);
   setMessage(
     result.data.message ||
       (requestedActiveStatus
         ? "Customer account activated successfully."
         : "Customer account deactivated successfully.")
   );
-
-  await loadCustomerData();
 }
 
 async function toggleMeetAndGreetApproval() {
@@ -802,22 +850,31 @@ async function resendActivationEmail() {
                           </span>
                         )}
                       </div>
-                    </div>
 
-                    <div className="rounded-lg border border-[#D9CBB8] bg-[#FFFDF9] p-3 md:p-4">
-                      <p className="text-xs font-semibold text-[#8B6A4E] md:text-sm">
-                        Activation Status
-                      </p>
-
-                      <div className="mt-2">
-                        {customer.was_activated ? (
-                          <span className="inline-flex w-fit items-center rounded-lg border border-green-300 bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-800 md:text-sm">
-                            Activated
-                          </span>
+                      <div className="mt-4">
+                        {customer.active ? (
+                          <button
+                            type="button"
+                            onClick={toggleCustomerActiveStatus}
+                            disabled={accountActionLoading}
+                            className="inline-flex min-h-11 w-fit items-center justify-center rounded-lg border border-red-400 px-4 py-2 text-sm font-semibold text-red-600 transition-all duration-300 hover:scale-105 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100 md:text-base"
+                          >
+                            {accountActionLoading
+                              ? "Updating..."
+                              : "Deactivate Customer"}
+                          </button>
                         ) : (
-                          <span className="inline-flex w-fit items-center rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 md:text-sm">
-                            Not Activated
-                          </span>
+                          <Button
+                            type="button"
+                            variant="dark"
+                            onClick={toggleCustomerActiveStatus}
+                            disabled={accountActionLoading}
+                            className="disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
+                          >
+                            {accountActionLoading
+                              ? "Updating..."
+                              : "Activate Customer"}
+                          </Button>
                         )}
                       </div>
                     </div>
@@ -864,31 +921,6 @@ async function resendActivationEmail() {
                   )}
 
                   <div className="mt-5 flex flex-wrap justify-center gap-3 sm:justify-end">
-                    {customer.active ? (
-                      <button
-                        type="button"
-                        onClick={toggleCustomerActiveStatus}
-                        disabled={accountActionLoading}
-                        className="inline-flex min-h-11 w-fit items-center justify-center rounded-lg border border-red-400 px-4 py-2 text-sm font-semibold text-red-600 transition-all duration-300 hover:scale-105 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100 md:text-base"
-                      >
-                        {accountActionLoading
-                          ? "Updating..."
-                          : "Deactivate Customer"}
-                      </button>
-                    ) : (
-                      <Button
-                        type="button"
-                        variant="dark"
-                        onClick={toggleCustomerActiveStatus}
-                        disabled={accountActionLoading}
-                        className="disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
-                      >
-                        {accountActionLoading
-                          ? "Updating..."
-                          : "Activate Customer"}
-                      </Button>
-                    )}
-
                     {customer.meet_and_greet_approved ? (
                       <button
                         type="button"
@@ -952,17 +984,24 @@ async function resendActivationEmail() {
                       <button
                         type="button"
                         onClick={toggleAdminStatus}
-                        className="inline-flex min-h-11 items-center rounded-lg border border-red-400 px-4 py-2 font-semibold text-red-600 hover:bg-red-50"
+                        disabled={accountActionLoading}
+                        className="inline-flex min-h-11 items-center rounded-lg border border-red-400 px-4 py-2 font-semibold text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
                       >
-                        Remove Admin Access
+                        {accountActionLoading
+                          ? "Updating..."
+                          : "Remove Admin Access"}
                       </button>
                     ) : (
                       <Button
                         type="button"
                         variant="dark"
                         onClick={toggleAdminStatus}
+                        disabled={accountActionLoading}
+                        className="disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
                       >
-                        Promote To Admin
+                        {accountActionLoading
+                          ? "Updating..."
+                          : "Promote To Admin"}
                       </Button>
                     )}
                   </div>
