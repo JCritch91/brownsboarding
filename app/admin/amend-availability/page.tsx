@@ -49,14 +49,6 @@ type SaveBulkAvailabilityResponse = {
     date: string;
     error: string;
   }>;
-  availability?: Array<{
-    id: string;
-    date: string;
-    available: boolean;
-    totalSpaces: number;
-    spacesAvailable: number;
-    notes: string | null;
-  }>;
   message?: string;
   error?: string;
 };
@@ -447,6 +439,7 @@ export default function AmendAvailabilityPage() {
       setSaving(false);
       setBulkSyncCurrent(0);
       setBulkSyncTotal(0);
+
       window.location.href = "/login";
       return;
     }
@@ -471,8 +464,6 @@ export default function AmendAvailabilityPage() {
       );
       return;
     }
-
-    setBulkSyncCurrent(result.data.calendarUpdated);
 
     await loadAvailability();
 
