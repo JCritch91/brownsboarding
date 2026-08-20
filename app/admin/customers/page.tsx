@@ -49,8 +49,7 @@ export default function AdminCustomersPage() {
   const [isError, setIsError] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedFilter, setSelectedFilter] =
-    useState<CustomerFilter>("All");
+  const [selectedFilter, setSelectedFilter] = useState<CustomerFilter>("All");
 
   useEffect(() => {
     checkAdminAndLoadCustomers();
@@ -99,7 +98,7 @@ export default function AdminCustomersPage() {
         was_activated,
         activated_at,
         created_at
-        `
+        `,
       )
       .eq("is_admin", false)
       .order("last_name", { ascending: true })
@@ -163,11 +162,11 @@ export default function AdminCustomersPage() {
 
     const customerSummaries = profiles.map((profile) => {
       const dogCount = (dogsData || []).filter(
-        (dog) => dog.owner_id === profile.id
+        (dog) => dog.owner_id === profile.id,
       ).length;
 
       const upcomingBookingCount = (bookingsData || []).filter(
-        (booking) => booking.owner_id === profile.id
+        (booking) => booking.owner_id === profile.id,
       ).length;
 
       return {
@@ -244,21 +243,20 @@ export default function AdminCustomersPage() {
   const filteredCustomers = useMemo(() => {
     return customers.filter(
       (customer) =>
-        matchesSelectedFilter(customer) &&
-        matchesSearchTerm(customer)
+        matchesSelectedFilter(customer) && matchesSearchTerm(customer),
     );
   }, [customers, searchTerm, selectedFilter]);
 
   const activeCustomers = customers.filter(
-    (customer) => customer.active && customer.was_activated
+    (customer) => customer.active && customer.was_activated,
   );
 
   const inactiveCustomers = customers.filter(
-    (customer) => !customer.active && customer.was_activated
+    (customer) => !customer.active && customer.was_activated,
   );
 
   const unactivatedCustomers = customers.filter(
-    (customer) => !customer.was_activated
+    (customer) => !customer.was_activated,
   );
 
   if (loading) {
@@ -267,15 +265,11 @@ export default function AdminCustomersPage() {
 
   return (
     <AdminPageLayout>
-        <PageCard
+      <PageCard
         title="Customers"
         subtitle="Create, view and manage customers, dogs and bookings."
-        actions={
-            <Button href="/admin/customers/add">
-                Add Customer
-            </Button>
-        }
-        >
+        actions={<Button href="/admin/customers/add">Add Customer</Button>}
+      >
         <div className="space-y-6 md:space-y-8">
           {message && (
             <MessageBox type={isError ? "error" : "success"}>
@@ -438,86 +432,87 @@ export default function AdminCustomersPage() {
                         </div>
 
                         <div className="flex flex-wrap gap-2 sm:justify-end">
-                        {!customer.was_activated ? (
+                          {!customer.was_activated ? (
                             <span className="inline-flex w-fit items-center rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 md:text-sm">
-                            Not Activated
+                              Not Activated
                             </span>
-                        ) : customer.active ? (
+                          ) : customer.active ? (
                             <span className="inline-flex w-fit items-center rounded-lg border border-green-300 bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-800 md:text-sm">
-                            Active
+                              Active
                             </span>
-                        ) : (
+                          ) : (
                             <span className="inline-flex w-fit items-center rounded-lg border border-red-300 bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 md:text-sm">
-                            Inactive
+                              Inactive
                             </span>
-                        )}
+                          )}
 
-                        {customer.meet_and_greet_approved ? (
+                          {customer.meet_and_greet_approved ? (
                             <span className="inline-flex w-fit items-center rounded-lg border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-800 md:text-sm">
-                            Meet & Greet Approved
+                              Meet & Greet Approved
                             </span>
-                        ) : (
+                          ) : (
                             <span className="inline-flex w-fit items-center rounded-lg border border-gray-300 bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-700 md:text-sm">
-                            Meet & Greet Pending
+                              Meet & Greet Pending
                             </span>
-                        )}
+                          )}
                         </div>
-                        </div>
+                      </div>
 
-                        {customerAddress && (
+                      {customerAddress && (
                         <div className="mt-4 rounded-lg border border-[#D9CBB8] bg-[#F5EFE6] p-3 md:p-4">
-                            <p className="text-xs font-semibold text-[#5C4033] md:text-sm">
+                          <p className="text-xs font-semibold text-[#5C4033] md:text-sm">
                             Address
-                            </p>
+                          </p>
 
-                            <p className="mt-1 text-sm text-[#8B6A4E] md:text-base">
+                          <p className="mt-1 text-sm text-[#8B6A4E] md:text-base">
                             {customerAddress}
-                            </p>
+                          </p>
                         </div>
-                        )}
+                      )}
 
-                        <div className="mt-4 grid grid-cols-2 gap-3">
+                      <div className="mt-4 grid grid-cols-2 gap-3">
                         <div className="rounded-lg border border-[#D9CBB8] bg-[#FFFDF9] p-3 text-center">
-                            <p className="text-xl font-bold text-[#5C4033]">
+                          <p className="text-xl font-bold text-[#5C4033]">
                             {customer.dogCount}
-                            </p>
+                          </p>
 
-                            <p className="mt-1 text-xs font-medium text-[#8B6A4E] md:text-sm">
+                          <p className="mt-1 text-xs font-medium text-[#8B6A4E] md:text-sm">
                             Active Dog
                             {customer.dogCount === 1 ? "" : "s"}
-                            </p>
+                          </p>
                         </div>
 
                         <div className="rounded-lg border border-[#D9CBB8] bg-[#FFFDF9] p-3 text-center">
-                            <p className="text-xl font-bold text-[#5C4033]">
+                          <p className="text-xl font-bold text-[#5C4033]">
                             {customer.upcomingBookingCount}
-                            </p>
+                          </p>
 
-                            <p className="mt-1 text-xs font-medium text-[#8B6A4E] md:text-sm">
+                          <p className="mt-1 text-xs font-medium text-[#8B6A4E] md:text-sm">
                             Upcoming Booking
                             {customer.upcomingBookingCount === 1 ? "" : "s"}
-                            </p>
+                          </p>
                         </div>
-                        </div>
+                      </div>
 
-                        <div className="mt-5 flex flex-wrap justify-center gap-2 sm:justify-end">
+                      <div className="mt-5 flex flex-wrap justify-center gap-2 sm:justify-end">
                         <Button href={`/admin/customers/${customer.id}`}>
-                            View Customer
+                          View Customer
                         </Button>
 
-                        <Button href={`/admin/customers/${customer.id}/bookings/add`}>
-                            Create Booking
+                        <Button
+                          href={`/admin/customers/${customer.id}/bookings/add`}
+                        >
+                          Create Booking
                         </Button>
-                        </div>
-
-                        </article>
-                    );
-                    })}
-                    </div>
-                    )}
-                    </section>
-                </div>
-            </PageCard>
-        </AdminPageLayout>
-    );
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        </div>
+      </PageCard>
+    </AdminPageLayout>
+  );
 }

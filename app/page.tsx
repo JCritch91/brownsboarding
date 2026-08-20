@@ -14,11 +14,11 @@ export default function Home() {
         <div className="max-w-6xl mx-auto px-4 md:px-6 text-center">
           <div className="flex justify-center mb-6 md:mb-10">
             <div className="bg-[#F5EFE6] p-4 md:p-6 rounded-2xl shadow-lg">
-              <img 
+              <img
                 src="/images/logo.jpg"
                 alt="Browns Boarding Logo"
-                className="h-28 md:h-50 w-auto">
-              </img>
+                className="h-28 md:h-50 w-auto"
+              ></img>
             </div>
           </div>
 
@@ -58,7 +58,7 @@ export default function Home() {
           </InfoCard>
 
           <InfoCard title="Day Care">
-                Safe daytime care while you're at work.
+            Safe daytime care while you're at work.
           </InfoCard>
         </div>
       </PageSection>

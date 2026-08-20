@@ -4,10 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import type { DateRange } from "react-day-picker";
 
 import { supabase } from "@/lib/supabase";
-import {
-  getActivePricingSettings,
-  getCurrentUser,
-} from "@/lib/appActions";
+import { getActivePricingSettings, getCurrentUser } from "@/lib/appActions";
 import {
   formatDisplayDate,
   formatDateForDatabase,
@@ -23,12 +20,8 @@ import LoadingScreen from "@/components/LoadingScreen";
 import BookingForm, {
   type BookingFormDog,
 } from "@/components/bookings/BookingForm";
-import type {
-  Availability,
-} from "@/types/availability";
-import {
-  authenticatedApiRequest,
-} from "@/lib/client/authenticated-api";
+import type { Availability } from "@/types/availability";
+import { authenticatedApiRequest } from "@/lib/client/authenticated-api";
 
 type CreateBookingResponse = {
   success: boolean;
@@ -46,7 +39,6 @@ type CreateBookingResponse = {
   error?: string;
 };
 
-
 export default function BookingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -55,8 +47,7 @@ export default function BookingsPage() {
 
   const [dogs, setDogs] = useState<BookingFormDog[]>([]);
 
-const [availability, setAvailability] =
-  useState<Availability[]>([]);
+  const [availability, setAvailability] = useState<Availability[]>([]);
 
   const [selectedDog, setSelectedDog] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -67,7 +58,7 @@ const [availability, setAvailability] =
 
   const [nightlyRate, setNightlyRate] = useState<number | null>(null);
   const [depositPercentage, setDepositPercentage] = useState<number | null>(
-    null
+    null,
   );
 
   useEffect(() => {
@@ -91,7 +82,7 @@ const [availability, setAvailability] =
     const { data: dogsData, error: dogsError } = await supabase
       .from("dogs")
       .select(
-        "id, name, breed, meet_and_greet_completed, vaccinated, vaccination_expiry"
+        "id, name, breed, meet_and_greet_completed, vaccinated, vaccination_expiry",
       )
       .eq("owner_id", user.id)
       .eq("active", true)
@@ -147,18 +138,18 @@ const [availability, setAvailability] =
   }
 
   useEffect(() => {
-  function updateCalendarMonths() {
-    setCalendarMonths(window.innerWidth >= 768 ? 2 : 1);
-  }
+    function updateCalendarMonths() {
+      setCalendarMonths(window.innerWidth >= 768 ? 2 : 1);
+    }
 
-  updateCalendarMonths();
+    updateCalendarMonths();
 
-  window.addEventListener("resize", updateCalendarMonths);
+    window.addEventListener("resize", updateCalendarMonths);
 
-  return () => {
-    window.removeEventListener("resize", updateCalendarMonths);
-  };
-}, []);
+    return () => {
+      window.removeEventListener("resize", updateCalendarMonths);
+    };
+  }, []);
 
   function checkAvailabilityForRange(start: string, end: string) {
     const selectedDates = getDatesInRange(start, end);
@@ -166,7 +157,7 @@ const [availability, setAvailability] =
 
     for (const selectedDate of selectedDates) {
       const availabilityForDay = availability.find(
-        (day) => day.date === selectedDate
+        (day) => day.date === selectedDate,
       );
 
       if (!availabilityForDay) {
@@ -204,29 +195,29 @@ const [availability, setAvailability] =
   }
 
   function isPastDate(date: Date) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-  return date < today;
-}
-
-function isUnavailableDate(date: Date) {
-  const dayAvailability = findAvailabilityForDate(date);
-
-  if (!dayAvailability) {
-    return true;
+    return date < today;
   }
 
-  if (!dayAvailability.available) {
-    return true;
-  }
+  function isUnavailableDate(date: Date) {
+    const dayAvailability = findAvailabilityForDate(date);
 
-  if (dayAvailability.spaces_available <= 0) {
-    return true;
-  }
+    if (!dayAvailability) {
+      return true;
+    }
 
-  return false;
-}
+    if (!dayAvailability.available) {
+      return true;
+    }
+
+    if (dayAvailability.spaces_available <= 0) {
+      return true;
+    }
+
+    return false;
+  }
 
   function isLimitedAvailabilityDate(date: Date) {
     const dayAvailability = findAvailabilityForDate(date);
@@ -296,10 +287,7 @@ function isUnavailableDate(date: Date) {
       return;
     }
 
-    const validationMessage = validateBookingDates(
-      startDate,
-      endDate
-    );
+    const validationMessage = validateBookingDates(startDate, endDate);
 
     if (validationMessage) {
       setIsError(true);
@@ -318,7 +306,7 @@ function isUnavailableDate(date: Date) {
     if (!dog.vaccinated) {
       setIsError(true);
       setMessage(
-        "This dog cannot be booked because vaccination information is incomplete."
+        "This dog cannot be booked because vaccination information is incomplete.",
       );
       return;
     }
@@ -326,7 +314,7 @@ function isUnavailableDate(date: Date) {
     if (dog.vaccination_expiry && dog.vaccination_expiry < startDate) {
       setIsError(true);
       setMessage(
-        "This dog's vaccination will have expired before the booking starts."
+        "This dog's vaccination will have expired before the booking starts.",
       );
       return;
     }
@@ -339,108 +327,88 @@ function isUnavailableDate(date: Date) {
       return;
     }
 
-setSaving(true);
+    setSaving(true);
 
-const result =
-  await authenticatedApiRequest<CreateBookingResponse>(
-    "/api/bookings/create",
-    {
-      body: {
-        dogId: selectedDog,
-        startDate,
-        endDate,
-        notes,
+    const result = await authenticatedApiRequest<CreateBookingResponse>(
+      "/api/bookings/create",
+      {
+        body: {
+          dogId: selectedDog,
+          startDate,
+          endDate,
+          notes,
+        },
       },
+    );
+
+    setSaving(false);
+
+    if (result.unauthenticated) {
+      window.location.href = "/login";
+      return;
     }
-  );
 
-setSaving(false);
+    if (!result.ok) {
+      setIsError(true);
+      setMessage(
+        result.error || "Your booking request could not be submitted.",
+      );
+      return;
+    }
 
-if (result.unauthenticated) {
-  window.location.href = "/login";
-  return;
-}
+    if (!result.data || !result.data.bookingCreated) {
+      setIsError(true);
+      setMessage(
+        result.data?.error ||
+          "The booking service did not create your booking request.",
+      );
+      return;
+    }
 
-if (!result.ok) {
-  setIsError(true);
-  setMessage(
-    result.error ||
-      "Your booking request could not be submitted."
-  );
-  return;
-}
+    setIsError(false);
 
-if (
-  !result.data ||
-  !result.data.bookingCreated
-) {
-  setIsError(true);
-  setMessage(
-    result.data?.error ||
-      "The booking service did not create your booking request."
-  );
-  return;
-}
+    setMessage(
+      result.data.message ||
+        "Booking request submitted successfully. Browns Boarding will review your request and confirm the final cost and deposit details.",
+    );
 
-setIsError(false);
-
-setMessage(
-  result.data.message ||
-    "Booking request submitted successfully. Browns Boarding will review your request and confirm the final cost and deposit details."
-);
-
-setSelectedDog("");
-setStartDate("");
-setEndDate("");
-setNotes("");
-setSelectedRange(undefined);
-}
+    setSelectedDog("");
+    setStartDate("");
+    setEndDate("");
+    setNotes("");
+    setSelectedRange(undefined);
+  }
 
   if (loading) {
     return <LoadingScreen message="Loading booking form..." />;
   }
 
-const projectedNights =
-  startDate && endDate
-    ? calculateNumberOfNights(
-        startDate,
-        endDate
-      )
-    : 0;
+  const projectedNights =
+    startDate && endDate ? calculateNumberOfNights(startDate, endDate) : 0;
 
-const projectedTotal =
-  nightlyRate !== null &&
-  projectedNights > 0
-    ? nightlyRate * projectedNights
-    : 0;
-
-const isProjectedShortNotice = startDate
-  ? isWithinTwoWeeks(startDate)
-  : false;
-
-const projectedDeposit =
-  isProjectedShortNotice
-    ? 0
-    : depositPercentage !== null &&
-        projectedTotal > 0
-      ? projectedTotal *
-        (depositPercentage / 100)
+  const projectedTotal =
+    nightlyRate !== null && projectedNights > 0
+      ? nightlyRate * projectedNights
       : 0;
 
-const projectedBalance =
-  projectedTotal - projectedDeposit;
+  const isProjectedShortNotice = startDate
+    ? isWithinTwoWeeks(startDate)
+    : false;
 
+  const projectedDeposit = isProjectedShortNotice
+    ? 0
+    : depositPercentage !== null && projectedTotal > 0
+      ? projectedTotal * (depositPercentage / 100)
+      : 0;
+
+  const projectedBalance = projectedTotal - projectedDeposit;
 
   return (
     <CustomerPageLayout>
       <PageCard
         title="Book a Stay"
         subtitle="Select your dog and preferred boarding dates."
-        actions={
-          <Button href="/my-bookings">
-            My Bookings
-          </Button>
-        }
+        actions={<Button href="/my-bookings">My Bookings</Button>}
       >
         {dogs.length === 0 ? (
           <div className="py-8 text-center md:py-12">
@@ -449,9 +417,7 @@ const projectedBalance =
             </p>
 
             <div className="mt-4 flex justify-center md:mt-6">
-              <Button href="/my-dogs/add">
-                Add Dog
-              </Button>
+              <Button href="/my-dogs/add">Add Dog</Button>
             </div>
           </div>
         ) : (

@@ -11,7 +11,7 @@ import {
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
 type UpdateProfileRequest = {
@@ -30,133 +30,105 @@ type UpdateProfileRequest = {
   vet_address?: unknown;
 };
 
-function optionalString(
-  value: unknown
-): string {
-  return typeof value === "string"
-    ? value.trim()
-    : "";
+function optionalString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }
 
-export async function PATCH(
-  request: Request
-) {
+export async function PATCH(request: Request) {
   try {
-    const authorizationHeader =
-      request.headers.get("authorization");
+    const authorizationHeader = request.headers.get("authorization");
 
-    const accessToken =
-      authorizationHeader?.replace(
-        "Bearer ",
-        ""
-      );
+    const accessToken = authorizationHeader?.replace("Bearer ", "");
 
     if (!accessToken) {
       return NextResponse.json(
         {
-          error:
-            "You must be signed in to update your details.",
+          error: "You must be signed in to update your details.",
         },
         {
           status: 401,
-        }
+        },
       );
     }
 
     const {
       data: { user },
       error: userError,
-    } = await supabaseAdmin.auth.getUser(
-      accessToken
-    );
+    } = await supabaseAdmin.auth.getUser(accessToken);
 
     if (userError || !user) {
       return NextResponse.json(
         {
-          error:
-            "Unable to verify the signed-in user.",
+          error: "Unable to verify the signed-in user.",
         },
         {
           status: 401,
-        }
+        },
       );
     }
 
-    const {
-      data: existingProfile,
-      error: profileLoadError,
-    } = await supabaseAdmin
-      .from("profiles")
-      .select(
-        `
+    const { data: existingProfile, error: profileLoadError } =
+      await supabaseAdmin
+        .from("profiles")
+        .select(
+          `
         id,
         email,
         active
-        `
-      )
-      .eq("id", user.id)
-      .maybeSingle();
+        `,
+        )
+        .eq("id", user.id)
+        .maybeSingle();
 
     if (profileLoadError) {
       return NextResponse.json(
         {
-          error:
-            profileLoadError.message,
+          error: profileLoadError.message,
         },
         {
           status: 500,
-        }
+        },
       );
     }
 
     if (!existingProfile) {
       return NextResponse.json(
         {
-          error:
-            "Your customer profile could not be found.",
+          error: "Your customer profile could not be found.",
         },
         {
           status: 404,
-        }
+        },
       );
     }
 
     if (!existingProfile.active) {
       return NextResponse.json(
         {
-          error:
-            "An inactive account cannot update its profile.",
+          error: "An inactive account cannot update its profile.",
         },
         {
           status: 403,
-        }
+        },
       );
     }
 
-    const body =
-      (await request.json()) as UpdateProfileRequest;
+    const body = (await request.json()) as UpdateProfileRequest;
 
-    const firstName = formatName(
-      optionalString(body.first_name)
-    );
+    const firstName = formatName(optionalString(body.first_name));
 
-    const lastName = formatName(
-      optionalString(body.last_name)
-    );
+    const lastName = formatName(optionalString(body.last_name));
 
-    const submittedEmail = formatEmail(
-      optionalString(body.email)
-    );
+    const submittedEmail = formatEmail(optionalString(body.email));
 
     if (!firstName || !lastName) {
       return NextResponse.json(
         {
-          error:
-            "First name and last name are required.",
+          error: "First name and last name are required.",
         },
         {
           status: 400,
-        }
+        },
       );
     }
 
@@ -168,93 +140,58 @@ export async function PATCH(
     if (
       submittedEmail &&
       existingProfile.email &&
-      submittedEmail !==
-        formatEmail(existingProfile.email)
+      submittedEmail !== formatEmail(existingProfile.email)
     ) {
       return NextResponse.json(
         {
-          error:
-            "Your email address cannot be changed from this page.",
+          error: "Your email address cannot be changed from this page.",
         },
         {
           status: 400,
-        }
+        },
       );
     }
 
-    const phone = formatUkPhone(
-      optionalString(body.phone)
+    const phone = formatUkPhone(optionalString(body.phone));
+
+    const addressLine1 = formatAddressLine(optionalString(body.address_line_1));
+
+    const addressLine2 = formatAddressLine(optionalString(body.address_line_2));
+
+    const town = formatName(optionalString(body.town));
+
+    const postcode = formatPostcode(optionalString(body.postcode));
+
+    const emergencyContactName = formatName(
+      optionalString(body.emergency_contact_name),
     );
 
-    const addressLine1 =
-      formatAddressLine(
-        optionalString(body.address_line_1)
-      );
-
-    const addressLine2 =
-      formatAddressLine(
-        optionalString(body.address_line_2)
-      );
-
-    const town = formatName(
-      optionalString(body.town)
+    const emergencyContactPhone = formatUkPhone(
+      optionalString(body.emergency_contact_phone),
     );
 
-    const postcode = formatPostcode(
-      optionalString(body.postcode)
-    );
+    const vetName = formatName(optionalString(body.vet_name));
 
-    const emergencyContactName =
-      formatName(
-        optionalString(
-          body.emergency_contact_name
-        )
-      );
+    const vetPhone = formatUkPhone(optionalString(body.vet_phone));
 
-    const emergencyContactPhone =
-      formatUkPhone(
-        optionalString(
-          body.emergency_contact_phone
-        )
-      );
+    const vetAddress = formatAddressLine(optionalString(body.vet_address));
 
-    const vetName = formatName(
-      optionalString(body.vet_name)
-    );
-
-    const vetPhone = formatUkPhone(
-      optionalString(body.vet_phone)
-    );
-
-    const vetAddress =
-      formatAddressLine(
-        optionalString(body.vet_address)
-      );
-
-    const {
-      data: updatedProfile,
-      error: updateError,
-    } = await supabaseAdmin
+    const { data: updatedProfile, error: updateError } = await supabaseAdmin
       .from("profiles")
       .update({
         first_name: firstName,
         last_name: lastName,
         phone: phone || null,
-        address_line_1:
-          addressLine1 || null,
-        address_line_2:
-          addressLine2 || null,
+        address_line_1: addressLine1 || null,
+        address_line_2: addressLine2 || null,
         town: town || null,
         postcode: postcode || null,
-        emergency_contact_name:
-          emergencyContactName || null,
-        emergency_contact_phone:
-          emergencyContactPhone || null,
+        emergency_contact_name: emergencyContactName || null,
+        emergency_contact_phone: emergencyContactPhone || null,
         vet_name: vetName || null,
         vet_phone: vetPhone || null,
         vet_address: vetAddress || null,
-        updated_at:
-          new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       })
       .eq("id", user.id)
       .eq("active", true)
@@ -275,7 +212,7 @@ export async function PATCH(
         vet_phone,
         vet_address,
         active
-        `
+        `,
       )
       .maybeSingle();
 
@@ -286,7 +223,7 @@ export async function PATCH(
         },
         {
           status: 500,
-        }
+        },
       );
     }
 
@@ -298,7 +235,7 @@ export async function PATCH(
         },
         {
           status: 409,
-        }
+        },
       );
     }
 
@@ -306,14 +243,10 @@ export async function PATCH(
       success: true,
       profileUpdated: true,
       profile: updatedProfile,
-      message:
-        "Your details have been updated successfully.",
+      message: "Your details have been updated successfully.",
     });
   } catch (error) {
-    console.error(
-      "Customer profile update failed:",
-      error
-    );
+    console.error("Customer profile update failed:", error);
 
     return NextResponse.json(
       {
@@ -324,7 +257,7 @@ export async function PATCH(
       },
       {
         status: 500,
-      }
+      },
     );
   }
 }

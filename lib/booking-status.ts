@@ -1,16 +1,8 @@
-import type {
-  Booking,
-  BookingStatus,
-} from "@/types/booking";
+import type { Booking, BookingStatus } from "@/types/booking";
 
-type BookingStatusDetails = Pick<
-  Booking,
-  "status" | "deposit_amount"
->;
+type BookingStatusDetails = Pick<Booking, "status" | "deposit_amount">;
 
-export function getBookingStatusStyle(
-  status: BookingStatus
-) {
+export function getBookingStatusStyle(status: BookingStatus) {
   switch (status) {
     case "Pending":
       return "bg-amber-50 text-amber-800 border-amber-300";
@@ -37,9 +29,7 @@ export function getBookingStatusStyle(
   }
 }
 
-export function getBookingDisplayStatus(
-  booking: BookingStatusDetails
-) {
+export function getBookingDisplayStatus(booking: BookingStatusDetails) {
   switch (booking.status) {
     case "Pending":
       return "Pending";
@@ -48,8 +38,7 @@ export function getBookingDisplayStatus(
       return "Confirmed";
 
     case "Balance Pending":
-      return booking.deposit_amount !== null &&
-        booking.deposit_amount > 0
+      return booking.deposit_amount !== null && booking.deposit_amount > 0
         ? "Deposit received"
         : "Balance due";
 
@@ -63,8 +52,7 @@ export function getBookingDisplayStatus(
       return "Cancelled";
 
     default: {
-      const exhaustiveCheck: never =
-        booking.status;
+      const exhaustiveCheck: never = booking.status;
 
       return exhaustiveCheck;
     }

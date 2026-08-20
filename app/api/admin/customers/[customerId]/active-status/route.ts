@@ -1,13 +1,11 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-import {
-  ACTIVE_BOOKING_STATUSES,
-} from "@/types/booking";
+import { ACTIVE_BOOKING_STATUSES } from "@/types/booking";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
 type RouteContext = {
@@ -20,13 +18,9 @@ type UpdateActiveStatusRequest = {
   active?: unknown;
 };
 
-export async function PATCH(
-  request: Request,
-  context: RouteContext
-) {
+export async function PATCH(request: Request, context: RouteContext) {
   try {
-    const { customerId } =
-      await context.params;
+    const { customerId } = await context.params;
 
     if (!customerId?.trim()) {
       return NextResponse.json(
@@ -35,61 +29,49 @@ export async function PATCH(
         },
         {
           status: 400,
-        }
+        },
       );
     }
 
-    const authorizationHeader =
-      request.headers.get("authorization");
+    const authorizationHeader = request.headers.get("authorization");
 
-    const accessToken =
-      authorizationHeader?.replace(
-        "Bearer ",
-        ""
-      );
+    const accessToken = authorizationHeader?.replace("Bearer ", "");
 
     if (!accessToken) {
       return NextResponse.json(
         {
-          error:
-            "You must be signed in as an administrator.",
+          error: "You must be signed in as an administrator.",
         },
         {
           status: 401,
-        }
+        },
       );
     }
 
     const {
       data: { user },
       error: userError,
-    } = await supabaseAdmin.auth.getUser(
-      accessToken
-    );
+    } = await supabaseAdmin.auth.getUser(accessToken);
 
     if (userError || !user) {
       return NextResponse.json(
         {
-          error:
-            "Unable to verify the signed-in user.",
+          error: "Unable to verify the signed-in user.",
         },
         {
           status: 401,
-        }
+        },
       );
     }
 
-    const {
-      data: adminProfile,
-      error: adminProfileError,
-    } = await supabaseAdmin
+    const { data: adminProfile, error: adminProfileError } = await supabaseAdmin
       .from("profiles")
       .select(
         `
         id,
         active,
         is_admin
-        `
+        `,
       )
       .eq("id", user.id)
       .maybeSingle();
@@ -101,15 +83,11 @@ export async function PATCH(
         },
         {
           status: 500,
-        }
+        },
       );
     }
 
-    if (
-      !adminProfile ||
-      !adminProfile.active ||
-      !adminProfile.is_admin
-    ) {
+    if (!adminProfile || !adminProfile.active || !adminProfile.is_admin) {
       return NextResponse.json(
         {
           error:
@@ -117,32 +95,26 @@ export async function PATCH(
         },
         {
           status: 403,
-        }
+        },
       );
     }
 
-    const body =
-      (await request.json()) as UpdateActiveStatusRequest;
+    const body = (await request.json()) as UpdateActiveStatusRequest;
 
     if (typeof body.active !== "boolean") {
       return NextResponse.json(
         {
-          error:
-            "The requested account status is invalid.",
+          error: "The requested account status is invalid.",
         },
         {
           status: 400,
-        }
+        },
       );
     }
 
-    const requestedActiveStatus =
-      body.active;
+    const requestedActiveStatus = body.active;
 
-    const {
-      data: customer,
-      error: customerLoadError,
-    } = await supabaseAdmin
+    const { data: customer, error: customerLoadError } = await supabaseAdmin
       .from("profiles")
       .select(
         `
@@ -152,7 +124,7 @@ export async function PATCH(
         email,
         active,
         is_admin
-        `
+        `,
       )
       .eq("id", customerId)
       .maybeSingle();
@@ -164,41 +136,33 @@ export async function PATCH(
         },
         {
           status: 500,
-        }
+        },
       );
     }
 
     if (!customer) {
       return NextResponse.json(
         {
-          error:
-            "The customer could not be found.",
+          error: "The customer could not be found.",
         },
         {
           status: 404,
-        }
+        },
       );
     }
 
-    if (
-      customer.id === user.id &&
-      !requestedActiveStatus
-    ) {
+    if (customer.id === user.id && !requestedActiveStatus) {
       return NextResponse.json(
         {
-          error:
-            "You cannot deactivate your own administrator account.",
+          error: "You cannot deactivate your own administrator account.",
         },
         {
           status: 409,
-        }
+        },
       );
     }
 
-    if (
-      customer.active ===
-      requestedActiveStatus
-    ) {
+    if (customer.active === requestedActiveStatus) {
       return NextResponse.json({
         success: true,
         customerStatusUpdated: true,
@@ -217,37 +181,28 @@ export async function PATCH(
      * a booking in any active lifecycle stage.
      */
     if (!requestedActiveStatus) {
-      const {
-        count: activeBookingCount,
-        error: bookingCheckError,
-      } = await supabaseAdmin
-        .from("bookings")
-        .select("id", {
-          count: "exact",
-          head: true,
-        })
-        .eq("owner_id", customer.id)
-        .in(
-          "status",
-          ACTIVE_BOOKING_STATUSES
-        );
+      const { count: activeBookingCount, error: bookingCheckError } =
+        await supabaseAdmin
+          .from("bookings")
+          .select("id", {
+            count: "exact",
+            head: true,
+          })
+          .eq("owner_id", customer.id)
+          .in("status", ACTIVE_BOOKING_STATUSES);
 
       if (bookingCheckError) {
         return NextResponse.json(
           {
-            error:
-              bookingCheckError.message,
+            error: bookingCheckError.message,
           },
           {
             status: 500,
-          }
+          },
         );
       }
 
-      if (
-        activeBookingCount !== null &&
-        activeBookingCount > 0
-      ) {
+      if (activeBookingCount !== null && activeBookingCount > 0) {
         return NextResponse.json(
           {
             error:
@@ -255,20 +210,16 @@ export async function PATCH(
           },
           {
             status: 409,
-          }
+          },
         );
       }
     }
 
-    const {
-      data: updatedCustomer,
-      error: updateError,
-    } = await supabaseAdmin
+    const { data: updatedCustomer, error: updateError } = await supabaseAdmin
       .from("profiles")
       .update({
         active: requestedActiveStatus,
-        updated_at:
-          new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       })
       .eq("id", customer.id)
       .eq("active", customer.active)
@@ -276,7 +227,7 @@ export async function PATCH(
         `
         id,
         active
-        `
+        `,
       )
       .maybeSingle();
 
@@ -287,7 +238,7 @@ export async function PATCH(
         },
         {
           status: 500,
-        }
+        },
       );
     }
 
@@ -299,7 +250,7 @@ export async function PATCH(
         },
         {
           status: 409,
-        }
+        },
       );
     }
 
@@ -315,10 +266,7 @@ export async function PATCH(
         : "Customer account deactivated successfully.",
     });
   } catch (error) {
-    console.error(
-      "Admin customer active-status update failed:",
-      error
-    );
+    console.error("Admin customer active-status update failed:", error);
 
     return NextResponse.json(
       {
@@ -329,7 +277,7 @@ export async function PATCH(
       },
       {
         status: 500,
-      }
+      },
     );
   }
 }

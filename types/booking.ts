@@ -6,10 +6,7 @@ export type BookingStatus =
   | "Completed"
   | "Cancelled";
 
-export type BookingFilter =
-| "All"
-| BookingStatus;
-
+export type BookingFilter = "All" | BookingStatus;
 
 export type BookingDogSummary = {
   name: string;
@@ -51,9 +48,7 @@ export type BookingWithCustomer = Booking & {
   customer: BookingCustomerSummary | null;
 };
 
-export type BookingPaymentType =
-  | "Deposit"
-  | "Balance";
+export type BookingPaymentType = "Deposit" | "Balance";
 
 export type BookingPaymentResult = {
   id: string;
@@ -80,10 +75,10 @@ export const BOOKING_STATUSES: BookingStatus[] = [
 ];
 
 export const ACTIVE_BOOKING_STATUSES: BookingStatus[] = [
-    "Pending",
-    "Deposit Pending",
-    "Balance Pending",
-    "Balance Paid",
+  "Pending",
+  "Deposit Pending",
+  "Balance Pending",
+  "Balance Paid",
 ];
 
 export const CONFIRMED_BOOKING_STATUSES: BookingStatus[] = [

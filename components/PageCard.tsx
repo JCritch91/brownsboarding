@@ -16,7 +16,9 @@ export default function PageCard({
   className = "",
 }: PageCardProps) {
   return (
-    <div className={`bg-[#FFFDF9] p-5 md:p-8 rounded-xl shadow-lg ${className}`}>
+    <div
+      className={`bg-[#FFFDF9] p-5 md:p-8 rounded-xl shadow-lg ${className}`}
+    >
       {(title || subtitle || actions) && (
         <>
           <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3 md:gap-4">

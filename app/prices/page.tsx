@@ -11,33 +11,35 @@ import { formatMoney } from "@/lib/helpers";
 
 export default function PricesPage() {
   const [nightlyRate, setNightlyRate] = useState<number | null>(null);
-  const [depositPercentage, setDepositPercentage] = useState<number | null>(null);
+  const [depositPercentage, setDepositPercentage] = useState<number | null>(
+    null,
+  );
   const [loadingPricing, setLoadingPricing] = useState(true);
 
   useEffect(() => {
     loadPricingSettings();
   }, []);
 
-async function loadPricingSettings() {
-  setLoadingPricing(true);
+  async function loadPricingSettings() {
+    setLoadingPricing(true);
 
-  try {
-    const pricingData = await getActivePricingSettings();
+    try {
+      const pricingData = await getActivePricingSettings();
 
-    if (pricingData) {
-      setNightlyRate(Number(pricingData.nightly_rate));
-      setDepositPercentage(Number(pricingData.deposit_percentage));
+      if (pricingData) {
+        setNightlyRate(Number(pricingData.nightly_rate));
+        setDepositPercentage(Number(pricingData.deposit_percentage));
+      }
+    } catch (error) {
+      if (error instanceof Error) {
+        console.error("Error loading pricing settings:", error.message);
+      } else {
+        console.error("Unexpected pricing error:", error);
+      }
+    } finally {
+      setLoadingPricing(false);
     }
-  } catch (error) {
-    if (error instanceof Error) {
-      console.error("Error loading pricing settings:", error.message);
-    } else {
-      console.error("Unexpected pricing error:", error);
-    }
-  } finally {
-    setLoadingPricing(false);
   }
-}
 
   return (
     <PublicPageLayout>
@@ -64,9 +66,7 @@ async function loadPricingSettings() {
                     {formatMoney(nightlyRate)}
                   </span>
 
-                  <span className="block mt-2 text-[#8B6A4E]">
-                    per night
-                  </span>
+                  <span className="block mt-2 text-[#8B6A4E]">per night</span>
                 </>
               ) : (
                 <span>Price coming soon</span>
@@ -112,15 +112,18 @@ async function loadPricingSettings() {
             </InfoCard>
 
             <InfoCard title="Normal routine">
-              Feeding and care based around your dog's usual routine where possible.
+              Feeding and care based around your dog's usual routine where
+              possible.
             </InfoCard>
 
             <InfoCard title="Individual attention">
-              Personal care based on your dog's needs, personality and preferences.
+              Personal care based on your dog's needs, personality and
+              preferences.
             </InfoCard>
 
             <InfoCard title="Regular updates">
-              Updates during your dog's stay so you know how they are getting on.
+              Updates during your dog's stay so you know how they are getting
+              on.
             </InfoCard>
 
             <InfoCard title="Meet & greet">
@@ -150,7 +153,8 @@ async function loadPricingSettings() {
             </InfoCard>
 
             <InfoCard title="Short Notice Bookings">
-              Bookings within 14 days of arrival require full payment upon confirmation.
+              Bookings within 14 days of arrival require full payment upon
+              confirmation.
             </InfoCard>
           </div>
         </div>
@@ -166,13 +170,14 @@ async function loadPricingSettings() {
 
           <div className="grid gap-3 md:grid-cols-2 md:gap-8">
             <InfoCard title="Up-to-date vaccinations required">
-              All dogs staying at Browns Boarding must have up-to-date vaccinations before their stay.
-              Vaccination details can be added and managed through your customer account.
+              All dogs staying at Browns Boarding must have up-to-date
+              vaccinations before their stay. Vaccination details can be added
+              and managed through your customer account.
             </InfoCard>
 
             <InfoCard title="Up-to-date Flea and Worm Treatment Required">
-              All dogs staying at Browns Boarding must also have up-to-date flea and workm treatment before their stay.
-              
+              All dogs staying at Browns Boarding must also have up-to-date flea
+              and workm treatment before their stay.
             </InfoCard>
           </div>
         </div>
@@ -186,7 +191,8 @@ async function loadPricingSettings() {
           </h2>
 
           <p className="mt-3 md:mt-4 text-base md:text-lg text-[#F5EFE6]/90">
-            Create an account, add your dog's details and request a stay with Browns Boarding.
+            Create an account, add your dog's details and request a stay with
+            Browns Boarding.
           </p>
 
           <div className="mt-6 md:mt-8 flex flex-wrap gap-4 justify-center">
@@ -194,7 +200,7 @@ async function loadPricingSettings() {
               Book a Stay
             </Button>
 
-             <Button variant="light" href="/contact">
+            <Button variant="light" href="/contact">
               Contact Us
             </Button>
           </div>

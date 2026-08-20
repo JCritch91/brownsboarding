@@ -6,7 +6,7 @@ import { createEmailTemplate } from "@/lib/email-template";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
 type CreateCustomerRequest = {
@@ -29,11 +29,9 @@ export async function POST(request: Request) {
   let createdUserId: string | null = null;
 
   try {
-    const authorizationHeader =
-      request.headers.get("authorization");
+    const authorizationHeader = request.headers.get("authorization");
 
-    const accessToken =
-      authorizationHeader?.replace("Bearer ", "");
+    const accessToken = authorizationHeader?.replace("Bearer ", "");
 
     if (!accessToken) {
       return NextResponse.json(
@@ -42,7 +40,7 @@ export async function POST(request: Request) {
         },
         {
           status: 401,
-        }
+        },
       );
     }
 
@@ -58,16 +56,15 @@ export async function POST(request: Request) {
         },
         {
           status: 401,
-        }
+        },
       );
     }
 
-    const { data: adminProfile, error: adminProfileError } =
-      await supabaseAdmin
-        .from("profiles")
-        .select("id, is_admin, active")
-        .eq("id", signedInUser.id)
-        .maybeSingle();
+    const { data: adminProfile, error: adminProfileError } = await supabaseAdmin
+      .from("profiles")
+      .select("id, is_admin, active")
+      .eq("id", signedInUser.id)
+      .maybeSingle();
 
     if (adminProfileError) {
       return NextResponse.json(
@@ -76,28 +73,22 @@ export async function POST(request: Request) {
         },
         {
           status: 500,
-        }
+        },
       );
     }
 
-    if (
-      !adminProfile ||
-      !adminProfile.is_admin ||
-      !adminProfile.active
-    ) {
+    if (!adminProfile || !adminProfile.is_admin || !adminProfile.active) {
       return NextResponse.json(
         {
-          error:
-            "You do not have permission to create customers.",
+          error: "You do not have permission to create customers.",
         },
         {
           status: 403,
-        }
+        },
       );
     }
 
-    const body =
-      (await request.json()) as CreateCustomerRequest;
+    const body = (await request.json()) as CreateCustomerRequest;
 
     const firstName = body.first_name?.trim();
     const lastName = body.last_name?.trim();
@@ -106,17 +97,15 @@ export async function POST(request: Request) {
     if (!firstName || !lastName || !email) {
       return NextResponse.json(
         {
-          error:
-            "First name, last name and email address are required.",
+          error: "First name, last name and email address are required.",
         },
         {
           status: 400,
-        }
+        },
       );
     }
 
-    const emailPattern =
-      /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     if (!emailPattern.test(email)) {
       return NextResponse.json(
@@ -125,16 +114,14 @@ export async function POST(request: Request) {
         },
         {
           status: 400,
-        }
+        },
       );
     }
 
     const siteUrl =
-      process.env.NEXT_PUBLIC_SITE_URL ||
-      new URL(request.url).origin;
+      process.env.NEXT_PUBLIC_SITE_URL || new URL(request.url).origin;
 
-    const redirectTo =
-      `${siteUrl}/set-password`;
+    const redirectTo = `${siteUrl}/set-password`;
 
     const { data: inviteData, error: inviteError } =
       await supabaseAdmin.auth.admin.generateLink({
@@ -153,63 +140,49 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            inviteError?.message ||
-            "Unable to create the customer account.",
+            inviteError?.message || "Unable to create the customer account.",
         },
         {
           status: 400,
-        }
+        },
       );
     }
 
     createdUserId = inviteData.user.id;
 
-    const inviteLink =
-      inviteData.properties?.action_link;
+    const inviteLink = inviteData.properties?.action_link;
 
     if (!inviteLink) {
-      throw new Error(
-        "Supabase did not return a customer invitation link."
-      );
+      throw new Error("Supabase did not return a customer invitation link.");
     }
 
-    const { error: profileError } =
-      await supabaseAdmin
-        .from("profiles")
-        .upsert(
-          {
-            id: createdUserId,
-            first_name: firstName,
-            last_name: lastName,
-            email,
-            phone: body.phone?.trim() || null,
-            address_line_1:
-              body.address_line_1?.trim() || null,
-            address_line_2:
-              body.address_line_2?.trim() || null,
-            town: body.town?.trim() || null,
-            postcode: body.postcode?.trim() || null,
-            emergency_contact_name:
-              body.emergency_contact_name?.trim() ||
-              null,
-            emergency_contact_phone:
-              body.emergency_contact_phone?.trim() ||
-              null,
-            vet_name: body.vet_name?.trim() || null,
-            vet_phone: body.vet_phone?.trim() || null,
-            vet_address:
-              body.vet_address?.trim() || null,
-            meet_and_greet_approved: false,
-            is_admin: false,
-            active: false,
-            was_activated: false,
-            activated_at: null,
-            updated_at: new Date().toISOString(),
-          },
-          {
-            onConflict: "id",
-          }
-        );
+    const { error: profileError } = await supabaseAdmin.from("profiles").upsert(
+      {
+        id: createdUserId,
+        first_name: firstName,
+        last_name: lastName,
+        email,
+        phone: body.phone?.trim() || null,
+        address_line_1: body.address_line_1?.trim() || null,
+        address_line_2: body.address_line_2?.trim() || null,
+        town: body.town?.trim() || null,
+        postcode: body.postcode?.trim() || null,
+        emergency_contact_name: body.emergency_contact_name?.trim() || null,
+        emergency_contact_phone: body.emergency_contact_phone?.trim() || null,
+        vet_name: body.vet_name?.trim() || null,
+        vet_phone: body.vet_phone?.trim() || null,
+        vet_address: body.vet_address?.trim() || null,
+        meet_and_greet_approved: false,
+        is_admin: false,
+        active: false,
+        was_activated: false,
+        activated_at: null,
+        updated_at: new Date().toISOString(),
+      },
+      {
+        onConflict: "id",
+      },
+    );
 
     if (profileError) {
       throw new Error(profileError.message);
@@ -250,21 +223,19 @@ export async function POST(request: Request) {
 
     const emailBody = createEmailTemplate(
       "Set Up Your Browns Boarding Account",
-      bodyContent
+      bodyContent,
     );
 
     await sendGmailEmail({
       to: email,
-      subject:
-        "Set up your Browns Boarding account",
+      subject: "Set up your Browns Boarding account",
       html: emailBody,
     });
 
     return NextResponse.json({
       success: true,
       customerId: createdUserId,
-      message:
-        "Customer created and invitation email sent successfully.",
+      message: "Customer created and invitation email sent successfully.",
     });
   } catch (error) {
     console.error("Admin customer creation failed:", error);
@@ -275,14 +246,9 @@ export async function POST(request: Request) {
      * account from remaining in Supabase.
      */
     if (createdUserId) {
-      await supabaseAdmin
-        .from("profiles")
-        .delete()
-        .eq("id", createdUserId);
+      await supabaseAdmin.from("profiles").delete().eq("id", createdUserId);
 
-      await supabaseAdmin.auth.admin.deleteUser(
-        createdUserId
-      );
+      await supabaseAdmin.auth.admin.deleteUser(createdUserId);
     }
 
     return NextResponse.json(
@@ -294,7 +260,7 @@ export async function POST(request: Request) {
       },
       {
         status: 500,
-      }
+      },
     );
   }
 }

@@ -43,7 +43,7 @@ async function getGoogleAccessToken() {
     throw new Error(
       data.error_description ||
         data.error ||
-        "Unable to get Google access token."
+        "Unable to get Google access token.",
     );
   }
 
@@ -100,11 +100,11 @@ function createEventBody(booking: GoogleCalendarBookingEvent) {
       date: addOneDay(booking.endDate),
     },
     colorId:
-  booking.bookingStatus === "Cancelled"
-    ? "11"
-    : booking.bookingStatus === "Completed"
-      ? "8"
-      : "9",
+      booking.bookingStatus === "Cancelled"
+        ? "11"
+        : booking.bookingStatus === "Completed"
+          ? "8"
+          : "9",
     extendedProperties: {
       private: {
         bookingId: booking.bookingId,
@@ -114,14 +114,14 @@ function createEventBody(booking: GoogleCalendarBookingEvent) {
 }
 
 export async function createGoogleBookingEvent(
-  booking: GoogleCalendarBookingEvent
+  booking: GoogleCalendarBookingEvent,
 ) {
   const accessToken = await getGoogleAccessToken();
   const calendarId = getCalendarId();
 
   const response = await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
-      calendarId
+      calendarId,
     )}/events`,
     {
       method: "POST",
@@ -130,14 +130,14 @@ export async function createGoogleBookingEvent(
         "Content-Type": "application/json",
       },
       body: JSON.stringify(createEventBody(booking)),
-    }
+    },
   );
 
   const data = await response.json();
 
   if (!response.ok) {
     throw new Error(
-      data.error?.message || "Unable to create Google Calendar event."
+      data.error?.message || "Unable to create Google Calendar event.",
     );
   }
 
@@ -146,14 +146,14 @@ export async function createGoogleBookingEvent(
 
 export async function updateGoogleBookingEvent(
   googleEventId: string,
-  booking: GoogleCalendarBookingEvent
+  booking: GoogleCalendarBookingEvent,
 ) {
   const accessToken = await getGoogleAccessToken();
   const calendarId = getCalendarId();
 
   const response = await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
-      calendarId
+      calendarId,
     )}/events/${encodeURIComponent(googleEventId)}`,
     {
       method: "PATCH",
@@ -162,14 +162,14 @@ export async function updateGoogleBookingEvent(
         "Content-Type": "application/json",
       },
       body: JSON.stringify(createEventBody(booking)),
-    }
+    },
   );
 
   const data = await response.json();
 
   if (!response.ok) {
     throw new Error(
-      data.error?.message || "Unable to update Google Calendar event."
+      data.error?.message || "Unable to update Google Calendar event.",
     );
   }
 

@@ -34,7 +34,7 @@ async function getGoogleAccessToken() {
     throw new Error(
       data.error_description ||
         data.error ||
-        "Unable to get Google access token."
+        "Unable to get Google access token.",
     );
   }
 
@@ -122,14 +122,14 @@ function createAvailabilityEventBody(event: GoogleAvailabilityEvent) {
 }
 
 export async function createGoogleAvailabilityEvent(
-  event: GoogleAvailabilityEvent
+  event: GoogleAvailabilityEvent,
 ) {
   const accessToken = await getGoogleAccessToken();
   const calendarId = getAvailabilityCalendarId();
 
   const response = await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
-      calendarId
+      calendarId,
     )}/events`,
     {
       method: "POST",
@@ -138,15 +138,14 @@ export async function createGoogleAvailabilityEvent(
         "Content-Type": "application/json",
       },
       body: JSON.stringify(createAvailabilityEventBody(event)),
-    }
+    },
   );
 
   const data = await response.json();
 
   if (!response.ok) {
     throw new Error(
-      data.error?.message ||
-        "Unable to create Google availability event."
+      data.error?.message || "Unable to create Google availability event.",
     );
   }
 
@@ -155,14 +154,14 @@ export async function createGoogleAvailabilityEvent(
 
 export async function updateGoogleAvailabilityEvent(
   googleEventId: string,
-  event: GoogleAvailabilityEvent
+  event: GoogleAvailabilityEvent,
 ) {
   const accessToken = await getGoogleAccessToken();
   const calendarId = getAvailabilityCalendarId();
 
   const response = await fetch(
     `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
-      calendarId
+      calendarId,
     )}/events/${encodeURIComponent(googleEventId)}`,
     {
       method: "PATCH",
@@ -171,15 +170,14 @@ export async function updateGoogleAvailabilityEvent(
         "Content-Type": "application/json",
       },
       body: JSON.stringify(createAvailabilityEventBody(event)),
-    }
+    },
   );
 
   const data = await response.json();
 
   if (!response.ok) {
     throw new Error(
-      data.error?.message ||
-        "Unable to update Google availability event."
+      data.error?.message || "Unable to update Google availability event.",
     );
   }
 

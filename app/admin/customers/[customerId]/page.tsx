@@ -3,23 +3,14 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import {
-  formatDisplayDate,
-  formatMoney,
-  formatName,
-} from "@/lib/helpers";
-import {
-  ensureActiveAdminUser,
-  getCurrentUser,
-} from "@/lib/appActions";
+import { formatDisplayDate, formatMoney, formatName } from "@/lib/helpers";
+import { ensureActiveAdminUser, getCurrentUser } from "@/lib/appActions";
 import AdminPageLayout from "@/components/AdminPageLayout";
 import PageCard from "@/components/PageCard";
 import Button from "@/components/Buttons";
 import MessageBox from "@/components/MessageBox";
 import LoadingScreen from "@/components/LoadingScreen";
-import {
-  authenticatedApiRequest,
-} from "@/lib/client/authenticated-api";
+import { authenticatedApiRequest } from "@/lib/client/authenticated-api";
 
 type ResendActivationEmailResponse = {
   success: boolean;
@@ -129,8 +120,7 @@ export default function AdminCustomerDetailsPage() {
 
   const [loading, setLoading] = useState(true);
 
-  const [customer, setCustomer] =
-    useState<CustomerProfile | null>(null);
+  const [customer, setCustomer] = useState<CustomerProfile | null>(null);
 
   const [dogs, setDogs] = useState<Dog[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -139,110 +129,92 @@ export default function AdminCustomerDetailsPage() {
   const [isError, setIsError] = useState(false);
   const [currentUserId, setCurrentUserId] = useState("");
 
-
-  const [accountActionLoading, setAccountActionLoading] =
-  useState(false);
+  const [accountActionLoading, setAccountActionLoading] = useState(false);
 
   useEffect(() => {
     checkAdminAndLoadCustomer();
   }, [customerId]);
 
-async function toggleAdminStatus() {
-  if (!customer || accountActionLoading) {
-    return;
-  }
+  async function toggleAdminStatus() {
+    if (!customer || accountActionLoading) {
+      return;
+    }
 
-  const makingAdmin =
-    !customer.is_admin;
+    const makingAdmin = !customer.is_admin;
 
-  if (
-    customer.id === currentUserId &&
-    !makingAdmin
-  ) {
-    setIsError(true);
-    setMessage(
-      "You cannot remove your own administrator access."
+    if (customer.id === currentUserId && !makingAdmin) {
+      setIsError(true);
+      setMessage("You cannot remove your own administrator access.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      makingAdmin
+        ? `Grant administrator access to ${getCustomerName()}?`
+        : `Remove administrator access from ${getCustomerName()}?`,
     );
-    return;
-  }
 
-  const confirmed = window.confirm(
-    makingAdmin
-      ? `Grant administrator access to ${getCustomerName()}?`
-      : `Remove administrator access from ${getCustomerName()}?`
-  );
+    if (!confirmed) {
+      return;
+    }
 
-  if (!confirmed) {
-    return;
-  }
+    setAccountActionLoading(true);
+    setMessage("");
+    setIsError(false);
 
-  setAccountActionLoading(true);
-  setMessage("");
-  setIsError(false);
-
-  const result =
-    await authenticatedApiRequest<UpdateAdminStatusResponse>(
+    const result = await authenticatedApiRequest<UpdateAdminStatusResponse>(
       `/api/admin/customers/${customerId}/admin-status`,
       {
         method: "PATCH",
         body: {
           isAdmin: makingAdmin,
         },
-      }
+      },
     );
 
-  if (result.unauthenticated) {
-    setAccountActionLoading(false);
-    window.location.href = "/login";
-    return;
-  }
+    if (result.unauthenticated) {
+      setAccountActionLoading(false);
+      window.location.href = "/login";
+      return;
+    }
 
-  if (!result.ok) {
+    if (!result.ok) {
+      setAccountActionLoading(false);
+      setIsError(true);
+      setMessage(result.error || "Administrator access could not be updated.");
+      return;
+    }
+
+    if (!result.data || !result.data.adminStatusUpdated) {
+      setAccountActionLoading(false);
+      setIsError(true);
+      setMessage(
+        result.data?.error ||
+          "The role-management service did not update administrator access.",
+      );
+      return;
+    }
+
+    const updatedAdminStatus = result.data.profile?.isAdmin ?? makingAdmin;
+
+    setCustomer((current) =>
+      current
+        ? {
+            ...current,
+            is_admin: updatedAdminStatus,
+          }
+        : current,
+    );
+
     setAccountActionLoading(false);
-    setIsError(true);
+    setIsError(false);
     setMessage(
-      result.error ||
-        "Administrator access could not be updated."
+      result.data.message ||
+        (updatedAdminStatus
+          ? "Administrator access granted."
+          : "Administrator access removed."),
     );
-    return;
   }
-
-  if (
-    !result.data ||
-    !result.data.adminStatusUpdated
-  ) {
-    setAccountActionLoading(false);
-    setIsError(true);
-    setMessage(
-      result.data?.error ||
-        "The role-management service did not update administrator access."
-    );
-    return;
-  }
-
-  const updatedAdminStatus =
-    result.data.profile?.isAdmin ??
-    makingAdmin;
-
-  setCustomer((current) =>
-    current
-      ? {
-          ...current,
-          is_admin:
-            updatedAdminStatus,
-        }
-      : current
-  );
-
-  setAccountActionLoading(false);
-  setIsError(false);
-  setMessage(
-    result.data.message ||
-      (updatedAdminStatus
-        ? "Administrator access granted."
-        : "Administrator access removed.")
-  );
-}
 
   async function checkAdminAndLoadCustomer() {
     setLoading(true);
@@ -296,7 +268,7 @@ async function toggleAdminStatus() {
           activated_at,
           created_at,
           is_admin
-          `
+          `,
         )
         .eq("id", customerId)
         .or("is_admin.eq.false,is_admin.is.null")
@@ -318,7 +290,7 @@ async function toggleAdminStatus() {
           microchip_number,
           meet_and_greet_completed,
           active
-          `
+          `,
         )
         .eq("owner_id", customerId)
         .order("name", { ascending: true }),
@@ -343,7 +315,7 @@ async function toggleAdminStatus() {
             name,
             breed
           )
-          `
+          `,
         )
         .eq("owner_id", customerId)
         .order("start_date", { ascending: false }),
@@ -383,242 +355,214 @@ async function toggleAdminStatus() {
     setLoading(false);
   }
 
-function formatAccountDate(dateString: string | null) {
-  if (!dateString) {
-    return "Not recorded";
+  function formatAccountDate(dateString: string | null) {
+    if (!dateString) {
+      return "Not recorded";
+    }
+
+    return new Date(dateString).toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    });
   }
 
-  return new Date(dateString).toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  });
-}
+  async function toggleCustomerActiveStatus() {
+    if (!customer || accountActionLoading) {
+      return;
+    }
 
-async function toggleCustomerActiveStatus() {
-  if (!customer || accountActionLoading) {
-    return;
-  }
+    const requestedActiveStatus = !customer.active;
 
-  const requestedActiveStatus =
-    !customer.active;
+    const confirmed = window.confirm(
+      requestedActiveStatus
+        ? "Are you sure you want to activate this customer account?"
+        : "Are you sure you want to deactivate this customer account?\n\nThe customer will no longer be able to access the customer portal.",
+    );
 
-  const confirmed = window.confirm(
-    requestedActiveStatus
-      ? "Are you sure you want to activate this customer account?"
-      : "Are you sure you want to deactivate this customer account?\n\nThe customer will no longer be able to access the customer portal."
-  );
+    if (!confirmed) {
+      return;
+    }
 
-  if (!confirmed) {
-    return;
-  }
+    setAccountActionLoading(true);
+    setMessage("");
+    setIsError(false);
 
-  setAccountActionLoading(true);
-  setMessage("");
-  setIsError(false);
-
-  const result =
-    await authenticatedApiRequest<UpdateCustomerActiveStatusResponse>(
-      `/api/admin/customers/${customerId}/active-status`,
-      {
-        method: "PATCH",
-        body: {
-          active: requestedActiveStatus,
+    const result =
+      await authenticatedApiRequest<UpdateCustomerActiveStatusResponse>(
+        `/api/admin/customers/${customerId}/active-status`,
+        {
+          method: "PATCH",
+          body: {
+            active: requestedActiveStatus,
+          },
         },
-      }
-    );
+      );
 
-  if (result.unauthenticated) {
-    setAccountActionLoading(false);
-    window.location.href = "/login";
-    return;
-  }
+    if (result.unauthenticated) {
+      setAccountActionLoading(false);
+      window.location.href = "/login";
+      return;
+    }
 
-  if (!result.ok) {
+    if (!result.ok) {
+      setAccountActionLoading(false);
+      setIsError(true);
+      setMessage(
+        result.error || "The customer account status could not be updated.",
+      );
+      return;
+    }
+
+    if (!result.data || !result.data.customerStatusUpdated) {
+      setAccountActionLoading(false);
+      setIsError(true);
+      setMessage(
+        result.data?.error ||
+          "The customer service did not update the account status.",
+      );
+      return;
+    }
+
+    await loadCustomerData();
+
     setAccountActionLoading(false);
-    setIsError(true);
+    setIsError(false);
     setMessage(
-      result.error ||
-        "The customer account status could not be updated."
+      result.data.message ||
+        (requestedActiveStatus
+          ? "Customer account activated successfully."
+          : "Customer account deactivated successfully."),
     );
-    return;
   }
 
-  if (
-    !result.data ||
-    !result.data.customerStatusUpdated
-  ) {
-    setAccountActionLoading(false);
-    setIsError(true);
-    setMessage(
-      result.data?.error ||
-        "The customer service did not update the account status."
+  async function toggleMeetAndGreetApproval() {
+    if (!customer || accountActionLoading) {
+      return;
+    }
+
+    const newApprovalStatus = !customer.meet_and_greet_approved;
+
+    const confirmed = window.confirm(
+      newApprovalStatus
+        ? `Mark ${getCustomerName()} as Meet & Greet approved?`
+        : `Remove Meet & Greet approval for ${getCustomerName()}?`,
     );
-    return;
-  }
 
-  await loadCustomerData();
+    if (!confirmed) {
+      return;
+    }
 
-  setAccountActionLoading(false);
-  setIsError(false);
-  setMessage(
-    result.data.message ||
-      (requestedActiveStatus
-        ? "Customer account activated successfully."
-        : "Customer account deactivated successfully.")
-  );
-}
+    setAccountActionLoading(true);
+    setMessage("");
+    setIsError(false);
 
-async function toggleMeetAndGreetApproval() {
-  if (!customer || accountActionLoading) {
-    return;
-  }
-
-  const newApprovalStatus =
-    !customer.meet_and_greet_approved;
-
-  const confirmed = window.confirm(
-    newApprovalStatus
-      ? `Mark ${getCustomerName()} as Meet & Greet approved?`
-      : `Remove Meet & Greet approval for ${getCustomerName()}?`
-  );
-
-  if (!confirmed) {
-    return;
-  }
-
-  setAccountActionLoading(true);
-  setMessage("");
-  setIsError(false);
-
-  const result =
-    await authenticatedApiRequest<UpdateMeetAndGreetApprovalResponse>(
-      `/api/admin/customers/${customerId}/meet-and-greet`,
-      {
-        method: "PATCH",
-        body: {
-          approved: newApprovalStatus,
+    const result =
+      await authenticatedApiRequest<UpdateMeetAndGreetApprovalResponse>(
+        `/api/admin/customers/${customerId}/meet-and-greet`,
+        {
+          method: "PATCH",
+          body: {
+            approved: newApprovalStatus,
+          },
         },
-      }
-    );
+      );
 
-  if (result.unauthenticated) {
+    if (result.unauthenticated) {
+      setAccountActionLoading(false);
+      window.location.href = "/login";
+      return;
+    }
+
+    if (!result.ok) {
+      setAccountActionLoading(false);
+      setIsError(true);
+      setMessage(result.error || "Meet & Greet approval could not be updated.");
+      return;
+    }
+
+    if (!result.data || !result.data.meetAndGreetApprovalUpdated) {
+      setAccountActionLoading(false);
+      setIsError(true);
+      setMessage(
+        result.data?.error ||
+          "The customer service did not update the Meet & Greet approval.",
+      );
+      return;
+    }
+
+    await loadCustomerData();
+
     setAccountActionLoading(false);
-    window.location.href = "/login";
-    return;
+    setIsError(false);
+    setMessage(
+      result.data.message ||
+        (newApprovalStatus
+          ? "Meet & Greet approval added successfully."
+          : "Meet & Greet approval removed successfully."),
+    );
   }
 
-  if (!result.ok) {
+  async function resendActivationEmail() {
+    if (!customer || accountActionLoading) {
+      return;
+    }
+
+    if (customer.was_activated) {
+      setIsError(true);
+      setMessage("This customer has already activated their account.");
+      return;
+    }
+
+    if (!customer.email) {
+      setIsError(true);
+      setMessage("This customer does not have an email address.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Send a new activation email to ${customer.email}?`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setAccountActionLoading(true);
+    setMessage("");
+    setIsError(false);
+
+    const result = await authenticatedApiRequest<ResendActivationEmailResponse>(
+      `/api/admin/customers/${customerId}/resend-activation`,
+    );
+
+    if (result.unauthenticated) {
+      setAccountActionLoading(false);
+      window.location.href = "/login";
+      return;
+    }
+
+    if (!result.ok) {
+      setAccountActionLoading(false);
+      setIsError(true);
+      setMessage(result.error || "Unable to resend the activation email.");
+      return;
+    }
+
+    if (!result.data || !result.data.activationEmailSent) {
+      setAccountActionLoading(false);
+      setIsError(true);
+      setMessage(
+        result.data?.error ||
+          "The activation service did not send a new email.",
+      );
+      return;
+    }
+
     setAccountActionLoading(false);
-    setIsError(true);
-    setMessage(
-      result.error ||
-        "Meet & Greet approval could not be updated."
-    );
-    return;
+    setIsError(false);
+    setMessage(result.data.message || "A new activation email has been sent.");
   }
-
-  if (
-    !result.data ||
-    !result.data.meetAndGreetApprovalUpdated
-  ) {
-    setAccountActionLoading(false);
-    setIsError(true);
-    setMessage(
-      result.data?.error ||
-        "The customer service did not update the Meet & Greet approval."
-    );
-    return;
-  }
-
-  await loadCustomerData();
-
-  setAccountActionLoading(false);
-  setIsError(false);
-  setMessage(
-    result.data.message ||
-      (newApprovalStatus
-        ? "Meet & Greet approval added successfully."
-        : "Meet & Greet approval removed successfully.")
-  );
-}
-
-async function resendActivationEmail() {
-  if (!customer || accountActionLoading) {
-    return;
-  }
-
-  if (customer.was_activated) {
-    setIsError(true);
-    setMessage(
-      "This customer has already activated their account."
-    );
-    return;
-  }
-
-  if (!customer.email) {
-    setIsError(true);
-    setMessage(
-      "This customer does not have an email address."
-    );
-    return;
-  }
-
-  const confirmed = window.confirm(
-    `Send a new activation email to ${customer.email}?`
-  );
-
-  if (!confirmed) {
-    return;
-  }
-
-  setAccountActionLoading(true);
-  setMessage("");
-  setIsError(false);
-
-  const result =
-    await authenticatedApiRequest<ResendActivationEmailResponse>(
-      `/api/admin/customers/${customerId}/resend-activation`
-    );
-
-  if (result.unauthenticated) {
-    setAccountActionLoading(false);
-    window.location.href = "/login";
-    return;
-  }
-
-  if (!result.ok) {
-    setAccountActionLoading(false);
-    setIsError(true);
-    setMessage(
-      result.error ||
-        "Unable to resend the activation email."
-    );
-    return;
-  }
-
-  if (
-    !result.data ||
-    !result.data.activationEmailSent
-  ) {
-    setAccountActionLoading(false);
-    setIsError(true);
-    setMessage(
-      result.data?.error ||
-        "The activation service did not send a new email."
-    );
-    return;
-  }
-
-  setAccountActionLoading(false);
-  setIsError(false);
-  setMessage(
-    result.data.message ||
-      "A new activation email has been sent."
-  );
-}
-
-
 
   function getCustomerName() {
     if (!customer) {
@@ -628,11 +572,7 @@ async function resendActivationEmail() {
     const firstName = formatName(customer.first_name || "");
     const lastName = formatName(customer.last_name || "");
 
-    return (
-      `${firstName} ${lastName}`.trim() ||
-      customer.email ||
-      "Customer"
-    );
+    return `${firstName} ${lastName}`.trim() || customer.email || "Customer";
   }
 
   function getCustomerAddress() {
@@ -730,14 +670,14 @@ async function resendActivationEmail() {
     (booking) =>
       booking.end_date >= today &&
       booking.status !== "Cancelled" &&
-      booking.status !== "Completed"
+      booking.status !== "Completed",
   );
 
   const historicBookings = bookings.filter(
     (booking) =>
       booking.end_date < today ||
       booking.status === "Cancelled" ||
-      booking.status === "Completed"
+      booking.status === "Completed",
   );
 
   if (loading) {
@@ -749,11 +689,7 @@ async function resendActivationEmail() {
       <PageCard
         title={getCustomerName()}
         subtitle="View and manage this customer, their dogs and bookings."
-        actions={
-        <Button href="/admin/customers">
-            Back to Customers
-          </Button>
-        }
+        actions={<Button href="/admin/customers">Back to Customers</Button>}
       >
         <div className="space-y-8 md:space-y-12">
           {message && (
@@ -840,7 +776,9 @@ async function resendActivationEmail() {
                       Add Dog
                     </Button>
 
-                    <Button href={`/admin/customers/${customer.id}/bookings/add`}>
+                    <Button
+                      href={`/admin/customers/${customer.id}/bookings/add`}
+                    >
                       Create Booking
                     </Button>
                   </div>
@@ -994,9 +932,7 @@ async function resendActivationEmail() {
                     Current Role:
                     <strong>
                       {" "}
-                      {customer.is_admin
-                        ? "Administrator"
-                        : "Customer"}
+                      {customer.is_admin ? "Administrator" : "Customer"}
                     </strong>
                   </p>
 
@@ -1049,9 +985,7 @@ async function resendActivationEmail() {
 
                         <p className="mt-1 text-sm text-[#5C4033] md:text-base">
                           {customer.emergency_contact_name
-                            ? formatName(
-                                customer.emergency_contact_name
-                              )
+                            ? formatName(customer.emergency_contact_name)
                             : "Not provided"}
                         </p>
                       </div>
@@ -1062,8 +996,7 @@ async function resendActivationEmail() {
                         </p>
 
                         <p className="mt-1 text-sm text-[#5C4033] md:text-base">
-                          {customer.emergency_contact_phone ||
-                            "Not provided"}
+                          {customer.emergency_contact_phone || "Not provided"}
                         </p>
                       </div>
                     </div>
@@ -1151,7 +1084,7 @@ async function resendActivationEmail() {
 
                           <span
                             className={`inline-flex w-fit items-center rounded-lg border px-3 py-1.5 text-xs font-semibold md:text-sm ${getDogStatusStyle(
-                              dog
+                              dog,
                             )}`}
                           >
                             {getDogStatusText(dog)}
@@ -1211,16 +1144,15 @@ async function resendActivationEmail() {
                             </p>
 
                             <p className="mt-1 text-sm text-[#5C4033] md:text-base">
-                              {formatDisplayDate(
-                                dog.vaccination_expiry
-                              )}
+                              {formatDisplayDate(dog.vaccination_expiry)}
                             </p>
                           </div>
                         )}
 
                         <div className="mt-5 flex justify-center sm:justify-end">
                           <Button
-                            href={`/admin/customers/${customer.id}/dogs/${dog.id}/edit`}>
+                            href={`/admin/customers/${customer.id}/dogs/${dog.id}/edit`}
+                          >
                             Edit Dog
                           </Button>
                         </div>
@@ -1258,9 +1190,7 @@ async function resendActivationEmail() {
                         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                           <div>
                             <h3 className="text-xl font-semibold text-[#5C4033]">
-                              {formatName(
-                                booking.dogs?.name || "Dog"
-                              )}
+                              {formatName(booking.dogs?.name || "Dog")}
                             </h3>
 
                             {booking.dogs?.breed && (
@@ -1270,40 +1200,31 @@ async function resendActivationEmail() {
                             )}
 
                             <p className="mt-2 text-xs font-semibold text-[#8B6A4E] md:text-sm">
-                              Booking reference:{" "}
-                              {booking.booking_reference}
+                              Booking reference: {booking.booking_reference}
                             </p>
 
                             <p className="mt-3 text-sm font-medium text-[#5C4033] md:text-base">
-                              {formatDisplayDate(
-                                booking.start_date
-                              )}{" "}
-                              to{" "}
+                              {formatDisplayDate(booking.start_date)} to{" "}
                               {formatDisplayDate(booking.end_date)}
                             </p>
 
                             {booking.total_cost !== null && (
                               <div className="mt-3 rounded-lg border border-[#D9CBB8] bg-[#F5EFE6] p-3">
                                 <p className="text-sm text-[#8B6A4E] md:text-base">
-                                  Total cost:{" "}
-                                  {formatMoney(booking.total_cost)}
+                                  Total cost: {formatMoney(booking.total_cost)}
                                 </p>
 
                                 {booking.deposit_amount !== null && (
                                   <p className="mt-1 text-sm text-[#8B6A4E] md:text-base">
                                     Deposit:{" "}
-                                    {formatMoney(
-                                      booking.deposit_amount
-                                    )}
+                                    {formatMoney(booking.deposit_amount)}
                                   </p>
                                 )}
 
                                 {booking.balance_amount !== null && (
                                   <p className="mt-1 text-sm text-[#8B6A4E] md:text-base">
                                     Balance:{" "}
-                                    {formatMoney(
-                                      booking.balance_amount
-                                    )}
+                                    {formatMoney(booking.balance_amount)}
                                   </p>
                                 )}
                               </div>
@@ -1318,7 +1239,7 @@ async function resendActivationEmail() {
 
                           <span
                             className={`inline-flex w-fit items-center rounded-lg border px-3 py-1.5 text-xs font-semibold md:text-sm ${getBookingStatusStyle(
-                              booking.status
+                              booking.status,
                             )}`}
                           >
                             {getBookingStatusText(booking.status)}
@@ -1352,9 +1273,7 @@ async function resendActivationEmail() {
                         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                           <div>
                             <h3 className="text-lg font-semibold text-[#5C4033] md:text-xl">
-                              {formatName(
-                                booking.dogs?.name || "Dog"
-                              )}
+                              {formatName(booking.dogs?.name || "Dog")}
                             </h3>
 
                             {booking.dogs?.breed && (
@@ -1364,22 +1283,17 @@ async function resendActivationEmail() {
                             )}
 
                             <p className="mt-2 text-xs font-semibold text-[#8B6A4E] md:text-sm">
-                              Booking reference:{" "}
-                              {booking.booking_reference}
+                              Booking reference: {booking.booking_reference}
                             </p>
 
                             <p className="mt-3 text-sm font-medium text-[#5C4033] md:text-base">
-                              {formatDisplayDate(
-                                booking.start_date
-                              )}{" "}
-                              to{" "}
+                              {formatDisplayDate(booking.start_date)} to{" "}
                               {formatDisplayDate(booking.end_date)}
                             </p>
 
                             {booking.total_cost !== null && (
                               <p className="mt-2 text-sm text-[#8B6A4E] md:text-base">
-                                Total cost:{" "}
-                                {formatMoney(booking.total_cost)}
+                                Total cost: {formatMoney(booking.total_cost)}
                               </p>
                             )}
 
@@ -1392,7 +1306,7 @@ async function resendActivationEmail() {
 
                           <span
                             className={`inline-flex w-fit items-center rounded-lg border px-3 py-1.5 text-xs font-semibold md:text-sm ${getBookingStatusStyle(
-                              booking.status
+                              booking.status,
                             )}`}
                           >
                             {getBookingStatusText(booking.status)}

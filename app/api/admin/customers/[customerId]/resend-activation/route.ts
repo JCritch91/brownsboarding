@@ -2,13 +2,11 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 import { sendGmailEmail } from "@/lib/gmail";
-import {
-  createEmailTemplate,
-} from "@/lib/email-template";
+import { createEmailTemplate } from "@/lib/email-template";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
 type RouteContext = {
@@ -17,13 +15,9 @@ type RouteContext = {
   }>;
 };
 
-export async function POST(
-  request: Request,
-  context: RouteContext
-) {
+export async function POST(request: Request, context: RouteContext) {
   try {
-    const { customerId } =
-      await context.params;
+    const { customerId } = await context.params;
 
     if (!customerId?.trim()) {
       return NextResponse.json(
@@ -32,61 +26,49 @@ export async function POST(
         },
         {
           status: 400,
-        }
+        },
       );
     }
 
-    const authorizationHeader =
-      request.headers.get("authorization");
+    const authorizationHeader = request.headers.get("authorization");
 
-    const accessToken =
-      authorizationHeader?.replace(
-        "Bearer ",
-        ""
-      );
+    const accessToken = authorizationHeader?.replace("Bearer ", "");
 
     if (!accessToken) {
       return NextResponse.json(
         {
-          error:
-            "You must be signed in as an administrator.",
+          error: "You must be signed in as an administrator.",
         },
         {
           status: 401,
-        }
+        },
       );
     }
 
     const {
       data: { user },
       error: userError,
-    } = await supabaseAdmin.auth.getUser(
-      accessToken
-    );
+    } = await supabaseAdmin.auth.getUser(accessToken);
 
     if (userError || !user) {
       return NextResponse.json(
         {
-          error:
-            "Unable to verify the signed-in user.",
+          error: "Unable to verify the signed-in user.",
         },
         {
           status: 401,
-        }
+        },
       );
     }
 
-    const {
-      data: adminProfile,
-      error: adminProfileError,
-    } = await supabaseAdmin
+    const { data: adminProfile, error: adminProfileError } = await supabaseAdmin
       .from("profiles")
       .select(
         `
         id,
         active,
         is_admin
-        `
+        `,
       )
       .eq("id", user.id)
       .maybeSingle();
@@ -94,20 +76,15 @@ export async function POST(
     if (adminProfileError) {
       return NextResponse.json(
         {
-          error:
-            adminProfileError.message,
+          error: adminProfileError.message,
         },
         {
           status: 500,
-        }
+        },
       );
     }
 
-    if (
-      !adminProfile ||
-      !adminProfile.active ||
-      !adminProfile.is_admin
-    ) {
+    if (!adminProfile || !adminProfile.active || !adminProfile.is_admin) {
       return NextResponse.json(
         {
           error:
@@ -115,14 +92,11 @@ export async function POST(
         },
         {
           status: 403,
-        }
+        },
       );
     }
 
-    const {
-      data: customer,
-      error: customerLoadError,
-    } = await supabaseAdmin
+    const { data: customer, error: customerLoadError } = await supabaseAdmin
       .from("profiles")
       .select(
         `
@@ -132,7 +106,7 @@ export async function POST(
         email,
         was_activated,
         is_admin
-        `
+        `,
       )
       .eq("id", customerId)
       .maybeSingle();
@@ -140,24 +114,22 @@ export async function POST(
     if (customerLoadError) {
       return NextResponse.json(
         {
-          error:
-            customerLoadError.message,
+          error: customerLoadError.message,
         },
         {
           status: 500,
-        }
+        },
       );
     }
 
     if (!customer) {
       return NextResponse.json(
         {
-          error:
-            "The customer could not be found.",
+          error: "The customer could not be found.",
         },
         {
           status: 404,
-        }
+        },
       );
     }
 
@@ -169,54 +141,45 @@ export async function POST(
         },
         {
           status: 409,
-        }
+        },
       );
     }
 
     if (customer.was_activated) {
       return NextResponse.json(
         {
-          error:
-            "This customer has already activated their account.",
+          error: "This customer has already activated their account.",
         },
         {
           status: 409,
-        }
+        },
       );
     }
 
     if (!customer.email) {
       return NextResponse.json(
         {
-          error:
-            "This customer does not have an email address.",
+          error: "This customer does not have an email address.",
         },
         {
           status: 409,
-        }
+        },
       );
     }
 
     const siteUrl =
-      process.env.NEXT_PUBLIC_SITE_URL ||
-      new URL(request.url).origin;
+      process.env.NEXT_PUBLIC_SITE_URL || new URL(request.url).origin;
 
-    const redirectTo =
-      `${siteUrl}/set-password`;
+    const redirectTo = `${siteUrl}/set-password`;
 
-    const {
-      data: inviteData,
-      error: inviteError,
-    } =
+    const { data: inviteData, error: inviteError } =
       await supabaseAdmin.auth.admin.generateLink({
         type: "invite",
         email: customer.email,
         options: {
           data: {
-            first_name:
-              customer.first_name || "",
-            last_name:
-              customer.last_name || "",
+            first_name: customer.first_name || "",
+            last_name: customer.last_name || "",
           },
           redirectTo,
         },
@@ -231,29 +194,26 @@ export async function POST(
         },
         {
           status: 500,
-        }
+        },
       );
     }
 
-    const inviteLink =
-      inviteData.properties?.action_link;
+    const inviteLink = inviteData.properties?.action_link;
 
     if (!inviteLink) {
       return NextResponse.json(
         {
-          error:
-            "Supabase did not return a new invitation link.",
+          error: "Supabase did not return a new invitation link.",
         },
         {
           status: 500,
-        }
+        },
       );
     }
 
     const customerName =
-      `${customer.first_name || ""} ${
-        customer.last_name || ""
-      }`.trim() || "Customer";
+      `${customer.first_name || ""} ${customer.last_name || ""}`.trim() ||
+      "Customer";
 
     const bodyContent = `
       <p>Hi ${customerName},</p>
@@ -294,16 +254,14 @@ export async function POST(
       </p>
     `;
 
-    const emailBody =
-      createEmailTemplate(
-        "Set Up Your Browns Boarding Account",
-        bodyContent
-      );
+    const emailBody = createEmailTemplate(
+      "Set Up Your Browns Boarding Account",
+      bodyContent,
+    );
 
     await sendGmailEmail({
       to: customer.email,
-      subject:
-        "Set up your Browns Boarding account",
+      subject: "Set up your Browns Boarding account",
       html: emailBody,
     });
 
@@ -314,14 +272,10 @@ export async function POST(
         id: customer.id,
         email: customer.email,
       },
-      message:
-        "A new activation email has been sent successfully.",
+      message: "A new activation email has been sent successfully.",
     });
   } catch (error) {
-    console.error(
-      "Admin activation email resend failed:",
-      error
-    );
+    console.error("Admin activation email resend failed:", error);
 
     return NextResponse.json(
       {
@@ -332,7 +286,7 @@ export async function POST(
       },
       {
         status: 500,
-      }
+      },
     );
   }
 }

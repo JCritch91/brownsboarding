@@ -33,35 +33,36 @@ export default function AuthHeader() {
           <div className="flex justify-start">
             <NavLink href="/">
               <img
-                  src="/images/logo.jpg"
-                  alt="Browns Boarding Logo"
-                  className="h-20 lg:h-24 w-auto rounded-xl" 
+                src="/images/logo.jpg"
+                alt="Browns Boarding Logo"
+                className="h-20 lg:h-24 w-auto rounded-xl"
               />
             </NavLink>
           </div>
 
-            <DesktopNavLinks links={authNavLinks} />
+          <DesktopNavLinks links={authNavLinks} />
 
           {/* Login icon right */}
           <div className="flex justify-end relative">
-              <NavLink href="/login"
+            <NavLink
+              href="/login"
               className="!h-11 !w-11 !p-0 !rounded-full border border-[#8B6A4E] text-[#8B6A4E] flex items-center justify-center hover:text-[#5C4033] hover:bg-[#F5EFE6] transition-all duration-300 cursor-pointer"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="h-5 w-5"
+                aria-hidden="true"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="h-5 w-5"
-                  aria-hidden="true"
-                >
-                  <path d="M20 21a8 8 0 0 0-16 0" />
-                  <circle cx="12" cy="7" r="4" />
-                </svg>
-              </NavLink>
+                <path d="M20 21a8 8 0 0 0-16 0" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+            </NavLink>
           </div>
         </div>
 
@@ -71,44 +72,42 @@ export default function AuthHeader() {
           <div className="flex justify-start">
             <MobileMenuButton
               isOpen={mobileMenuOpen}
-              onClick={() =>
-                setMobileMenuOpen((current) => !current)
-              }
+              onClick={() => setMobileMenuOpen((current) => !current)}
             />
           </div>
 
           {/* Logo centre */}
           <div className="flex justify-center">
-           <NavLink href="/">
+            <NavLink href="/">
               <img
-                  src="/images/logo.jpg"
-                  alt="Browns Boarding Logo"
-                  className="h-14 w-auto rounded-xl"
+                src="/images/logo.jpg"
+                alt="Browns Boarding Logo"
+                className="h-14 w-auto rounded-xl"
               />
             </NavLink>
           </div>
           <div className="flex justify-end relative">
-              <NavLink href="/login" 
-                className="!h-11 !w-11 !p-0 !rounded-full border border-[#8B6A4E] text-[#8B6A4E] flex items-center justify-center hover:text-[#5C4033] hover:bg-[#F5EFE6] transition-all duration-300 cursor-pointer"
-              >
+            <NavLink
+              href="/login"
+              className="!h-11 !w-11 !p-0 !rounded-full border border-[#8B6A4E] text-[#8B6A4E] flex items-center justify-center hover:text-[#5C4033] hover:bg-[#F5EFE6] transition-all duration-300 cursor-pointer"
+            >
               <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  className="h-5 w-5"
-                  aria-hidden="true"
-                >
-                  <path d="M20 21a8 8 0 0 0-16 0" />
-                  <circle cx="12" cy="7" r="4" />
-                </svg>
-              </NavLink>
-            </div>
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="h-5 w-5"
+                aria-hidden="true"
+              >
+                <path d="M20 21a8 8 0 0 0-16 0" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
+            </NavLink>
           </div>
-
+        </div>
 
         {/* Mobile Dropdown Menu */}
         {mobileMenuOpen && (

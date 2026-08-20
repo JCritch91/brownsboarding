@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
 export async function POST(request: Request) {
@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     if (!token) {
       return NextResponse.json(
         { error: "Activation token is missing." },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -28,7 +28,7 @@ export async function POST(request: Request) {
     if (profileError || !profile) {
       return NextResponse.json(
         { error: "This activation link is invalid." },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
     ) {
       return NextResponse.json(
         { error: "This activation link has expired." },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -64,10 +64,7 @@ export async function POST(request: Request) {
       .eq("id", profile.id);
 
     if (updateError) {
-      return NextResponse.json(
-        { error: updateError.message },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: updateError.message }, { status: 500 });
     }
 
     return NextResponse.json({
@@ -82,7 +79,7 @@ export async function POST(request: Request) {
             ? error.message
             : "Unable to activate account.",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

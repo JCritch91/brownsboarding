@@ -44,15 +44,9 @@ export default function AccountDropdown({
       <div className="flex flex-col gap-1 text-[#8B6A4E] text-right">
         <div className="flex items-start justify-end gap-3 px-3 py-3 border-b border-[#D9CBB8] mb-1 text-right">
           <div className="min-w-0 flex-1 text-right">
-            <div className={nameClass}>
-              {userDisplayName || "My Account"}
-            </div>
+            <div className={nameClass}>{userDisplayName || "My Account"}</div>
 
-            {userEmail && (
-              <div className={emailClass}>
-                {userEmail}
-              </div>
-            )}
+            {userEmail && <div className={emailClass}>{userEmail}</div>}
           </div>
 
           <div className="h-9 w-9 shrink-0 rounded-full bg-[#F5EFE6] border border-[#D9CBB8] flex items-center justify-center text-sm font-bold text-[#5C4033]">
@@ -60,20 +54,13 @@ export default function AccountDropdown({
           </div>
         </div>
 
-        <Link 
-          href="/my-details" 
-          className={linkClass}
-          onClick={onClose}>
+        <Link href="/my-details" className={linkClass} onClick={onClose}>
           My Profile
         </Link>
 
         <div className="my-1 border-t border-[#D9CBB8]" />
 
-        <button
-          type="button"
-          onClick={onLogout}
-          className={logoutClass}
-        >
+        <button type="button" onClick={onLogout} className={logoutClass}>
           Logout
         </button>
       </div>

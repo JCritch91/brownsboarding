@@ -43,7 +43,8 @@ export default function AdminHeader() {
     const lastName = profile?.last_name || "";
     const email = profile?.email || user.email || "";
 
-    const initials = `${firstName?.[0] || ""}${lastName?.[0] || ""}`.toUpperCase();
+    const initials =
+      `${firstName?.[0] || ""}${lastName?.[0] || ""}`.toUpperCase();
     const displayName = `${firstName} ${lastName}`.trim();
 
     setUserInitials(initials || email?.[0]?.toUpperCase() || "?");
@@ -78,9 +79,9 @@ export default function AdminHeader() {
           <div className="flex justify-start">
             <NavLink href="/">
               <img
-                  src="/images/logo.jpg"
-                  alt="Browns Boarding Logo"
-                  className="h-20 lg:h-24 w-auto rounded-xl" 
+                src="/images/logo.jpg"
+                alt="Browns Boarding Logo"
+                className="h-20 lg:h-24 w-auto rounded-xl"
               />
             </NavLink>
           </div>
@@ -133,13 +134,13 @@ export default function AdminHeader() {
 
           {/* Logo centre */}
           <div className="flex justify-center">
-           <NavLink href="/">
+            <NavLink href="/">
               <img
-                  src="/images/logo.jpg"
-                  alt="Browns Boarding Logo"
-                  className="h-14 w-auto rounded-xl"
+                src="/images/logo.jpg"
+                alt="Browns Boarding Logo"
+                className="h-14 w-auto rounded-xl"
               />
-           </NavLink>
+            </NavLink>
           </div>
 
           {/* Account icon right */}

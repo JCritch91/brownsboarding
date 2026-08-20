@@ -40,8 +40,7 @@ export default function AdminAddCustomerPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const [form, setForm] =
-    useState<CustomerFormValues>(emptyForm);
+  const [form, setForm] = useState<CustomerFormValues>(emptyForm);
 
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
@@ -65,19 +64,14 @@ export default function AdminAddCustomerPage() {
     setLoading(false);
   }
 
-  function updateField(
-    field: keyof CustomerFormValues,
-    value: string
-  ) {
+  function updateField(field: keyof CustomerFormValues, value: string) {
     setForm((current) => ({
       ...current,
-      [field]:value,
+      [field]: value,
     }));
   }
 
-  async function handleSubmit(
-    event: FormEvent<HTMLFormElement>
-  ) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (saving) {
@@ -95,9 +89,7 @@ export default function AdminAddCustomerPage() {
     if (!firstName || !lastName || !email) {
       setSaving(false);
       setIsError(true);
-      setMessage(
-        "First name, last name and email address are required."
-      );
+      setMessage("First name, last name and email address are required.");
       return;
     }
 
@@ -121,70 +113,50 @@ export default function AdminAddCustomerPage() {
       return;
     }
 
-    const response = await fetch(
-      "/api/admin/customers/create",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          first_name: firstName,
-          last_name: lastName,
-          email,
-          phone: formatUkPhone(form.phone),
-          address_line_1: formatAddressLine(
-            form.address_line_1
-          ),
-          address_line_2: formatAddressLine(
-            form.address_line_2
-          ),
-          town: formatName(form.town),
-          postcode: formatPostcode(form.postcode),
-          emergency_contact_name: formatName(
-            form.emergency_contact_name
-          ),
-          emergency_contact_phone: formatUkPhone(
-            form.emergency_contact_phone
-          ),
-          vet_name: formatName(form.vet_name),
-          vet_phone: formatUkPhone(form.vet_phone),
-          vet_address: formatAddressLine(
-            form.vet_address
-          ),
-        }),
-      }
-    );
+    const response = await fetch("/api/admin/customers/create", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        first_name: firstName,
+        last_name: lastName,
+        email,
+        phone: formatUkPhone(form.phone),
+        address_line_1: formatAddressLine(form.address_line_1),
+        address_line_2: formatAddressLine(form.address_line_2),
+        town: formatName(form.town),
+        postcode: formatPostcode(form.postcode),
+        emergency_contact_name: formatName(form.emergency_contact_name),
+        emergency_contact_phone: formatUkPhone(form.emergency_contact_phone),
+        vet_name: formatName(form.vet_name),
+        vet_phone: formatUkPhone(form.vet_phone),
+        vet_address: formatAddressLine(form.vet_address),
+      }),
+    });
 
     const result = await response.json().catch(() => null);
 
     if (!response.ok) {
       setSaving(false);
       setIsError(true);
-      setMessage(
-        result?.error || "Unable to create the customer."
-      );
+      setMessage(result?.error || "Unable to create the customer.");
       return;
     }
 
     if (!result?.customerId) {
       setSaving(false);
       setIsError(true);
-      setMessage(
-        "The customer was created, but no customer ID was returned."
-      );
+      setMessage("The customer was created, but no customer ID was returned.");
       return;
     }
 
-    window.location.href =
-      `/admin/customers/${result.customerId}`;
+    window.location.href = `/admin/customers/${result.customerId}`;
   }
 
   if (loading) {
-    return (
-      <LoadingScreen message="Preparing customer form..." />
-    );
+    return <LoadingScreen message="Preparing customer form..." />;
   }
 
   return (
@@ -192,11 +164,7 @@ export default function AdminAddCustomerPage() {
       <PageCard
         title="Add Customer"
         subtitle="Create a customer account and send an invitation to set up their password."
-        actions={
-          <Button href="/admin/customers">
-            Back to Customers
-          </Button>
-        }
+        actions={<Button href="/admin/customers">Back to Customers</Button>}
       >
         <CustomerForm
           form={form}

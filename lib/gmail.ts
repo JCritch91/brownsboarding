@@ -21,11 +21,7 @@ type SendGmailOptions = {
   html: string;
 };
 
-export async function sendGmailEmail({
-  to,
-  subject,
-  html,
-}: SendGmailOptions) {
+export async function sendGmailEmail({ to, subject, html }: SendGmailOptions) {
   if (!to) {
     throw new Error("Email recipient is missing.");
   }

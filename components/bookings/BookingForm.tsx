@@ -1,29 +1,15 @@
 "use client";
 
-import type {
-  FormEvent,
-  ReactNode,
-} from "react";
+import type { FormEvent, ReactNode } from "react";
 
-import {
-  DayPicker,
-  type DateRange,
-} from "react-day-picker";
+import { DayPicker, type DateRange } from "react-day-picker";
 
-import {
-  formatDisplayDate,
-  formatMoney,
-} from "@/lib/helpers";
+import { formatDisplayDate, formatMoney } from "@/lib/helpers";
 
 import Button from "@/components/Buttons";
 import MessageBox from "@/components/MessageBox";
-import {
-  FormSelect,
-  FormTextarea,
-} from "@/components/FormInput";
-import type {
-  Availability,
-} from "@/types/availability";
+import { FormSelect, FormTextarea } from "@/components/FormInput";
+import type { Availability } from "@/types/availability";
 
 export type BookingFormDog = {
   id: string;
@@ -34,8 +20,7 @@ export type BookingFormDog = {
   vaccination_expiry: string | null;
 };
 
-export type BookingFormAvailability =
-  Availability;
+export type BookingFormAvailability = Availability;
 
 type BookingFormProps = {
   dogs: BookingFormDog[];
@@ -72,23 +57,15 @@ type BookingFormProps = {
   additionalFields?: ReactNode;
 
   onDogChange: (dogId: string) => void;
-  onDateRangeSelect: (
-    range: DateRange | undefined
-  ) => void;
+  onDateRangeSelect: (range: DateRange | undefined) => void;
   onClearDates: () => void;
   onNotesChange: (notes: string) => void;
-  onSubmit: (
-    event: FormEvent<HTMLFormElement>
-  ) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 
   isPastDate: (date: Date) => boolean;
   isUnavailableDate: (date: Date) => boolean;
-  isLimitedAvailabilityDate: (
-    date: Date
-  ) => boolean;
-  isGoodAvailabilityDate: (
-    date: Date
-  ) => boolean;
+  isLimitedAvailabilityDate: (date: Date) => boolean;
+  isGoodAvailabilityDate: (date: Date) => boolean;
 };
 
 export default function BookingForm({
@@ -111,10 +88,8 @@ export default function BookingForm({
   submitLabel = "Request Booking",
   savingLabel = "Submitting Request...",
   cancelHref,
-  introductoryMessage =
-    "If you are booking multiple dogs for the same stay, please submit a separate booking request for each dog.",
-  summaryMessage =
-    "Your booking request will be reviewed by Browns Boarding before confirmation. Any projected cost shown is an estimate. The final cost and deposit amount will be confirmed before your booking is accepted.",
+  introductoryMessage = "If you are booking multiple dogs for the same stay, please submit a separate booking request for each dog.",
+  summaryMessage = "Your booking request will be reviewed by Browns Boarding before confirmation. Any projected cost shown is an estimate. The final cost and deposit amount will be confirmed before your booking is accepted.",
   additionalActions,
   additionalFields,
   onDogChange,
@@ -137,10 +112,7 @@ export default function BookingForm({
         </div>
       )}
 
-      <form
-        onSubmit={onSubmit}
-        className="space-y-6 md:space-y-10"
-      >
+      <form onSubmit={onSubmit} className="space-y-6 md:space-y-10">
         {/* Dog selection */}
         <section>
           <h2 className="mb-4 text-xl font-semibold text-[#5C4033] md:mb-6 md:text-2xl">
@@ -151,22 +123,15 @@ export default function BookingForm({
             id="dog"
             label="Dog"
             value={selectedDog}
-            onChange={(event) =>
-              onDogChange(event.target.value)
-            }
+            onChange={(event) => onDogChange(event.target.value)}
             required
           >
             <option value="">Select a dog</option>
 
             {dogs.map((dog) => (
-              <option
-                key={dog.id}
-                value={dog.id}
-              >
+              <option key={dog.id} value={dog.id}>
                 {dog.name}
-                {dog.breed
-                  ? ` • ${dog.breed}`
-                  : ""}
+                {dog.breed ? ` • ${dog.breed}` : ""}
               </option>
             ))}
           </FormSelect>
@@ -191,8 +156,7 @@ export default function BookingForm({
               fixedWeeks
               modifiers={{
                 available: isGoodAvailabilityDate,
-                limited:
-                  isLimitedAvailabilityDate,
+                limited: isLimitedAvailabilityDate,
                 unavailable: isUnavailableDate,
               }}
               modifiersClassNames={{
@@ -202,40 +166,29 @@ export default function BookingForm({
                   "bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200",
                 unavailable:
                   "bg-red-50 text-red-300 line-through cursor-not-allowed",
-                selected:
-                  "bg-[#8B6A4E] text-white border border-[#8B6A4E]",
-                range_start:
-                  "bg-[#8B6A4E] text-white border border-[#8B6A4E]",
-                range_end:
-                  "bg-[#8B6A4E] text-white border border-[#8B6A4E]",
+                selected: "bg-[#8B6A4E] text-white border border-[#8B6A4E]",
+                range_start: "bg-[#8B6A4E] text-white border border-[#8B6A4E]",
+                range_end: "bg-[#8B6A4E] text-white border border-[#8B6A4E]",
                 range_middle:
                   "bg-[#E8DDCF] text-[#5C4033] border border-[#D9CBB8]",
               }}
               classNames={{
                 months:
                   "flex flex-col md:flex-row justify-center gap-4 md:gap-6",
-                month:
-                  "w-full max-w-xs md:max-w-lg",
-                month_caption:
-                  "flex justify-center items-center mb-3 md:mb-4",
-                caption_label:
-                  "text-lg md:text-xl font-bold text-[#5C4033]",
-                nav:
-                  "flex items-center justify-between mb-4",
+                month: "w-full max-w-xs md:max-w-lg",
+                month_caption: "flex justify-center items-center mb-3 md:mb-4",
+                caption_label: "text-lg md:text-xl font-bold text-[#5C4033]",
+                nav: "flex items-center justify-between mb-4",
                 button_previous:
                   "text-[#5C4033] hover:text-[#8B6A4E] hover:scale-110 transition-all duration-200",
                 button_next:
                   "text-[#5C4033] hover:text-[#8B6A4E] hover:scale-110 transition-all duration-200",
-                weekdays:
-                  "grid grid-cols-7 mb-2",
+                weekdays: "grid grid-cols-7 mb-2",
                 weekday:
                   "text-center text-xs md:text-sm font-semibold text-[#8B6A4E]",
-                week:
-                  "grid grid-cols-7 gap-2 md:gap-3 mb-1 md:mb-2",
-                day:
-                  "h-8 w-8 md:h-9 md:w-9 flex items-center justify-center rounded-full text-xs md:text-sm font-medium transition-all duration-200",
-                today:
-                  "ring-2 ring-[#8B6A4E] ring-offset-2",
+                week: "grid grid-cols-7 gap-2 md:gap-3 mb-1 md:mb-2",
+                day: "h-8 w-8 md:h-9 md:w-9 flex items-center justify-center rounded-full text-xs md:text-sm font-medium transition-all duration-200",
+                today: "ring-2 ring-[#8B6A4E] ring-offset-2",
               }}
               className="mx-auto"
             />
@@ -265,24 +218,16 @@ export default function BookingForm({
 
                   <p className="mt-1 text-sm text-[#8B6A4E] md:text-base">
                     Arrival:{" "}
-                    {startDate
-                      ? formatDisplayDate(startDate)
-                      : "Not selected"}
+                    {startDate ? formatDisplayDate(startDate) : "Not selected"}
                   </p>
 
                   <p className="text-sm text-[#8B6A4E] md:text-base">
                     Departure:{" "}
-                    {endDate
-                      ? formatDisplayDate(endDate)
-                      : "Not selected"}
+                    {endDate ? formatDisplayDate(endDate) : "Not selected"}
                   </p>
                 </div>
 
-                <Button
-                  type="button"
-                  variant="light"
-                  onClick={onClearDates}
-                >
+                <Button type="button" variant="light" onClick={onClearDates}>
                   Clear Selection
                 </Button>
               </div>
@@ -297,43 +242,35 @@ export default function BookingForm({
 
               <p className="mt-2 text-sm text-[#8B6A4E] md:text-base">
                 {projectedNights} night
-                {projectedNights === 1 ? "" : "s"}{" "}
-                at {formatMoney(nightlyRate)} per
-                night.
+                {projectedNights === 1 ? "" : "s"} at {formatMoney(nightlyRate)}{" "}
+                per night.
               </p>
 
               <p className="mt-1 text-sm text-[#8B6A4E] md:text-base">
-                Estimated total cost:{" "}
-                {formatMoney(projectedTotal)}
+                Estimated total cost: {formatMoney(projectedTotal)}
               </p>
 
               {isProjectedShortNotice ? (
                 <p className="mt-3 text-xs font-medium text-amber-700 md:text-sm">
-                  This booking starts within 14
-                  days, so no deposit will be
-                  requested. The full balance will
-                  be due if Browns Boarding accepts
-                  the booking.
+                  This booking starts within 14 days, so no deposit will be
+                  requested. The full balance will be due if Browns Boarding
+                  accepts the booking.
                 </p>
               ) : (
                 <>
                   <p className="mt-1 text-sm text-[#8B6A4E] md:text-base">
-                    Estimated deposit:{" "}
-                    {formatMoney(projectedDeposit)}
+                    Estimated deposit: {formatMoney(projectedDeposit)}
                   </p>
 
                   <p className="mt-1 text-sm text-[#8B6A4E] md:text-base">
-                    Estimated remaining balance:{" "}
-                    {formatMoney(projectedBalance)}
+                    Estimated remaining balance: {formatMoney(projectedBalance)}
                   </p>
                 </>
               )}
 
               <p className="mt-3 text-xs italic text-[#8B6A4E] md:text-sm">
-                This is an estimate only. Browns
-                Boarding will confirm the final
-                price before accepting your
-                booking.
+                This is an estimate only. Browns Boarding will confirm the final
+                price before accepting your booking.
               </p>
             </div>
           )}
@@ -349,9 +286,7 @@ export default function BookingForm({
             id="notes"
             label="Anything we should know about this booking?"
             value={notes}
-            onChange={(event) =>
-              onNotesChange(event.target.value)
-            }
+            onChange={(event) => onNotesChange(event.target.value)}
             rows={2}
           />
         </section>
@@ -359,17 +294,13 @@ export default function BookingForm({
         {/* Summary message */}
         {summaryMessage && (
           <section>
-            <MessageBox type="info">
-              {summaryMessage}
-            </MessageBox>
+            <MessageBox type="info">{summaryMessage}</MessageBox>
           </section>
         )}
 
         {/* Result message */}
         {message && (
-          <MessageBox
-            type={isError ? "error" : "success"}
-          >
+          <MessageBox type={isError ? "error" : "success"}>
             {message}
           </MessageBox>
         )}
@@ -382,9 +313,7 @@ export default function BookingForm({
             disabled={saving}
             className="disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
           >
-            {saving
-              ? savingLabel
-              : submitLabel}
+            {saving ? savingLabel : submitLabel}
           </Button>
 
           {cancelHref && (

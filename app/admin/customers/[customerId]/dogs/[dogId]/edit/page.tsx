@@ -1,29 +1,18 @@
 "use client";
 
-import {
-  useEffect,
-  useState,
-  type FormEvent,
-} from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useParams } from "next/navigation";
 
 import { supabase } from "@/lib/supabase";
 import { ensureActiveAdminUser } from "@/lib/appActions";
-import {
-  formatName,
-  validateDogDetails,
-} from "@/lib/helpers";
+import { formatName, validateDogDetails } from "@/lib/helpers";
 
 import AdminPageLayout from "@/components/AdminPageLayout";
 import PageCard from "@/components/PageCard";
 import Button from "@/components/Buttons";
 import LoadingScreen from "@/components/LoadingScreen";
-import DogForm, {
-  type DogFormValues,
-} from "@/components/dogs/DogForm";
-import {
-  authenticatedApiRequest,
-} from "@/lib/client/authenticated-api";
+import DogForm, { type DogFormValues } from "@/components/dogs/DogForm";
+import { authenticatedApiRequest } from "@/lib/client/authenticated-api";
 
 type UpdateAdminDogResponse = {
   success: boolean;
@@ -67,15 +56,11 @@ export default function AdminEditDogPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const [form, setForm] =
-    useState<DogFormValues>(emptyForm);
+  const [form, setForm] = useState<DogFormValues>(emptyForm);
 
   const [dogActive, setDogActive] = useState(true);
 
-  const [
-    meetAndGreetCompleted,
-    setMeetAndGreetCompleted,
-  ] = useState(false);
+  const [meetAndGreetCompleted, setMeetAndGreetCompleted] = useState(false);
 
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
@@ -89,8 +74,7 @@ export default function AdminEditDogPage() {
     setMessage("");
     setIsError(false);
 
-    const { redirectTo } =
-      await ensureActiveAdminUser();
+    const { redirectTo } = await ensureActiveAdminUser();
 
     if (redirectTo) {
       window.location.href = redirectTo;
@@ -122,7 +106,7 @@ export default function AdminEditDogPage() {
         behaviour_notes,
         meet_and_greet_completed,
         active
-        `
+        `,
       )
       .eq("id", dogId)
       .eq("owner_id", customerId)
@@ -137,9 +121,7 @@ export default function AdminEditDogPage() {
 
     if (!data) {
       setIsError(true);
-      setMessage(
-        "Dog could not be found for this customer."
-      );
+      setMessage("Dog could not be found for this customer.");
       setLoading(false);
       return;
     }
@@ -148,79 +130,54 @@ export default function AdminEditDogPage() {
       name: data.name || "",
       breed: data.breed || "",
       date_of_birth: data.date_of_birth || "",
-      weight_kg:
-        data.weight_kg !== null
-          ? String(data.weight_kg)
-          : "",
+      weight_kg: data.weight_kg !== null ? String(data.weight_kg) : "",
       gender: data.gender || "",
-      neutered:
-        data.neutered === null
-          ? ""
-          : data.neutered
-            ? "yes"
-            : "no",
+      neutered: data.neutered === null ? "" : data.neutered ? "yes" : "no",
       vaccinated:
-        data.vaccinated === null
-          ? ""
-          : data.vaccinated
-            ? "yes"
-            : "no",
-      vaccination_expiry:
-        data.vaccination_expiry || "",
-      microchip_number:
-        data.microchip_number || "",
+        data.vaccinated === null ? "" : data.vaccinated ? "yes" : "no",
+      vaccination_expiry: data.vaccination_expiry || "",
+      microchip_number: data.microchip_number || "",
       medical_notes: data.medical_notes || "",
-      medication_notes:
-        data.medication_notes || "",
+      medication_notes: data.medication_notes || "",
       feeding_notes: data.feeding_notes || "",
-      behaviour_notes:
-        data.behaviour_notes || "",
+      behaviour_notes: data.behaviour_notes || "",
     });
 
     setDogActive(Boolean(data.active));
 
-    setMeetAndGreetCompleted(
-      Boolean(data.meet_and_greet_completed)
-    );
+    setMeetAndGreetCompleted(Boolean(data.meet_and_greet_completed));
 
     setLoading(false);
   }
 
-  function updateField(
-    field: keyof DogFormValues,
-    value: string
-  ) {
+  function updateField(field: keyof DogFormValues, value: string) {
     setForm((current) => ({
       ...current,
-      [field]:value,
+      [field]: value,
     }));
   }
 
-async function handleSave(
-  event: FormEvent<HTMLFormElement>
-) {
-  event.preventDefault();
+  async function handleSave(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
 
-  if (saving) {
-    return;
-  }
+    if (saving) {
+      return;
+    }
 
-  setMessage("");
-  setIsError(false);
+    setMessage("");
+    setIsError(false);
 
-  const validationMessage =
-    validateDogDetails(form);
+    const validationMessage = validateDogDetails(form);
 
-  if (validationMessage) {
-    setIsError(true);
-    setMessage(validationMessage);
-    return;
-  }
+    if (validationMessage) {
+      setIsError(true);
+      setMessage(validationMessage);
+      return;
+    }
 
-  setSaving(true);
+    setSaving(true);
 
-  const result =
-    await authenticatedApiRequest<UpdateAdminDogResponse>(
+    const result = await authenticatedApiRequest<UpdateAdminDogResponse>(
       `/api/admin/customers/${customerId}/dogs/${dogId}`,
       {
         method: "PATCH",
@@ -229,55 +186,44 @@ async function handleSave(
           meetAndGreetCompleted,
           active: dogActive,
         },
-      }
+      },
     );
 
-  setSaving(false);
+    setSaving(false);
 
-  if (result.unauthenticated) {
-    window.location.href = "/login";
-    return;
+    if (result.unauthenticated) {
+      window.location.href = "/login";
+      return;
+    }
+
+    if (!result.ok) {
+      setIsError(true);
+      setMessage(result.error || "The dog's details could not be updated.");
+      return;
+    }
+
+    if (!result.data || !result.data.dogUpdated) {
+      setIsError(true);
+      setMessage(
+        result.data?.error || "The dog service did not update the dog.",
+      );
+      return;
+    }
+
+    setIsError(false);
+
+    window.location.href = `/admin/customers/${customerId}`;
   }
-
-  if (!result.ok) {
-    setIsError(true);
-    setMessage(
-      result.error ||
-        "The dog's details could not be updated."
-    );
-    return;
-  }
-
-  if (
-    !result.data ||
-    !result.data.dogUpdated
-  ) {
-    setIsError(true);
-    setMessage(
-      result.data?.error ||
-        "The dog service did not update the dog."
-    );
-    return;
-  }
-
-  setIsError(false);
-
-  window.location.href =
-    `/admin/customers/${customerId}`;
-}
-
 
   function toggleDogActiveStatus() {
     const newActiveStatus = !dogActive;
 
     const confirmed = window.confirm(
       newActiveStatus
-        ? `Reactivate ${formatName(
-            form.name || "this dog"
-          )}?`
+        ? `Reactivate ${formatName(form.name || "this dog")}?`
         : `Deactivate ${formatName(
-            form.name || "this dog"
-          )}?\n\nThe dog will no longer be available for new bookings.`
+            form.name || "this dog",
+          )}?\n\nThe dog will no longer be available for new bookings.`,
     );
 
     if (!confirmed) {
@@ -288,9 +234,7 @@ async function handleSave(
   }
 
   if (loading) {
-    return (
-      <LoadingScreen message="Loading dog details..." />
-    );
+    return <LoadingScreen message="Loading dog details..." />;
   }
 
   return (
@@ -314,13 +258,9 @@ async function handleSave(
           submitLabel="Save Dog"
           savingLabel="Saving Dog..."
           cancelHref={`/admin/customers/${customerId}`}
-          meetAndGreetCompleted={
-            meetAndGreetCompleted
-          }
+          meetAndGreetCompleted={meetAndGreetCompleted}
           allowMeetAndGreetManagement={true}
-          onMeetAndGreetChange={
-            setMeetAndGreetCompleted
-          }
+          onMeetAndGreetChange={setMeetAndGreetCompleted}
           additionalActions={
             dogActive ? (
               <button

@@ -65,10 +65,9 @@ export function FormSelect({
   );
 }
 
-type FormTextareaProps =
-  TextareaHTMLAttributes<HTMLTextAreaElement> & {
-    label: string;
-  };
+type FormTextareaProps = TextareaHTMLAttributes<HTMLTextAreaElement> & {
+  label: string;
+};
 
 export function FormTextarea({
   label,

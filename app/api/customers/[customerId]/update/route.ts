@@ -10,7 +10,7 @@ import {
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
 type RouteContext = {
@@ -34,21 +34,13 @@ type UpdateCustomerRequest = {
   vet_address?: unknown;
 };
 
-function optionalString(
-  value: unknown
-): string {
-  return typeof value === "string"
-    ? value.trim()
-    : "";
+function optionalString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }
 
-export async function PATCH(
-  request: Request,
-  context: RouteContext
-) {
+export async function PATCH(request: Request, context: RouteContext) {
   try {
-    const { customerId } =
-      await context.params;
+    const { customerId } = await context.params;
 
     if (!customerId?.trim()) {
       return NextResponse.json(
@@ -57,61 +49,49 @@ export async function PATCH(
         },
         {
           status: 400,
-        }
+        },
       );
     }
 
-    const authorizationHeader =
-      request.headers.get("authorization");
+    const authorizationHeader = request.headers.get("authorization");
 
-    const accessToken =
-      authorizationHeader?.replace(
-        "Bearer ",
-        ""
-      );
+    const accessToken = authorizationHeader?.replace("Bearer ", "");
 
     if (!accessToken) {
       return NextResponse.json(
         {
-          error:
-            "You must be signed in as an administrator.",
+          error: "You must be signed in as an administrator.",
         },
         {
           status: 401,
-        }
+        },
       );
     }
 
     const {
       data: { user },
       error: userError,
-    } = await supabaseAdmin.auth.getUser(
-      accessToken
-    );
+    } = await supabaseAdmin.auth.getUser(accessToken);
 
     if (userError || !user) {
       return NextResponse.json(
         {
-          error:
-            "Unable to verify the signed-in user.",
+          error: "Unable to verify the signed-in user.",
         },
         {
           status: 401,
-        }
+        },
       );
     }
 
-    const {
-      data: adminProfile,
-      error: adminProfileError,
-    } = await supabaseAdmin
+    const { data: adminProfile, error: adminProfileError } = await supabaseAdmin
       .from("profiles")
       .select(
         `
         id,
         active,
         is_admin
-        `
+        `,
       )
       .eq("id", user.id)
       .maybeSingle();
@@ -123,40 +103,33 @@ export async function PATCH(
         },
         {
           status: 500,
-        }
+        },
       );
     }
 
-    if (
-      !adminProfile ||
-      !adminProfile.active ||
-      !adminProfile.is_admin
-    ) {
+    if (!adminProfile || !adminProfile.active || !adminProfile.is_admin) {
       return NextResponse.json(
         {
-          error:
-            "You do not have permission to update customers.",
+          error: "You do not have permission to update customers.",
         },
         {
           status: 403,
-        }
+        },
       );
     }
 
-    const {
-      data: existingCustomer,
-      error: customerLoadError,
-    } = await supabaseAdmin
-      .from("profiles")
-      .select(
-        `
+    const { data: existingCustomer, error: customerLoadError } =
+      await supabaseAdmin
+        .from("profiles")
+        .select(
+          `
         id,
         email,
         is_admin
-        `
-      )
-      .eq("id", customerId)
-      .maybeSingle();
+        `,
+        )
+        .eq("id", customerId)
+        .maybeSingle();
 
     if (customerLoadError) {
       return NextResponse.json(
@@ -165,19 +138,18 @@ export async function PATCH(
         },
         {
           status: 500,
-        }
+        },
       );
     }
 
     if (!existingCustomer) {
       return NextResponse.json(
         {
-          error:
-            "The customer could not be found.",
+          error: "The customer could not be found.",
         },
         {
           status: 404,
-        }
+        },
       );
     }
 
@@ -194,111 +166,70 @@ export async function PATCH(
         },
         {
           status: 409,
-        }
+        },
       );
     }
 
-    const body =
-      (await request.json()) as UpdateCustomerRequest;
+    const body = (await request.json()) as UpdateCustomerRequest;
 
-    const firstName = formatName(
-      optionalString(body.first_name)
-    );
+    const firstName = formatName(optionalString(body.first_name));
 
-    const lastName = formatName(
-      optionalString(body.last_name)
-    );
+    const lastName = formatName(optionalString(body.last_name));
 
     if (!firstName || !lastName) {
       return NextResponse.json(
         {
-          error:
-            "First name and last name are required.",
+          error: "First name and last name are required.",
         },
         {
           status: 400,
-        }
+        },
       );
     }
 
-    const phone = formatUkPhone(
-      optionalString(body.phone)
+    const phone = formatUkPhone(optionalString(body.phone));
+
+    const addressLine1 = formatAddressLine(optionalString(body.address_line_1));
+
+    const addressLine2 = formatAddressLine(optionalString(body.address_line_2));
+
+    const town = formatName(optionalString(body.town));
+
+    const postcode = formatPostcode(optionalString(body.postcode));
+
+    const emergencyContactName = formatName(
+      optionalString(body.emergency_contact_name),
     );
 
-    const addressLine1 =
-      formatAddressLine(
-        optionalString(body.address_line_1)
-      );
-
-    const addressLine2 =
-      formatAddressLine(
-        optionalString(body.address_line_2)
-      );
-
-    const town = formatName(
-      optionalString(body.town)
+    const emergencyContactPhone = formatUkPhone(
+      optionalString(body.emergency_contact_phone),
     );
 
-    const postcode = formatPostcode(
-      optionalString(body.postcode)
-    );
+    const vetName = formatName(optionalString(body.vet_name));
 
-    const emergencyContactName =
-      formatName(
-        optionalString(
-          body.emergency_contact_name
-        )
-      );
+    const vetPhone = formatUkPhone(optionalString(body.vet_phone));
 
-    const emergencyContactPhone =
-      formatUkPhone(
-        optionalString(
-          body.emergency_contact_phone
-        )
-      );
+    const vetAddress = formatAddressLine(optionalString(body.vet_address));
 
-    const vetName = formatName(
-      optionalString(body.vet_name)
-    );
-
-    const vetPhone = formatUkPhone(
-      optionalString(body.vet_phone)
-    );
-
-    const vetAddress =
-      formatAddressLine(
-        optionalString(body.vet_address)
-      );
-
-    const {
-      data: updatedCustomer,
-      error: updateError,
-    } = await supabaseAdmin
+    const { data: updatedCustomer, error: updateError } = await supabaseAdmin
       .from("profiles")
       .update({
         first_name: firstName,
         last_name: lastName,
         phone: phone || null,
-        address_line_1:
-          addressLine1 || null,
-        address_line_2:
-          addressLine2 || null,
+        address_line_1: addressLine1 || null,
+        address_line_2: addressLine2 || null,
         town: town || null,
         postcode: postcode || null,
-        emergency_contact_name:
-          emergencyContactName || null,
-        emergency_contact_phone:
-          emergencyContactPhone || null,
+        emergency_contact_name: emergencyContactName || null,
+        emergency_contact_phone: emergencyContactPhone || null,
         vet_name: vetName || null,
         vet_phone: vetPhone || null,
         vet_address: vetAddress || null,
-        updated_at:
-          new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       })
       .eq("id", customerId)
-      .or(
-        "is_admin.eq.false,is_admin.is.null"
-      )
+      .or("is_admin.eq.false,is_admin.is.null")
       .select(
         `
         id,
@@ -317,7 +248,7 @@ export async function PATCH(
         vet_address,
         active,
         is_admin
-        `
+        `,
       )
       .maybeSingle();
 
@@ -328,7 +259,7 @@ export async function PATCH(
         },
         {
           status: 500,
-        }
+        },
       );
     }
 
@@ -340,7 +271,7 @@ export async function PATCH(
         },
         {
           status: 409,
-        }
+        },
       );
     }
 
@@ -348,14 +279,10 @@ export async function PATCH(
       success: true,
       customerUpdated: true,
       customer: updatedCustomer,
-      message:
-        "The customer details have been updated successfully.",
+      message: "The customer details have been updated successfully.",
     });
   } catch (error) {
-    console.error(
-      "Admin customer update failed:",
-      error
-    );
+    console.error("Admin customer update failed:", error);
 
     return NextResponse.json(
       {
@@ -366,7 +293,7 @@ export async function PATCH(
       },
       {
         status: 500,
-      }
+      },
     );
   }
 }

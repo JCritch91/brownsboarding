@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase";
 import AuthLayout from "@/components/AuthLayout";
 import Button from "@/components/Buttons";
 import MessageBox from "@/components/MessageBox";
-import {FormInput} from "@/components/FormInput";
+import { FormInput } from "@/components/FormInput";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -24,7 +24,7 @@ export default function LoginPage() {
 
       if (params.get("activation") === "true") {
         setMessage(
-          "Account created successfully. Please check your email to activate your account before logging in."
+          "Account created successfully. Please check your email to activate your account before logging in.",
         );
       } else {
         setMessage("Account created successfully. You can now log in.");
@@ -92,9 +92,7 @@ export default function LoginPage() {
     >
       {/* Message */}
       {message && (
-        <MessageBox type={isError ? "error" : "info"}>
-          {message}
-        </MessageBox>
+        <MessageBox type={isError ? "error" : "info"}>{message}</MessageBox>
       )}
 
       <form onSubmit={handleLogin} className="space-y-4 max-w-md mx-auto">
@@ -115,28 +113,33 @@ export default function LoginPage() {
           onChange={(e) => setPassword(e.target.value)}
           required
         />
-          
-            <p className="text-right">
-                <Link href="/forgot-password" className="text-sm font-medium text-[#8B6A4E] hover:text-[#5C4033]">
-                    Forgotten your password?
-                </Link>
-            </p>
-        
+
+        <p className="text-right">
+          <Link
+            href="/forgot-password"
+            className="text-sm font-medium text-[#8B6A4E] hover:text-[#5C4033]"
+          >
+            Forgotten your password?
+          </Link>
+        </p>
+
         <div className="flex justify-center">
-          <Button variant="dark" type="submit" className="mx-auto min-w-28" disabled={loading}>
-              {loading ? "Logging in..." : "Log In"}
+          <Button
+            variant="dark"
+            type="submit"
+            className="mx-auto min-w-28"
+            disabled={loading}
+          >
+            {loading ? "Logging in..." : "Log In"}
           </Button>
         </div>
-
       </form>
 
       <div className="mt-5 text-center space-y-2">
-
-
-        <p className="text-sm text-[#8B6A4E]">
-          Don't have an account?{" "}
-        </p>
-        <Button variant="light" href="/signup" className="mx-auto w-fit">Create One</Button>
+        <p className="text-sm text-[#8B6A4E]">Don't have an account? </p>
+        <Button variant="light" href="/signup" className="mx-auto w-fit">
+          Create One
+        </Button>
       </div>
     </AuthLayout>
   );

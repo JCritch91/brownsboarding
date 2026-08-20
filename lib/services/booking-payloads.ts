@@ -1,12 +1,6 @@
-import {
-  formatDisplayDate,
-  formatMoney,
-  formatName,
-} from "@/lib/helpers";
+import { formatDisplayDate, formatMoney, formatName } from "@/lib/helpers";
 
-import type {
-  BookingPricingResult,
-} from "@/lib/services/booking-confirmation-service";
+import type { BookingPricingResult } from "@/lib/services/booking-confirmation-service";
 
 export type BookingConfirmationPayloadInput = {
   bookingReference: string;
@@ -33,27 +27,19 @@ export type BookingConfirmationEmailPayload = {
 };
 
 export function buildBookingConfirmationEmailPayload(
-  input: BookingConfirmationPayloadInput
+  input: BookingConfirmationPayloadInput,
 ): BookingConfirmationEmailPayload {
   return {
     bookingReference: input.bookingReference,
     customerEmail: input.customerEmail,
     customerName: input.customerName,
-    dogName:
-      formatName(input.dogName || "") || "your dog",
+    dogName: formatName(input.dogName || "") || "your dog",
     startDate: formatDisplayDate(input.startDate),
     endDate: formatDisplayDate(input.endDate),
-    totalCost: formatMoney(
-      input.pricing.totalCost
-    ),
-    depositAmount: formatMoney(
-      input.pricing.depositAmount
-    ),
-    balanceAmount: formatMoney(
-      input.pricing.balanceAmount
-    ),
-    shortNoticeBooking:
-      input.shortNoticeBooking,
+    totalCost: formatMoney(input.pricing.totalCost),
+    depositAmount: formatMoney(input.pricing.depositAmount),
+    balanceAmount: formatMoney(input.pricing.balanceAmount),
+    shortNoticeBooking: input.shortNoticeBooking,
   };
 }
 
@@ -90,31 +76,22 @@ export type BookingCalendarPayload = {
 };
 
 export function buildBookingCalendarPayload(
-  input: BookingCalendarPayloadInput
+  input: BookingCalendarPayloadInput,
 ): BookingCalendarPayload {
   return {
     bookingId: input.bookingId,
     bookingReference: input.bookingReference,
     ownerName: input.customerName,
     ownerEmail: input.customerEmail || null,
-    dogName:
-      formatName(input.dogName || "") || "Dog",
-    dogBreed: input.dogBreed
-      ? formatName(input.dogBreed)
-      : null,
+    dogName: formatName(input.dogName || "") || "Dog",
+    dogBreed: input.dogBreed ? formatName(input.dogBreed) : null,
     startDate: input.startDate,
     endDate: input.endDate,
     bookingStatus: input.bookingStatus,
     paymentStatus: input.paymentStatus,
-    totalCost: formatMoney(
-      input.pricing.totalCost
-    ),
-    depositAmount: formatMoney(
-      input.pricing.depositAmount
-    ),
-    balanceAmount: formatMoney(
-      input.pricing.balanceAmount
-    ),
+    totalCost: formatMoney(input.pricing.totalCost),
+    depositAmount: formatMoney(input.pricing.depositAmount),
+    balanceAmount: formatMoney(input.pricing.balanceAmount),
     notes: input.notes,
   };
 }

@@ -30,10 +30,5 @@ export type CustomerProfile = {
 
 export type CustomerSummary = Pick<
   CustomerProfile,
-  | "id"
-  | "first_name"
-  | "last_name"
-  | "email"
-  | "active"
-  | "is_admin"
+  "id" | "first_name" | "last_name" | "email" | "active" | "is_admin"
 >;

@@ -11,39 +11,27 @@ export type BookingPricingResult = {
   newStatus: string;
 };
 
-import {
-  calculateNumberOfNights,
-  isWithinTwoWeeks,
-} from "@/lib/helpers";
+import { calculateNumberOfNights, isWithinTwoWeeks } from "@/lib/helpers";
 
 export function calculateBookingPricing(
   startDate: string,
   endDate: string,
   nightlyRate: number,
-  depositPercentage: number
+  depositPercentage: number,
 ): BookingPricingResult {
-  const shortNoticeBooking =
-    isWithinTwoWeeks(startDate);
+  const shortNoticeBooking = isWithinTwoWeeks(startDate);
 
-  const numberOfNights =
-    calculateNumberOfNights(
-      startDate,
-      endDate
-    );
+  const numberOfNights = calculateNumberOfNights(startDate, endDate);
 
-  const totalCost =
-    numberOfNights * nightlyRate;
+  const totalCost = numberOfNights * nightlyRate;
 
   const depositAmount = shortNoticeBooking
     ? 0
     : totalCost * (depositPercentage / 100);
 
-  const balanceAmount =
-    totalCost - depositAmount;
+  const balanceAmount = totalCost - depositAmount;
 
-  const newStatus = shortNoticeBooking
-    ? "Balance Pending"
-    : "Deposit Pending";
+  const newStatus = shortNoticeBooking ? "Balance Pending" : "Deposit Pending";
 
   return {
     numberOfNights,

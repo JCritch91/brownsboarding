@@ -1,17 +1,10 @@
 "use client";
 
-import {
-  type FormEvent,
-  type ReactNode,
-} from "react";
+import { type FormEvent, type ReactNode } from "react";
 
 import Button from "@/components/Buttons";
 import MessageBox from "@/components/MessageBox";
-import {
-  FormInput,
-  FormSelect,
-  FormTextarea,
-} from "@/components/FormInput";
+import { FormInput, FormSelect, FormTextarea } from "@/components/FormInput";
 
 export type DogFormValues = {
   name: string;
@@ -31,10 +24,7 @@ export type DogFormValues = {
 
 type DogFormProps = {
   form: DogFormValues;
-  onChange: (
-    field: keyof DogFormValues,
-    value: string
-  ) => void;
+  onChange: (field: keyof DogFormValues, value: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   saving: boolean;
   message?: string;
@@ -64,10 +54,7 @@ export default function DogForm({
   additionalActions,
 }: DogFormProps) {
   return (
-    <form
-      onSubmit={onSubmit}
-      className="space-y-6 md:space-y-10"
-    >
+    <form onSubmit={onSubmit} className="space-y-6 md:space-y-10">
       {/* Dog Details */}
       <section>
         <h2 className="mb-4 text-xl font-semibold text-[#5C4033] md:mb-6 md:text-2xl">
@@ -80,9 +67,7 @@ export default function DogForm({
             label="Dog Name *"
             type="text"
             value={form.name}
-            onChange={(event) =>
-              onChange("name", event.target.value)
-            }
+            onChange={(event) => onChange("name", event.target.value)}
             required
           />
 
@@ -91,9 +76,7 @@ export default function DogForm({
             label="Breed *"
             type="text"
             value={form.breed}
-            onChange={(event) =>
-              onChange("breed", event.target.value)
-            }
+            onChange={(event) => onChange("breed", event.target.value)}
             required
           />
 
@@ -102,9 +85,7 @@ export default function DogForm({
             label="Date of Birth"
             type="date"
             value={form.date_of_birth}
-            onChange={(event) =>
-              onChange("date_of_birth", event.target.value)
-            }
+            onChange={(event) => onChange("date_of_birth", event.target.value)}
           />
 
           <FormInput
@@ -114,18 +95,14 @@ export default function DogForm({
             min="0"
             step="0.1"
             value={form.weight_kg}
-            onChange={(event) =>
-              onChange("weight_kg", event.target.value)
-            }
+            onChange={(event) => onChange("weight_kg", event.target.value)}
           />
 
           <FormSelect
             id="gender"
             label="Gender"
             value={form.gender}
-            onChange={(event) =>
-              onChange("gender", event.target.value)
-            }
+            onChange={(event) => onChange("gender", event.target.value)}
           >
             <option value="">Select Gender</option>
             <option value="Male">Male</option>
@@ -138,10 +115,7 @@ export default function DogForm({
             type="text"
             value={form.microchip_number}
             onChange={(event) =>
-              onChange(
-                "microchip_number",
-                event.target.value
-              )
+              onChange("microchip_number", event.target.value)
             }
           />
 
@@ -149,9 +123,7 @@ export default function DogForm({
             id="neutered"
             label="Neutered?"
             value={form.neutered}
-            onChange={(event) =>
-              onChange("neutered", event.target.value)
-            }
+            onChange={(event) => onChange("neutered", event.target.value)}
           >
             <option value="">Select an Option</option>
             <option value="yes">Yes</option>
@@ -185,10 +157,7 @@ export default function DogForm({
                 type="date"
                 value={form.vaccination_expiry}
                 onChange={(event) =>
-                  onChange(
-                    "vaccination_expiry",
-                    event.target.value
-                  )
+                  onChange("vaccination_expiry", event.target.value)
                 }
                 required
               />
@@ -204,8 +173,7 @@ export default function DogForm({
         </h2>
 
         <p className="mb-4 text-sm text-[#8B6A4E] md:mb-6 md:text-base">
-          Keep this information up to date before every boarding
-          stay.
+          Keep this information up to date before every boarding stay.
         </p>
 
         <div className="space-y-3 md:space-y-4">
@@ -213,9 +181,7 @@ export default function DogForm({
             id="medicalNotes"
             label="Medical Notes"
             value={form.medical_notes}
-            onChange={(event) =>
-              onChange("medical_notes", event.target.value)
-            }
+            onChange={(event) => onChange("medical_notes", event.target.value)}
             rows={2}
           />
 
@@ -224,10 +190,7 @@ export default function DogForm({
             label="Medication Notes"
             value={form.medication_notes}
             onChange={(event) =>
-              onChange(
-                "medication_notes",
-                event.target.value
-              )
+              onChange("medication_notes", event.target.value)
             }
             rows={2}
           />
@@ -236,9 +199,7 @@ export default function DogForm({
             id="feedingNotes"
             label="Feeding Notes"
             value={form.feeding_notes}
-            onChange={(event) =>
-              onChange("feeding_notes", event.target.value)
-            }
+            onChange={(event) => onChange("feeding_notes", event.target.value)}
             rows={2}
           />
 
@@ -247,10 +208,7 @@ export default function DogForm({
             label="Behaviour Notes"
             value={form.behaviour_notes}
             onChange={(event) =>
-              onChange(
-                "behaviour_notes",
-                event.target.value
-              )
+              onChange("behaviour_notes", event.target.value)
             }
             rows={2}
           />
@@ -272,9 +230,7 @@ export default function DogForm({
         >
           <p
             className={`text-sm font-medium md:text-base ${
-              meetAndGreetCompleted
-                ? "text-green-800"
-                : "text-amber-800"
+              meetAndGreetCompleted ? "text-green-800" : "text-amber-800"
             }`}
           >
             {meetAndGreetCompleted
@@ -284,9 +240,7 @@ export default function DogForm({
 
           <p
             className={`mt-1 text-sm md:mt-2 md:text-base ${
-              meetAndGreetCompleted
-                ? "text-green-700"
-                : "text-amber-700"
+              meetAndGreetCompleted ? "text-green-700" : "text-amber-700"
             }`}
           >
             {meetAndGreetCompleted
@@ -294,32 +248,26 @@ export default function DogForm({
               : "This status will be updated by Browns Boarding after a successful Meet & Greet."}
           </p>
 
-          {allowMeetAndGreetManagement &&
-            onMeetAndGreetChange && (
-              <div className="mt-4">
-                <label className="flex min-h-11 items-center justify-between gap-4 rounded-lg border border-[#D9CBB8] bg-white px-3 py-3 text-sm font-medium text-[#5C4033] md:text-base">
-                  Meet & Greet Completed
-
-                  <input
-                    type="checkbox"
-                    checked={meetAndGreetCompleted}
-                    onChange={(event) =>
-                      onMeetAndGreetChange(
-                        event.target.checked
-                      )
-                    }
-                    className="h-5 w-5 accent-[#8B6A4E]"
-                  />
-                </label>
-              </div>
-            )}
+          {allowMeetAndGreetManagement && onMeetAndGreetChange && (
+            <div className="mt-4">
+              <label className="flex min-h-11 items-center justify-between gap-4 rounded-lg border border-[#D9CBB8] bg-white px-3 py-3 text-sm font-medium text-[#5C4033] md:text-base">
+                Meet & Greet Completed
+                <input
+                  type="checkbox"
+                  checked={meetAndGreetCompleted}
+                  onChange={(event) =>
+                    onMeetAndGreetChange(event.target.checked)
+                  }
+                  className="h-5 w-5 accent-[#8B6A4E]"
+                />
+              </label>
+            </div>
+          )}
         </div>
       </section>
 
       {message && (
-        <MessageBox type={isError ? "error" : "success"}>
-          {message}
-        </MessageBox>
+        <MessageBox type={isError ? "error" : "success"}>{message}</MessageBox>
       )}
 
       {/* Actions */}

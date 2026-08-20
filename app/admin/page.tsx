@@ -153,7 +153,10 @@ export default function AdminDashboardPage() {
           View payment records, invoice numbers, deposits, balances and income.
         </DashboardCard>
 
-        <DashboardCard href="/admin/amend-availability" title="Amend Availability">
+        <DashboardCard
+          href="/admin/amend-availability"
+          title="Amend Availability"
+        >
           Manage available boarding dates, spaces and unavailable days.
         </DashboardCard>
 

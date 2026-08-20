@@ -3,7 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
 type RouteContext = {
@@ -16,13 +16,9 @@ type UpdateAdminStatusRequest = {
   isAdmin?: unknown;
 };
 
-export async function PATCH(
-  request: Request,
-  context: RouteContext
-) {
+export async function PATCH(request: Request, context: RouteContext) {
   try {
-    const { customerId } =
-      await context.params;
+    const { customerId } = await context.params;
 
     if (!customerId?.trim()) {
       return NextResponse.json(
@@ -31,61 +27,49 @@ export async function PATCH(
         },
         {
           status: 400,
-        }
+        },
       );
     }
 
-    const authorizationHeader =
-      request.headers.get("authorization");
+    const authorizationHeader = request.headers.get("authorization");
 
-    const accessToken =
-      authorizationHeader?.replace(
-        "Bearer ",
-        ""
-      );
+    const accessToken = authorizationHeader?.replace("Bearer ", "");
 
     if (!accessToken) {
       return NextResponse.json(
         {
-          error:
-            "You must be signed in as an administrator.",
+          error: "You must be signed in as an administrator.",
         },
         {
           status: 401,
-        }
+        },
       );
     }
 
     const {
       data: { user },
       error: userError,
-    } = await supabaseAdmin.auth.getUser(
-      accessToken
-    );
+    } = await supabaseAdmin.auth.getUser(accessToken);
 
     if (userError || !user) {
       return NextResponse.json(
         {
-          error:
-            "Unable to verify the signed-in user.",
+          error: "Unable to verify the signed-in user.",
         },
         {
           status: 401,
-        }
+        },
       );
     }
 
-    const {
-      data: adminProfile,
-      error: adminProfileError,
-    } = await supabaseAdmin
+    const { data: adminProfile, error: adminProfileError } = await supabaseAdmin
       .from("profiles")
       .select(
         `
         id,
         active,
         is_admin
-        `
+        `,
       )
       .eq("id", user.id)
       .maybeSingle();
@@ -93,73 +77,57 @@ export async function PATCH(
     if (adminProfileError) {
       return NextResponse.json(
         {
-          error:
-            adminProfileError.message,
+          error: adminProfileError.message,
         },
         {
           status: 500,
-        }
+        },
       );
     }
 
-    if (
-      !adminProfile ||
-      !adminProfile.active ||
-      !adminProfile.is_admin
-    ) {
+    if (!adminProfile || !adminProfile.active || !adminProfile.is_admin) {
       return NextResponse.json(
         {
-          error:
-            "You do not have permission to manage administrator access.",
+          error: "You do not have permission to manage administrator access.",
         },
         {
           status: 403,
-        }
+        },
       );
     }
 
-    const body =
-      (await request.json()) as UpdateAdminStatusRequest;
+    const body = (await request.json()) as UpdateAdminStatusRequest;
 
     if (typeof body.isAdmin !== "boolean") {
       return NextResponse.json(
         {
-          error:
-            "The requested administrator status is invalid.",
+          error: "The requested administrator status is invalid.",
         },
         {
           status: 400,
-        }
+        },
       );
     }
 
-    const requestedAdminStatus =
-      body.isAdmin;
+    const requestedAdminStatus = body.isAdmin;
 
     /*
      * Prevent an administrator from removing their
      * own access. This must be enforced on the server,
      * even though the page also performs this check.
      */
-    if (
-      customerId === user.id &&
-      !requestedAdminStatus
-    ) {
+    if (customerId === user.id && !requestedAdminStatus) {
       return NextResponse.json(
         {
-          error:
-            "You cannot remove your own administrator access.",
+          error: "You cannot remove your own administrator access.",
         },
         {
           status: 409,
-        }
+        },
       );
     }
 
-    const {
-      data: targetProfile,
-      error: targetLoadError,
-    } = await supabaseAdmin
+    const { data: targetProfile, error: targetLoadError } = await supabaseAdmin
       .from("profiles")
       .select(
         `
@@ -169,7 +137,7 @@ export async function PATCH(
         email,
         active,
         is_admin
-        `
+        `,
       )
       .eq("id", customerId)
       .maybeSingle();
@@ -177,41 +145,34 @@ export async function PATCH(
     if (targetLoadError) {
       return NextResponse.json(
         {
-          error:
-            targetLoadError.message,
+          error: targetLoadError.message,
         },
         {
           status: 500,
-        }
+        },
       );
     }
 
     if (!targetProfile) {
       return NextResponse.json(
         {
-          error:
-            "The selected profile could not be found.",
+          error: "The selected profile could not be found.",
         },
         {
           status: 404,
-        }
+        },
       );
     }
 
-    const existingAdminStatus =
-      targetProfile.is_admin === true;
+    const existingAdminStatus = targetProfile.is_admin === true;
 
-    if (
-      existingAdminStatus ===
-      requestedAdminStatus
-    ) {
+    if (existingAdminStatus === requestedAdminStatus) {
       return NextResponse.json({
         success: true,
         adminStatusUpdated: true,
         profile: {
           id: targetProfile.id,
-          isAdmin:
-            existingAdminStatus,
+          isAdmin: existingAdminStatus,
         },
         message: requestedAdminStatus
           ? "Administrator access is already enabled."
@@ -219,39 +180,30 @@ export async function PATCH(
       });
     }
 
-    const {
-      data: updatedProfile,
-      error: updateError,
-    } = await supabaseAdmin
+    const { data: updatedProfile, error: updateError } = await supabaseAdmin
       .from("profiles")
       .update({
-        is_admin:
-          requestedAdminStatus,
-        updated_at:
-          new Date().toISOString(),
+        is_admin: requestedAdminStatus,
+        updated_at: new Date().toISOString(),
       })
       .eq("id", targetProfile.id)
-      .eq(
-        "is_admin",
-        existingAdminStatus
-      )
+      .eq("is_admin", existingAdminStatus)
       .select(
         `
         id,
         is_admin
-        `
+        `,
       )
       .maybeSingle();
 
     if (updateError) {
       return NextResponse.json(
         {
-          error:
-            updateError.message,
+          error: updateError.message,
         },
         {
           status: 500,
-        }
+        },
       );
     }
 
@@ -263,12 +215,11 @@ export async function PATCH(
         },
         {
           status: 409,
-        }
+        },
       );
     }
 
-    const isAdmin =
-      updatedProfile.is_admin === true;
+    const isAdmin = updatedProfile.is_admin === true;
 
     return NextResponse.json({
       success: true,
@@ -282,10 +233,7 @@ export async function PATCH(
         : "Administrator access removed.",
     });
   } catch (error) {
-    console.error(
-      "Admin role-management update failed:",
-      error
-    );
+    console.error("Admin role-management update failed:", error);
 
     return NextResponse.json(
       {
@@ -296,7 +244,7 @@ export async function PATCH(
       },
       {
         status: 500,
-      }
+      },
     );
   }
 }

@@ -9,9 +9,7 @@ import CustomerPageLayout from "@/components/CustomerPageLayout";
 import PageCard from "@/components/PageCard";
 import Button from "@/components/Buttons";
 import Link from "next/link";
-import {
-  authenticatedApiRequest,
-} from "@/lib/client/authenticated-api";
+import { authenticatedApiRequest } from "@/lib/client/authenticated-api";
 
 type Dog = {
   id: string;
@@ -44,8 +42,7 @@ type DeactivateDogResponse = {
 };
 
 export default function MyDogsPage() {
-  const [removingDogId, setRemovingDogId] =
-  useState<string | null>(null);
+  const [removingDogId, setRemovingDogId] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [dogs, setDogs] = useState<Dog[]>([]);
@@ -71,7 +68,7 @@ export default function MyDogsPage() {
     const { data, error } = await supabase
       .from("dogs")
       .select(
-        "id, name, breed, date_of_birth, gender, neutered, vaccinated, vaccination_expiry, microchip_number, medical_notes, medication_notes, feeding_notes, behaviour_notes, meet_and_greet_completed"
+        "id, name, breed, date_of_birth, gender, neutered, vaccinated, vaccination_expiry, microchip_number, medical_notes, medication_notes, feeding_notes, behaviour_notes, meet_and_greet_completed",
       )
       .eq("owner_id", user.id)
       .eq("active", true)
@@ -111,196 +108,182 @@ export default function MyDogsPage() {
   function basicInfoComplete(dog: Dog) {
     return Boolean(
       dog.name &&
-        dog.breed &&
-        dog.date_of_birth &&
-        dog.gender &&
-        dog.microchip_number
+      dog.breed &&
+      dog.date_of_birth &&
+      dog.gender &&
+      dog.microchip_number,
     );
   }
 
   function careInfoComplete(dog: Dog) {
     return Boolean(
       dog.medical_notes ||
-        dog.medication_notes ||
-        dog.feeding_notes ||
-        dog.behaviour_notes
+      dog.medication_notes ||
+      dog.feeding_notes ||
+      dog.behaviour_notes,
     );
   }
 
-if (loading) {
-  return <LoadingScreen message="Loading your details..." />;
-}
-
-async function removeDog(dogId: string) {
-  if (removingDogId) {
-    return;
+  if (loading) {
+    return <LoadingScreen message="Loading your details..." />;
   }
 
-  setMessage("");
+  async function removeDog(dogId: string) {
+    if (removingDogId) {
+      return;
+    }
 
-  const confirmed = window.confirm(
-    "Are you sure you want to remove this dog?\n\nThe dog will no longer appear in My Dogs, but historical information and bookings will be retained."
-  );
+    setMessage("");
 
-  if (!confirmed) {
-    return;
-  }
+    const confirmed = window.confirm(
+      "Are you sure you want to remove this dog?\n\nThe dog will no longer appear in My Dogs, but historical information and bookings will be retained.",
+    );
 
-  setRemovingDogId(dogId);
+    if (!confirmed) {
+      return;
+    }
 
-  const result =
-    await authenticatedApiRequest<DeactivateDogResponse>(
+    setRemovingDogId(dogId);
+
+    const result = await authenticatedApiRequest<DeactivateDogResponse>(
       `/api/dogs/${dogId}`,
       {
         method: "DELETE",
-      }
+      },
     );
 
-  if (result.unauthenticated) {
-    setRemovingDogId(null);
-    window.location.href = "/login";
-    return;
-  }
+    if (result.unauthenticated) {
+      setRemovingDogId(null);
+      window.location.href = "/login";
+      return;
+    }
 
-  if (!result.ok) {
+    if (!result.ok) {
+      setRemovingDogId(null);
+      setMessage(result.error || "The dog could not be removed.");
+      return;
+    }
+
+    if (!result.data || !result.data.dogDeactivated) {
+      setRemovingDogId(null);
+      setMessage(
+        result.data?.error || "The dog service did not remove the dog.",
+      );
+      return;
+    }
+
+    await loadDogs();
+
     setRemovingDogId(null);
+
     setMessage(
-      result.error ||
-        "The dog could not be removed."
+      result.data.message || "Your dog has been removed successfully.",
     );
-    return;
   }
-
-  if (
-    !result.data ||
-    !result.data.dogDeactivated
-  ) {
-    setRemovingDogId(null);
-    setMessage(
-      result.data?.error ||
-        "The dog service did not remove the dog."
-    );
-    return;
-  }
-
-  await loadDogs();
-
-  setRemovingDogId(null);
-
-  setMessage(
-    result.data.message ||
-      "Your dog has been removed successfully."
-  );
-}
 
   return (
     <CustomerPageLayout>
-        <PageCard
+      <PageCard
         className="mb-4 md:mb-8"
         title="My Dogs"
         subtitle="Manage your dogs and their information."
-        actions={
-            <Button href="/my-dogs/add">
-                Add Dog
-            </Button>
-        }
-        >
-            
-        {message && (
-            <MessageBox type="error">
-              {message}
-            </MessageBox>
-        )}
+        actions={<Button href="/my-dogs/add">Add Dog</Button>}
+      >
+        {message && <MessageBox type="error">{message}</MessageBox>}
 
-          {dogs.length === 0 ? (
-            <div className="text-center py-8 md:py-12">
-                <p className="text-sm md:text-lg text-[#8B6A4E]">
-                    You haven't added any dogs yet.
-                </p>
+        {dogs.length === 0 ? (
+          <div className="text-center py-8 md:py-12">
+            <p className="text-sm md:text-lg text-[#8B6A4E]">
+              You haven't added any dogs yet.
+            </p>
 
-                <Link href="/my-dogs/add" className="inline-flex w-fit items-center justify-center mt-4 md:mt-6 bg-[#8B6A4E] text-white px-4 py-2 text-sm md:text-base md:px-6 md:py-3 rounded-lg font-semibold hover:bg-[#6F5440] hover:scale-105 transition">
-                Add your first Dog
-                </Link>
-            </div>
-          ) : (
-            <div className="mt-5 md:mt-8 space-y-4 md:space-y-6">
-              {dogs.map((dog) => (
-                <div
-                  key={dog.id}
-                    className="rounded-xl border border-[#D9CBB8] bg-white p-4 shadow-lg md:p-6"                >
-                  <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-3 md:gap-4">
-                    <div>
-                      <h2 className="text-xl md:text-2xl font-semibold text-[#5C4033]">
-                        {dog.name}
-                      </h2>
+            <Link
+              href="/my-dogs/add"
+              className="inline-flex w-fit items-center justify-center mt-4 md:mt-6 bg-[#8B6A4E] text-white px-4 py-2 text-sm md:text-base md:px-6 md:py-3 rounded-lg font-semibold hover:bg-[#6F5440] hover:scale-105 transition"
+            >
+              Add your first Dog
+            </Link>
+          </div>
+        ) : (
+          <div className="mt-5 md:mt-8 space-y-4 md:space-y-6">
+            {dogs.map((dog) => (
+              <div
+                key={dog.id}
+                className="rounded-xl border border-[#D9CBB8] bg-white p-4 shadow-lg md:p-6"
+              >
+                <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-3 md:gap-4">
+                  <div>
+                    <h2 className="text-xl md:text-2xl font-semibold text-[#5C4033]">
+                      {dog.name}
+                    </h2>
 
-                      <p className="mt-1 text-sm md:text-base text-[#8B6A4E]">
-                        {dog.breed || "Breed not provided"} •{" "}
-                        {calculateAge(dog.date_of_birth)}
-                      </p>
+                    <p className="mt-1 text-sm md:text-base text-[#8B6A4E]">
+                      {dog.breed || "Breed not provided"} •{" "}
+                      {calculateAge(dog.date_of_birth)}
+                    </p>
 
-                      <p className="mt-1 text-sm md:text-base text-[#8B6A4E]">
-                        Vaccinated: {dog.vaccinated ? "Yes" : "No"}
-                      </p>
-                    </div>
-
-                    <div className="text-left md:text-right">
-                      {dog.meet_and_greet_completed ? (
-                        <p className="text-sm md:text-base text-green-700 font-medium">
-                          Meet & Greet Complete
-                        </p>
-                      ) : (
-                        <p className="text-sm md:text-base text-amber-700 font-medium">
-                          Meet & Greet Required
-                        </p>
-                      )}
-                    </div>
+                    <p className="mt-1 text-sm md:text-base text-[#8B6A4E]">
+                      Vaccinated: {dog.vaccinated ? "Yes" : "No"}
+                    </p>
                   </div>
 
-                  <div className="mt-3 md:mt-4 space-y-1.5 md:space-y-2">
-                    {basicInfoComplete(dog) ? (
+                  <div className="text-left md:text-right">
+                    {dog.meet_and_greet_completed ? (
                       <p className="text-sm md:text-base text-green-700 font-medium">
-                        Basic Information Complete
+                        Meet & Greet Complete
                       </p>
                     ) : (
                       <p className="text-sm md:text-base text-amber-700 font-medium">
-                        Basic Information Incomplete
+                        Meet & Greet Required
                       </p>
                     )}
-
-                    {careInfoComplete(dog) ? (
-                      <p className="text-sm md:text-base text-green-700 font-medium">
-                        Care & Behaviour Started
-                      </p>
-                    ) : (
-                      <p className="text-sm md:text-base text-amber-700 font-medium">
-                        Care & Behaviour Incomplete
-                      </p>
-                    )}
-                  </div>
-
-                  <div className="mt-4 md:mt-5 flex flex-wrap gap-3 md:gap-4">
-                    <Link href={`/my-dogs/edit/${dog.id}`}
-                    className="inline-flex w-fit items-center justify-center bg-[#8B6A4E] text-white px-4 py-2 text-sm md:text-base rounded-lg font-semibold hover:bg-[#6F5440] hover:scale-105 transition-all duration-300 text-center">
-                      Edit Dog
-                    </Link>
-
-                    <button
-                      type="button"
-                      onClick={() => removeDog(dog.id)}
-                      disabled={removingDogId !== null}
-                      className="inline-flex w-fit cursor-pointer items-center justify-center rounded-lg border border-red-400 px-4 py-2 text-sm font-semibold text-red-600 transition-all duration-300 hover:scale-105 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100 md:text-base"
-                    >
-                      {removingDogId === dog.id
-                        ? "Removing..."
-                        : "Remove Dog"}
-                    </button>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </PageCard>
+
+                <div className="mt-3 md:mt-4 space-y-1.5 md:space-y-2">
+                  {basicInfoComplete(dog) ? (
+                    <p className="text-sm md:text-base text-green-700 font-medium">
+                      Basic Information Complete
+                    </p>
+                  ) : (
+                    <p className="text-sm md:text-base text-amber-700 font-medium">
+                      Basic Information Incomplete
+                    </p>
+                  )}
+
+                  {careInfoComplete(dog) ? (
+                    <p className="text-sm md:text-base text-green-700 font-medium">
+                      Care & Behaviour Started
+                    </p>
+                  ) : (
+                    <p className="text-sm md:text-base text-amber-700 font-medium">
+                      Care & Behaviour Incomplete
+                    </p>
+                  )}
+                </div>
+
+                <div className="mt-4 md:mt-5 flex flex-wrap gap-3 md:gap-4">
+                  <Link
+                    href={`/my-dogs/edit/${dog.id}`}
+                    className="inline-flex w-fit items-center justify-center bg-[#8B6A4E] text-white px-4 py-2 text-sm md:text-base rounded-lg font-semibold hover:bg-[#6F5440] hover:scale-105 transition-all duration-300 text-center"
+                  >
+                    Edit Dog
+                  </Link>
+
+                  <button
+                    type="button"
+                    onClick={() => removeDog(dog.id)}
+                    disabled={removingDogId !== null}
+                    className="inline-flex w-fit cursor-pointer items-center justify-center rounded-lg border border-red-400 px-4 py-2 text-sm font-semibold text-red-600 transition-all duration-300 hover:scale-105 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100 md:text-base"
+                  >
+                    {removingDogId === dog.id ? "Removing..." : "Remove Dog"}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </PageCard>
     </CustomerPageLayout>
   );
 }

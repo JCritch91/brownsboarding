@@ -24,10 +24,7 @@ export type CustomerFormValues = {
 
 type CustomerFormProps = {
   form: CustomerFormValues;
-  onChange: (
-    field: keyof CustomerFormValues,
-    value: string
-  ) => void;
+  onChange: (field: keyof CustomerFormValues, value: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   saving: boolean;
   message?: string;
@@ -55,10 +52,7 @@ export default function CustomerForm({
   additionalActions,
 }: CustomerFormProps) {
   return (
-    <form
-      onSubmit={onSubmit}
-      className="space-y-6 md:space-y-10"
-    >
+    <form onSubmit={onSubmit} className="space-y-6 md:space-y-10">
       {/* Personal Details */}
       <section>
         <h2 className="mb-4 text-xl font-semibold text-[#5C4033] md:mb-6 md:text-2xl">
@@ -71,9 +65,7 @@ export default function CustomerForm({
             label="First Name"
             type="text"
             value={form.first_name}
-            onChange={(event) =>
-              onChange("first_name", event.target.value)
-            }
+            onChange={(event) => onChange("first_name", event.target.value)}
             required
           />
 
@@ -82,9 +74,7 @@ export default function CustomerForm({
             label="Last Name"
             type="text"
             value={form.last_name}
-            onChange={(event) =>
-              onChange("last_name", event.target.value)
-            }
+            onChange={(event) => onChange("last_name", event.target.value)}
             required
           />
 
@@ -93,16 +83,10 @@ export default function CustomerForm({
             label="Email Address"
             type="email"
             value={form.email}
-            onChange={(event) =>
-              onChange("email", event.target.value)
-            }
+            onChange={(event) => onChange("email", event.target.value)}
             disabled={emailDisabled}
             required
-            className={
-              emailDisabled
-                ? "cursor-not-allowed bg-[#F5EFE6]"
-                : ""
-            }
+            className={emailDisabled ? "cursor-not-allowed bg-[#F5EFE6]" : ""}
           />
 
           <FormInput
@@ -110,9 +94,7 @@ export default function CustomerForm({
             label="Phone Number"
             type="tel"
             value={form.phone}
-            onChange={(event) =>
-              onChange("phone", event.target.value)
-            }
+            onChange={(event) => onChange("phone", event.target.value)}
             placeholder="07123 456789"
           />
         </div>
@@ -130,9 +112,7 @@ export default function CustomerForm({
             label="Address Line 1"
             type="text"
             value={form.address_line_1}
-            onChange={(event) =>
-              onChange("address_line_1", event.target.value)
-            }
+            onChange={(event) => onChange("address_line_1", event.target.value)}
           />
 
           <FormInput
@@ -140,9 +120,7 @@ export default function CustomerForm({
             label="Address Line 2"
             type="text"
             value={form.address_line_2}
-            onChange={(event) =>
-              onChange("address_line_2", event.target.value)
-            }
+            onChange={(event) => onChange("address_line_2", event.target.value)}
           />
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:gap-4">
@@ -151,9 +129,7 @@ export default function CustomerForm({
               label="Town / City"
               type="text"
               value={form.town}
-              onChange={(event) =>
-                onChange("town", event.target.value)
-              }
+              onChange={(event) => onChange("town", event.target.value)}
             />
 
             <FormInput
@@ -161,9 +137,7 @@ export default function CustomerForm({
               label="Postcode"
               type="text"
               value={form.postcode}
-              onChange={(event) =>
-                onChange("postcode", event.target.value)
-              }
+              onChange={(event) => onChange("postcode", event.target.value)}
             />
           </div>
         </div>
@@ -182,10 +156,7 @@ export default function CustomerForm({
             type="text"
             value={form.emergency_contact_name}
             onChange={(event) =>
-              onChange(
-                "emergency_contact_name",
-                event.target.value
-              )
+              onChange("emergency_contact_name", event.target.value)
             }
           />
 
@@ -195,10 +166,7 @@ export default function CustomerForm({
             type="tel"
             value={form.emergency_contact_phone}
             onChange={(event) =>
-              onChange(
-                "emergency_contact_phone",
-                event.target.value
-              )
+              onChange("emergency_contact_phone", event.target.value)
             }
             placeholder="07123 456789"
           />
@@ -219,9 +187,7 @@ export default function CustomerForm({
                 label="Practice Name"
                 type="text"
                 value={form.vet_name}
-                onChange={(event) =>
-                  onChange("vet_name", event.target.value)
-                }
+                onChange={(event) => onChange("vet_name", event.target.value)}
               />
 
               <FormInput
@@ -229,9 +195,7 @@ export default function CustomerForm({
                 label="Practice Phone"
                 type="tel"
                 value={form.vet_phone}
-                onChange={(event) =>
-                  onChange("vet_phone", event.target.value)
-                }
+                onChange={(event) => onChange("vet_phone", event.target.value)}
                 placeholder="023 8000 0000"
               />
             </div>
@@ -241,18 +205,14 @@ export default function CustomerForm({
               label="Practice Address"
               type="text"
               value={form.vet_address}
-              onChange={(event) =>
-                onChange("vet_address", event.target.value)
-              }
+              onChange={(event) => onChange("vet_address", event.target.value)}
             />
           </div>
         </section>
       )}
 
       {message && (
-        <MessageBox type={isError ? "error" : "success"}>
-          {message}
-        </MessageBox>
+        <MessageBox type={isError ? "error" : "success"}>{message}</MessageBox>
       )}
 
       <div className="flex flex-wrap justify-center gap-3 md:gap-4">

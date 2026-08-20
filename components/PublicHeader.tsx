@@ -9,10 +9,7 @@ import MobileMenuButton from "@/components/MobileMenuButton";
 import MobileMenuDropdown from "@/components/MobileMenuDropdown";
 import useClickOutside from "@/hooks/useClickOutside";
 import { supabase } from "@/lib/supabase";
-import {
-  getOptionalCurrentUser,
-  logout,
-} from "@/lib/appActions";
+import { getOptionalCurrentUser, logout } from "@/lib/appActions";
 
 export default function PublicHeader() {
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
@@ -45,10 +42,7 @@ export default function PublicHeader() {
   const mobileMenuLinks =
     loggedIn === true
       ? navLinks
-      : [
-          ...publicNavLinks,
-          { href: "/signup", label: "Signup" },
-        ];
+      : [...publicNavLinks, { href: "/signup", label: "Signup" }];
 
   const loadUserProfile = useCallback(async () => {
     const user = await getOptionalCurrentUser();
@@ -75,7 +69,8 @@ export default function PublicHeader() {
     const lastName = profile?.last_name || "";
     const email = profile?.email || user.email || "";
 
-    const initials = `${firstName?.[0] || ""}${lastName?.[0] || ""}`.toUpperCase();
+    const initials =
+      `${firstName?.[0] || ""}${lastName?.[0] || ""}`.toUpperCase();
     const displayName = `${firstName} ${lastName}`.trim();
 
     setUserInitials(initials || email?.[0]?.toUpperCase() || "?");
@@ -109,71 +104,72 @@ export default function PublicHeader() {
           {/* Logo left */}
           <div className="flex justify-start">
             <NavLink href="/">
-          <img
-              src="/images/logo.jpg"
-              alt="Browns Boarding Logo"
-              className="h-20 lg:h-24 w-auto rounded-xl" 
-          />
+              <img
+                src="/images/logo.jpg"
+                alt="Browns Boarding Logo"
+                className="h-20 lg:h-24 w-auto rounded-xl"
+              />
             </NavLink>
           </div>
 
-  {/* Links centre */}
-  <DesktopNavLinks links={navLinks} />
+          {/* Links centre */}
+          <DesktopNavLinks links={navLinks} />
 
-  {/* Account / Auth right */}
-  <div className="flex justify-end items-center relative">
-    {loggedIn === true ? (
-      <>
-        <AccountButton
-          userInitials={userInitials}
-          onClick={() => {
-            setMobileMenuOpen(false);
-            setAccountMenuOpen((current) => !current);
-          }}
-        />
+          {/* Account / Auth right */}
+          <div className="flex justify-end items-center relative">
+            {loggedIn === true ? (
+              <>
+                <AccountButton
+                  userInitials={userInitials}
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    setAccountMenuOpen((current) => !current);
+                  }}
+                />
 
-        {accountMenuOpen && (
-          <AccountDropdown
-            variant="desktop"
-            userInitials={userInitials}
-            userDisplayName={userDisplayName}
-            userEmail={userEmail}
-            onClose={() => {
-              setAccountMenuOpen(false);
-              setMobileMenuOpen(false);
-            }}
-            onLogout={() => {
-              setAccountMenuOpen(false);
-              setMobileMenuOpen(false);
-              logout();
-            }}
-          />
-        )}
-      </>
-    ) : (
-      <div className="flex items-center gap-3 text-base lg:text-lg">
-        <NavLink href="/login"
-        className="!h-11 !w-11 !p-0 !rounded-full border border-[#8B6A4E] text-[#8B6A4E] flex items-center justify-center hover:text-[#5C4033] hover:bg-[#F5EFE6] transition-all duration-300 cursor-pointer"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="h-5 w-5"
-            aria-hidden="true"
-          >
-          <path d="M20 21a8 8 0 0 0-16 0" />
-          <circle cx="12" cy="7" r="4" />
-          </svg>
-        </NavLink>
-      </div>
-    )}
-  </div>
-</div>
+                {accountMenuOpen && (
+                  <AccountDropdown
+                    variant="desktop"
+                    userInitials={userInitials}
+                    userDisplayName={userDisplayName}
+                    userEmail={userEmail}
+                    onClose={() => {
+                      setAccountMenuOpen(false);
+                      setMobileMenuOpen(false);
+                    }}
+                    onLogout={() => {
+                      setAccountMenuOpen(false);
+                      setMobileMenuOpen(false);
+                      logout();
+                    }}
+                  />
+                )}
+              </>
+            ) : (
+              <div className="flex items-center gap-3 text-base lg:text-lg">
+                <NavLink
+                  href="/login"
+                  className="!h-11 !w-11 !p-0 !rounded-full border border-[#8B6A4E] text-[#8B6A4E] flex items-center justify-center hover:text-[#5C4033] hover:bg-[#F5EFE6] transition-all duration-300 cursor-pointer"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="h-5 w-5"
+                    aria-hidden="true"
+                  >
+                    <path d="M20 21a8 8 0 0 0-16 0" />
+                    <circle cx="12" cy="7" r="4" />
+                  </svg>
+                </NavLink>
+              </div>
+            )}
+          </div>
+        </div>
         {/* Mobile Header */}
         <div className="grid grid-cols-[48px_1fr_48px] items-center md:hidden">
           {/* Hamburger left */}
@@ -189,15 +185,14 @@ export default function PublicHeader() {
 
           {/* Logo centre */}
           <div className="flex justify-center">
-           <NavLink href="/">
-            <img
+            <NavLink href="/">
+              <img
                 src="/images/logo.jpg"
                 alt="Browns Boarding Logo"
                 className="h-14 w-auto rounded-xl"
-            />
-           </NavLink>
+              />
+            </NavLink>
           </div>
-          
 
           {/* Account / Login right */}
           <div className="flex justify-end relative">
@@ -230,8 +225,9 @@ export default function PublicHeader() {
                 )}
               </>
             ) : (
-              <NavLink href="/login"
-              className="!h-11 !w-11 !p-0 !rounded-full border border-[#8B6A4E] text-[#8B6A4E] flex items-center justify-center hover:text-[#5C4033] hover:bg-[#F5EFE6] transition-all duration-300 cursor-pointer"
+              <NavLink
+                href="/login"
+                className="!h-11 !w-11 !p-0 !rounded-full border border-[#8B6A4E] text-[#8B6A4E] flex items-center justify-center hover:text-[#5C4033] hover:bg-[#F5EFE6] transition-all duration-300 cursor-pointer"
               >
                 <svg
                   xmlns="http://www.w3.org/2000/svg"

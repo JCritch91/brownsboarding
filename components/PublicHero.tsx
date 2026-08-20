@@ -3,10 +3,7 @@ type PublicHeroProps = {
   subtitle: string;
 };
 
-export default function PublicHero({
-  title,
-  subtitle,
-}: PublicHeroProps) {
+export default function PublicHero({ title, subtitle }: PublicHeroProps) {
   return (
     <section className="bg-[#8B6A4E] text-white py-12 md:py-24">
       <div className="max-w-6xl mx-auto px-6 text-center">

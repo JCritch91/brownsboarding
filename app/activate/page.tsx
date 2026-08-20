@@ -3,7 +3,7 @@
 import { useEffect, Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import AuthLayout from "@/components/AuthLayout";
-import Button from "@/components/Buttons"
+import Button from "@/components/Buttons";
 import LoadingScreen from "@/components/LoadingScreen";
 
 function ActivatePageContent() {
@@ -19,11 +19,9 @@ function ActivatePageContent() {
   }, []);
 
   async function resendActivationEmail() {
-  const token = searchParams.get("token");
+    const token = searchParams.get("token");
 
-  const response = await fetch(
-    "/api/resend-activation-email-from-token",
-    {
+    const response = await fetch("/api/resend-activation-email-from-token", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -31,24 +29,21 @@ function ActivatePageContent() {
       body: JSON.stringify({
         token,
       }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      setMessage(result.error || "Unable to resend activation email.");
+      return;
     }
-  );
 
-  const result = await response.json();
-
-  if (!response.ok) {
     setMessage(
-      result.error || "Unable to resend activation email."
+      "A new activation email has been sent. Please check your inbox.",
     );
-    return;
+
+    setExpiredToken(false);
   }
-
-  setMessage(
-    "A new activation email has been sent. Please check your inbox."
-  );
-
-  setExpiredToken(false);
-}
 
   async function activateAccount() {
     const token = searchParams.get("token");
@@ -74,73 +69,71 @@ function ActivatePageContent() {
 
     setLoading(false);
 
-if (!response.ok) {
-  if (
-    result.error?.toLowerCase().includes("expired")
-  ) {
-    setExpiredToken(true);
-  }
+    if (!response.ok) {
+      if (result.error?.toLowerCase().includes("expired")) {
+        setExpiredToken(true);
+      }
 
-  setMessage(result.error || "Unable to activate account.");
-  setSuccess(false);
-  return;
-}
+      setMessage(result.error || "Unable to activate account.");
+      setSuccess(false);
+      return;
+    }
 
     setMessage(result.message || "Account activated successfully.");
     setSuccess(true);
   }
 
   return (
-    <AuthLayout
-        title="Account Activation"
-        maxWidth="max-w-md"
-    >
-    {loading ? (
+    <AuthLayout title="Account Activation" maxWidth="max-w-md">
+      {loading ? (
         <p className="text-sm md:text-base text-center text-[#8B6A4E] mb-4">
-            Activating your account...
+          Activating your account...
         </p>
-        ) : (
+      ) : (
         <>
-            <div
+          <div
             className={`p-3 md:p-4 rounded-lg mb-4 border ${
-                success
+              success
                 ? "bg-green-50 border-green-300"
                 : "bg-red-50 border-red-300"
             }`}
-            >
+          >
             <p
-                className={`font-medium ${
+              className={`font-medium ${
                 success ? "text-green-800" : "text-red-800"
-                }`}
+              }`}
             >
-                {message}
+              {message}
             </p>
-            </div>
+          </div>
 
-            {expiredToken && (
+          {expiredToken && (
             <div className="flex justify-center mb-3">
               <Button
-                  type="button"
-                  variant ="light"
-                  onClick={resendActivationEmail}
+                type="button"
+                variant="light"
+                onClick={resendActivationEmail}
               >
-                  Resend Activation Email
+                Resend Activation Email
               </Button>
             </div>
-            )}
+          )}
 
-            {success ? (
-            
+          {success ? (
             <div className="flex justify-center">
-              <Button variant="light" href="/login">Go to Login</Button>
+              <Button variant="light" href="/login">
+                Go to Login
+              </Button>
             </div>
-            ) : (
+          ) : (
             <div className="flex justify-center">
-              <Button variant="light" href="/">Back to Home</Button>
+              <Button variant="light" href="/">
+                Back to Home
+              </Button>
             </div>
-            )}
+          )}
         </>
-        )}
+      )}
     </AuthLayout>
   );
 }
@@ -148,9 +141,7 @@ if (!response.ok) {
 export default function ActivatePage() {
   return (
     <Suspense
-      fallback={
-        <LoadingScreen message="Loading account activation..." />
-      }
+      fallback={<LoadingScreen message="Loading account activation..." />}
     >
       <ActivatePageContent />
     </Suspense>

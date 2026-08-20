@@ -11,9 +11,7 @@ export default function MeetAndGreetPage() {
       <PageCard
         title="Meet & Greet"
         subtitle="Before your dog's first stay, a meet and greet must be completed."
-        actions={
-          <Button href="/dashboard">Back to Dashboard</Button>  
-        }
+        actions={<Button href="/dashboard">Back to Dashboard</Button>}
       >
         <div className="space-y-5 md:space-y-8">
           <div>
@@ -49,7 +47,10 @@ export default function MeetAndGreetPage() {
               Phone: 07xxx xxxxxx
             </p>
 
-            <Link href="mailto:brownsboarding@outlook.com" className="block mt-2 text-sm md:text-base text-[#8B6A4E] hover:text-[#5C4033] break-all">
+            <Link
+              href="mailto:brownsboarding@outlook.com"
+              className="block mt-2 text-sm md:text-base text-[#8B6A4E] hover:text-[#5C4033] break-all"
+            >
               Email: brownsboarding@outlook.com
             </Link>
           </div>

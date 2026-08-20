@@ -15,7 +15,7 @@ type AuthenticatedApiOptions = {
 
 export async function authenticatedApiRequest<T>(
   url: string,
-  options: AuthenticatedApiOptions = {}
+  options: AuthenticatedApiOptions = {},
 ): Promise<AuthenticatedApiResult<T>> {
   const {
     data: { session },
@@ -38,14 +38,11 @@ export async function authenticatedApiRequest<T>(
     const response = await fetch(url, {
       method: options.method || "POST",
       headers: {
-        Authorization:
-          `Bearer ${session.access_token}`,
+        Authorization: `Bearer ${session.access_token}`,
         "Content-Type": "application/json",
       },
       body:
-        options.body === undefined
-          ? undefined
-          : JSON.stringify(options.body),
+        options.body === undefined ? undefined : JSON.stringify(options.body),
     });
 
     const responseText = await response.text();
@@ -60,33 +57,27 @@ export async function authenticatedApiRequest<T>(
           ok: false,
           status: response.status,
           data: null,
-          error:
-            responseText ||
-            "The server returned an invalid response.",
+          error: responseText || "The server returned an invalid response.",
           unauthenticated: false,
         };
       }
     }
 
-    const responseData = data as
-      | {
-          error?: string;
-          message?: string;
-        }
-      | null;
+    const responseData = data as {
+      error?: string;
+      message?: string;
+    } | null;
 
     return {
       ok: response.ok,
       status: response.status,
       data,
-      error:
-        response.ok
-          ? null
-          : responseData?.error ||
-            responseData?.message ||
-            "The request could not be completed.",
-      unauthenticated:
-        response.status === 401,
+      error: response.ok
+        ? null
+        : responseData?.error ||
+          responseData?.message ||
+          "The request could not be completed.",
+      unauthenticated: response.status === 401,
     };
   } catch (error) {
     return {

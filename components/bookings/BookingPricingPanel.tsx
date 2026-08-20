@@ -1,8 +1,6 @@
 import { formatMoney } from "@/lib/helpers";
 
-import type {
-  BookingWithCustomer,
-} from "@/types/booking";
+import type { BookingWithCustomer } from "@/types/booking";
 
 type BookingPricingPanelProps = {
   booking: BookingWithCustomer;
@@ -27,15 +25,13 @@ export default function BookingPricingPanel({
 
       {booking.deposit_amount !== null && (
         <p className="text-sm text-[#8B6A4E] md:text-base">
-          Deposit:{" "}
-          {formatMoney(booking.deposit_amount)}
+          Deposit: {formatMoney(booking.deposit_amount)}
         </p>
       )}
 
       {booking.balance_amount !== null && (
         <p className="text-sm text-[#8B6A4E] md:text-base">
-          Balance:{" "}
-          {formatMoney(booking.balance_amount)}
+          Balance: {formatMoney(booking.balance_amount)}
         </p>
       )}
 
@@ -44,11 +40,8 @@ export default function BookingPricingPanel({
         booking.nightly_rate !== null && (
           <p className="mt-2 text-xs text-[#8B6A4E] md:text-sm">
             Based on {booking.number_of_nights} night
-            {booking.number_of_nights === 1
-              ? ""
-              : "s"}{" "}
-            at {formatMoney(booking.nightly_rate)} per
-            night.
+            {booking.number_of_nights === 1 ? "" : "s"} at{" "}
+            {formatMoney(booking.nightly_rate)} per night.
           </p>
         )}
     </div>

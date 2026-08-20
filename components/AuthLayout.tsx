@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { ReactNode } from "react";
-import AuthHeader from "@/components/AuthHeader"
+import AuthHeader from "@/components/AuthHeader";
 
 type AuthLayoutProps = {
   title: string;
   subtitle?: string;
   children: ReactNode;
-  maxWidth?: string
+  maxWidth?: string;
 };
 
 export default function AuthLayout({
@@ -20,7 +20,6 @@ export default function AuthLayout({
   return (
     <main className="min-h-screen bg-[#8B6A4E] flex items-start md:items-center justify-center px-4 py-4 md:px-6 md:py-12">
       <div className={`w-full ${maxWidth}`}>
-
         <AuthHeader />
 
         <div className="bg-[#FFFDF9] rounded-2xl shadow-xl border border-[#D9CBB8] p-5 md:p-8">

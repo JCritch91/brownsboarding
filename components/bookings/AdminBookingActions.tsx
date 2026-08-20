@@ -1,28 +1,18 @@
 import Button from "@/components/Buttons";
 import BookingStatusBadge from "@/components/bookings/BookingStatusBadge";
 
-import type {
-  BookingWithCustomer,
-} from "@/types/booking";
+import type { BookingWithCustomer } from "@/types/booking";
 
 type AdminBookingActionsProps = {
   booking: BookingWithCustomer;
 
-  onConfirm: (
-    booking: BookingWithCustomer
-  ) => void | Promise<void>;
+  onConfirm: (booking: BookingWithCustomer) => void | Promise<void>;
 
-  onCancel: (
-    booking: BookingWithCustomer
-  ) => void | Promise<void>;
+  onCancel: (booking: BookingWithCustomer) => void | Promise<void>;
 
-  onMarkDepositPaid: (
-    booking: BookingWithCustomer
-  ) => void | Promise<void>;
+  onMarkDepositPaid: (booking: BookingWithCustomer) => void | Promise<void>;
 
-  onMarkBalancePaid: (
-    booking: BookingWithCustomer
-  ) => void | Promise<void>;
+  onMarkBalancePaid: (booking: BookingWithCustomer) => void | Promise<void>;
 };
 
 export default function AdminBookingActions({
@@ -60,9 +50,7 @@ export default function AdminBookingActions({
         <div className="flex flex-wrap gap-2 md:flex-col md:items-end">
           <button
             type="button"
-            onClick={() =>
-              onMarkDepositPaid(booking)
-            }
+            onClick={() => onMarkDepositPaid(booking)}
             className="inline-flex w-fit cursor-pointer items-center justify-center rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white transition-all duration-300 hover:scale-105 hover:bg-green-700 md:px-4 md:py-2 md:text-base"
           >
             Mark Deposit Paid
@@ -81,17 +69,14 @@ export default function AdminBookingActions({
       {booking.status === "Balance Pending" && (
         <div className="flex flex-wrap gap-2 md:flex-col md:items-end">
           <p className="w-full text-xs font-medium text-amber-700 md:max-w-xs md:text-right md:text-sm">
-            {booking.deposit_amount !== null &&
-            booking.deposit_amount > 0
+            {booking.deposit_amount !== null && booking.deposit_amount > 0
               ? "Deposit received. Awaiting remaining balance."
               : "Full balance due. No deposit required."}
           </p>
 
           <button
             type="button"
-            onClick={() =>
-              onMarkBalancePaid(booking)
-            }
+            onClick={() => onMarkBalancePaid(booking)}
             className="inline-flex w-fit cursor-pointer items-center justify-center rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white transition-all duration-300 hover:scale-105 hover:bg-green-700 md:px-4 md:py-2 md:text-base"
           >
             Mark Balance Paid

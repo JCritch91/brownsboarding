@@ -50,10 +50,7 @@ export function formatAddressLine(value: string) {
 }
 
 export function formatPostcode(value: string) {
-  const cleaned = value
-    .trim()
-    .toUpperCase()
-    .replace(/\s+/g, "");
+  const cleaned = value.trim().toUpperCase().replace(/\s+/g, "");
 
   if (cleaned.length <= 3) {
     return cleaned;
@@ -74,7 +71,7 @@ export function formatUkPhone(value: string) {
 
     return `${withoutPrefix.slice(0, 5)} ${withoutPrefix.slice(
       5,
-      8
+      8,
     )} ${withoutPrefix.slice(8)}`;
   }
 
@@ -111,10 +108,7 @@ export function calculateNumberOfNights(start: string, end: string) {
 
   const differenceMs = endDateObject.getTime() - startDateObject.getTime();
 
-  return Math.max(
-    1,
-    Math.ceil(differenceMs / (1000 * 60 * 60 * 24))
-  );
+  return Math.max(1, Math.ceil(differenceMs / (1000 * 60 * 60 * 24)));
 }
 
 export function isWithinTwoWeeks(startDate: string) {
@@ -177,10 +171,7 @@ export function validateDogDetails(form: DogValidationForm) {
   return "";
 }
 
-export function validateBookingDates(
-  startDate: string,
-  endDate: string
-) {
+export function validateBookingDates(startDate: string, endDate: string) {
   if (!startDate) {
     return "Please select an arrival date.";
   }

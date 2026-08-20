@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase";
 import AuthLayout from "@/components/AuthLayout";
 import Button from "@/components/Buttons";
 import MessageBox from "@/components/MessageBox";
-import {FormInput} from "@/components/FormInput";
+import { FormInput } from "@/components/FormInput";
 
 export default function ResetPasswordPage() {
   const router = useRouter();
@@ -53,50 +53,39 @@ export default function ResetPasswordPage() {
   };
 
   return (
-    <AuthLayout 
-        title="Reset Password"
-        subtitle="Enter your new password below"
-    >
-      {message && (
-        <MessageBox type="success">
-          {message}
-        </MessageBox>
-      )}
+    <AuthLayout title="Reset Password" subtitle="Enter your new password below">
+      {message && <MessageBox type="success">{message}</MessageBox>}
 
-        {errorMessage && (
-          <MessageBox type="error">
-            {errorMessage}
-          </MessageBox>
-        )}
+      {errorMessage && <MessageBox type="error">{errorMessage}</MessageBox>}
 
-          <form onSubmit={handleResetPassword} className="space-y-4 max-w-md mx-auto">
-            <FormInput
-              id="password"
-              label="New Password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
+      <form
+        onSubmit={handleResetPassword}
+        className="space-y-4 max-w-md mx-auto"
+      >
+        <FormInput
+          id="password"
+          label="New Password"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+        />
 
-            <FormInput
-              id="confirmPassword"
-              label="Confirm New Password"
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-            />
+        <FormInput
+          id="confirmPassword"
+          label="Confirm New Password"
+          type="password"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          required
+        />
 
-            <div className="flex justify-center">
-              <Button
-                type="submit"
-                disabled={loading}
-              >
-                {loading ? "Resetting Password..." : "Reset Password"}
-              </Button>
-            </div>
-          </form>    
+        <div className="flex justify-center">
+          <Button type="submit" disabled={loading}>
+            {loading ? "Resetting Password..." : "Reset Password"}
+          </Button>
+        </div>
+      </form>
     </AuthLayout>
   );
 }

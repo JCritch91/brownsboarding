@@ -1,6 +1,4 @@
-export type PaymentType =
-  | "Deposit"
-  | "Balance";
+export type PaymentType = "Deposit" | "Balance";
 
 export type Payment = {
   id: string;
