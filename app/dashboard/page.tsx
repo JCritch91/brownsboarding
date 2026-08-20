@@ -271,8 +271,9 @@ export default function DashboardPage() {
               className={`border p-3 md:p-4 rounded-lg flex flex-col md:flex-row md:items-center md:justify-between gap-3 md:gap-4 ${actionSummaryStyle}`}
             >
               <p className="text-sm md:text-base font-medium">
-                {actionItems.length} action
-                {actionItems.length === 1 ? "" : "s"} require your attention.
+                {actionItems.length === 1
+                  ? "You have 1 action to review."
+                  : `You have ${actionItems.length} actions to review.`}
               </p>
 
               <Button
