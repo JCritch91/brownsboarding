@@ -10,6 +10,7 @@ import PageCard from "@/components/PageCard";
 import Button from "@/components/Buttons";
 import Link from "next/link";
 import { authenticatedApiRequest } from "@/lib/client/authenticated-api";
+import ConfirmationModal from "@/components/modals/ConfirmationModal";
 
 type Dog = {
   id: string;
@@ -48,6 +49,9 @@ export default function MyDogsPage() {
   const [dogs, setDogs] = useState<Dog[]>([]);
   const [message, setMessage] = useState("");
 
+  const [isError, setIsError] = useState(false);
+  const [dogToRemove, setDogToRemove] = useState<Dog | null>(null);
+
   useEffect(() => {
     loadDogs();
   }, []);
@@ -55,6 +59,7 @@ export default function MyDogsPage() {
   async function loadDogs() {
     setLoading(true);
     setMessage("");
+    setIsError(false);
 
     let user;
 
@@ -77,6 +82,7 @@ export default function MyDogsPage() {
     setLoading(false);
 
     if (error) {
+      setIsError(true);
       setMessage(error.message);
       return;
     }
@@ -128,25 +134,29 @@ export default function MyDogsPage() {
     return <LoadingScreen message="Loading your details..." />;
   }
 
-  async function removeDog(dogId: string) {
+  function requestDogRemoval(dog: Dog) {
     if (removingDogId) {
       return;
     }
 
     setMessage("");
+    setIsError(false);
+    setDogToRemove(dog);
+  }
 
-    const confirmed = window.confirm(
-      "Are you sure you want to remove this dog?\n\nThe dog will no longer appear in My Dogs, but historical information and bookings will be retained.",
-    );
-
-    if (!confirmed) {
+  async function confirmDogRemoval() {
+    if (!dogToRemove || removingDogId) {
       return;
     }
 
-    setRemovingDogId(dogId);
+    const dog = dogToRemove;
+
+    setRemovingDogId(dog.id);
+    setMessage("");
+    setIsError(false);
 
     const result = await authenticatedApiRequest<DeactivateDogResponse>(
-      `/api/dogs/${dogId}`,
+      `/api/dogs/${dog.id}`,
       {
         method: "DELETE",
       },
@@ -154,18 +164,23 @@ export default function MyDogsPage() {
 
     if (result.unauthenticated) {
       setRemovingDogId(null);
+      setDogToRemove(null);
       window.location.href = "/login";
       return;
     }
 
     if (!result.ok) {
       setRemovingDogId(null);
+      setDogToRemove(null);
+      setIsError(true);
       setMessage(result.error || "The dog could not be removed.");
       return;
     }
 
     if (!result.data || !result.data.dogDeactivated) {
       setRemovingDogId(null);
+      setDogToRemove(null);
+      setIsError(true);
       setMessage(
         result.data?.error || "The dog service did not remove the dog.",
       );
@@ -175,7 +190,8 @@ export default function MyDogsPage() {
     await loadDogs();
 
     setRemovingDogId(null);
-
+    setDogToRemove(null);
+    setIsError(false);
     setMessage(
       result.data.message || "Your dog has been removed successfully.",
     );
@@ -189,7 +205,11 @@ export default function MyDogsPage() {
         subtitle="Manage your dogs and their information."
         actions={<Button href="/my-dogs/add">Add Dog</Button>}
       >
-        {message && <MessageBox type="error">{message}</MessageBox>}
+        {message && (
+          <MessageBox type={isError ? "error" : "success"}>
+            {message}
+          </MessageBox>
+        )}
 
         {dogs.length === 0 ? (
           <div className="text-center py-8 md:py-12">
@@ -272,11 +292,11 @@ export default function MyDogsPage() {
 
                   <button
                     type="button"
-                    onClick={() => removeDog(dog.id)}
+                    onClick={() => requestDogRemoval(dog)}
                     disabled={removingDogId !== null}
                     className="inline-flex w-fit cursor-pointer items-center justify-center rounded-lg border border-red-400 px-4 py-2 text-sm font-semibold text-red-600 transition-all duration-300 hover:scale-105 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100 md:text-base"
                   >
-                    {removingDogId === dog.id ? "Removing..." : "Remove Dog"}
+                    Remove Dog
                   </button>
                 </div>
               </div>
@@ -284,6 +304,60 @@ export default function MyDogsPage() {
           </div>
         )}
       </PageCard>
+
+      <ConfirmationModal
+        isOpen={dogToRemove !== null}
+        title="Remove Dog"
+        confirmText="Remove Dog"
+        cancelText="Keep Dog"
+        isConfirming={removingDogId !== null}
+        variant="danger"
+        onConfirm={confirmDogRemoval}
+        onCancel={() => {
+          if (!removingDogId) {
+            setDogToRemove(null);
+          }
+        }}
+      >
+        {dogToRemove && (
+          <div className="space-y-4">
+            <p>
+              Please confirm that you want to remove this dog from your active
+              dog profiles.
+            </p>
+
+            <dl className="grid gap-3 rounded-xl border border-[#D9CBB8] bg-[#FFFDF9] p-4 sm:grid-cols-2">
+              <div>
+                <dt className="text-xs font-semibold text-[#8B6A4E]">Dog</dt>
+                <dd className="mt-1 text-lg font-semibold text-[#5C4033]">
+                  {dogToRemove.name}
+                </dd>
+              </div>
+
+              <div>
+                <dt className="text-xs font-semibold text-[#8B6A4E]">Breed</dt>
+                <dd className="mt-1 text-[#5C4033]">
+                  {dogToRemove.breed || "Not provided"}
+                </dd>
+              </div>
+            </dl>
+
+            <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-red-800">
+              <p className="font-semibold">
+                This dog will no longer appear under My Dogs.
+              </p>
+
+              <ul className="mt-2 list-disc space-y-1 pl-5">
+                <li>The dog will become inactive.</li>
+                <li>The dog cannot be selected for new bookings.</li>
+                <li>
+                  Historical dog and booking information will be retained.
+                </li>
+              </ul>
+            </div>
+          </div>
+        )}
+      </ConfirmationModal>
     </CustomerPageLayout>
   );
 }
