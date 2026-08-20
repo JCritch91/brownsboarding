@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-import {
-  formatMoney,
-  formatName,
-} from "@/lib/helpers";
+import { formatMoney, formatName } from "@/lib/helpers";
+
+import { updateBookingCalendarEvent } from "@/lib/services/booking-calendar-service";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
 type CompletedBooking = {
@@ -45,78 +44,47 @@ type CalendarFailure = {
   error: string;
 };
 
-async function getResponseError(
-  response: Response,
-  fallbackMessage: string
-) {
-  const responseText = await response.text();
-
-  if (!responseText) {
-    return fallbackMessage;
-  }
-
-  try {
-    const responseData = JSON.parse(responseText);
-
-    return responseData.error || fallbackMessage;
-  } catch {
-    return responseText;
-  }
-}
-
 export async function POST(request: Request) {
   try {
-    const authorizationHeader =
-      request.headers.get("authorization");
+    const authorizationHeader = request.headers.get("authorization");
 
-    const accessToken =
-      authorizationHeader?.replace(
-        "Bearer ",
-        ""
-      );
+    const accessToken = authorizationHeader?.replace("Bearer ", "");
 
     if (!accessToken) {
       return NextResponse.json(
         {
-          error:
-            "You must be signed in as an administrator.",
+          error: "You must be signed in as an administrator.",
         },
         {
           status: 401,
-        }
+        },
       );
     }
 
     const {
       data: { user },
       error: userError,
-    } = await supabaseAdmin.auth.getUser(
-      accessToken
-    );
+    } = await supabaseAdmin.auth.getUser(accessToken);
 
     if (userError || !user) {
       return NextResponse.json(
         {
-          error:
-            "Unable to verify the signed-in user.",
+          error: "Unable to verify the signed-in user.",
         },
         {
           status: 401,
-        }
+        },
       );
     }
 
-    const {
-      data: adminProfile,
-      error: adminProfileError,
-    } = await supabaseAdmin
+    const { data: adminProfile, error: adminProfileError } = await supabaseAdmin
       .from("profiles")
       .select(
         `
         id,
         is_admin,
         active
-        `
+        `,
       )
       .eq("id", user.id)
       .maybeSingle();
@@ -128,23 +96,18 @@ export async function POST(request: Request) {
         },
         {
           status: 500,
-        }
+        },
       );
     }
 
-    if (
-      !adminProfile ||
-      !adminProfile.is_admin ||
-      !adminProfile.active
-    ) {
+    if (!adminProfile || !adminProfile.is_admin || !adminProfile.active) {
       return NextResponse.json(
         {
-          error:
-            "You do not have permission to complete bookings.",
+          error: "You do not have permission to complete bookings.",
         },
         {
           status: 403,
-        }
+        },
       );
     }
 
@@ -152,18 +115,11 @@ export async function POST(request: Request) {
      * Complete every eligible booking in one database
      * operation and return the bookings that changed.
      */
-    const {
-      data: completionRows,
-      error: completionError,
-    } = await supabaseAdmin.rpc(
-      "complete_eligible_bookings"
-    );
+    const { data: completionRows, error: completionError } =
+      await supabaseAdmin.rpc("complete_eligible_bookings");
 
     if (completionError) {
-      console.error(
-        "Eligible booking completion failed:",
-        completionError
-      );
+      console.error("Eligible booking completion failed:", completionError);
 
       return NextResponse.json(
         {
@@ -173,12 +129,11 @@ export async function POST(request: Request) {
         },
         {
           status: 500,
-        }
+        },
       );
     }
 
-    const completedBookings =
-      (completionRows || []) as CompletedBooking[];
+    const completedBookings = (completionRows || []) as CompletedBooking[];
 
     /*
      * No eligible bookings is a successful no-op.
@@ -191,36 +146,21 @@ export async function POST(request: Request) {
         calendarUpdated: 0,
         calendarFailures: [],
         followUpRequired: false,
-        message:
-          "There were no eligible bookings to complete.",
+        message: "There were no eligible bookings to complete.",
       });
     }
 
     const ownerIds = Array.from(
-      new Set(
-        completedBookings.map(
-          (booking) => booking.owner_id
-        )
-      )
+      new Set(completedBookings.map((booking) => booking.owner_id)),
     );
 
     const dogIds = Array.from(
-      new Set(
-        completedBookings.map(
-          (booking) => booking.dog_id
-        )
-      )
+      new Set(completedBookings.map((booking) => booking.dog_id)),
     );
 
     const [
-      {
-        data: customerData,
-        error: customerLoadError,
-      },
-      {
-        data: dogData,
-        error: dogLoadError,
-      },
+      { data: customerData, error: customerLoadError },
+      { data: dogData, error: dogLoadError },
     ] = await Promise.all([
       supabaseAdmin
         .from("profiles")
@@ -230,7 +170,7 @@ export async function POST(request: Request) {
           first_name,
           last_name,
           email
-          `
+          `,
         )
         .in("id", ownerIds),
 
@@ -241,7 +181,7 @@ export async function POST(request: Request) {
           id,
           name,
           breed
-          `
+          `,
         )
         .in("id", dogIds),
     ]);
@@ -251,17 +191,14 @@ export async function POST(request: Request) {
         {
           success: true,
           databaseCompleted: true,
-          processed:
-            completedBookings.length,
-          completed:
-            completedBookings.length,
+          processed: completedBookings.length,
+          completed: completedBookings.length,
           followUpRequired: true,
-          error:
-            `Bookings were completed, but customer details could not be loaded: ${customerLoadError.message}`,
+          error: `Bookings were completed, but customer details could not be loaded: ${customerLoadError.message}`,
         },
         {
           status: 207,
-        }
+        },
       );
     }
 
@@ -270,242 +207,132 @@ export async function POST(request: Request) {
         {
           success: true,
           databaseCompleted: true,
-          processed:
-            completedBookings.length,
-          completed:
-            completedBookings.length,
+          processed: completedBookings.length,
+          completed: completedBookings.length,
           followUpRequired: true,
-          error:
-            `Bookings were completed, but dog details could not be loaded: ${dogLoadError.message}`,
+          error: `Bookings were completed, but dog details could not be loaded: ${dogLoadError.message}`,
         },
         {
           status: 207,
-        }
+        },
       );
     }
 
-    const customers =
-      (customerData || []) as CustomerProfile[];
+    const customers = (customerData || []) as CustomerProfile[];
 
-    const dogs =
-      (dogData || []) as DogDetails[];
+    const dogs = (dogData || []) as DogDetails[];
 
     const customerById = new Map(
-      customers.map((customer) => [
-        customer.id,
-        customer,
-      ])
+      customers.map((customer) => [customer.id, customer]),
     );
 
-    const dogById = new Map(
-      dogs.map((dog) => [
-        dog.id,
-        dog,
-      ])
-    );
-
-    const requestOrigin =
-      new URL(request.url).origin;
+    const dogById = new Map(dogs.map((dog) => [dog.id, dog]));
 
     /*
      * Each booking calendar update is independent,
      * so complete all Google Calendar operations
      * concurrently.
      */
-    const calendarResults =
-      await Promise.allSettled(
-        completedBookings.map(
-          async (booking) => {
-            const customer =
-              customerById.get(
-                booking.owner_id
-              );
+    const calendarResults = await Promise.allSettled(
+      completedBookings.map(async (booking) => {
+        const customer = customerById.get(booking.owner_id);
 
-            const dog =
-              dogById.get(
-                booking.dog_id
-              );
+        const dog = dogById.get(booking.dog_id);
 
-            if (!customer) {
-              throw new Error(
-                "Customer details could not be found."
-              );
-            }
+        if (!customer) {
+          throw new Error("Customer details could not be found.");
+        }
 
-            if (!dog) {
-              throw new Error(
-                "Dog details could not be found."
-              );
-            }
+        if (!dog) {
+          throw new Error("Dog details could not be found.");
+        }
 
-            const customerName =
-              `${customer.first_name || ""} ${
-                customer.last_name || ""
-              }`.trim() ||
-              customer.email ||
-              "Customer";
+        const customerName =
+          `${customer.first_name || ""} ${customer.last_name || ""}`.trim() ||
+          customer.email ||
+          "Customer";
 
-            const response = await fetch(
-              `${requestOrigin}/api/google/update-booking-event`,
-              {
-                method: "POST",
-                headers: {
-                  "Content-Type":
-                    "application/json",
-                },
-                body: JSON.stringify({
-                  bookingId:
-                    booking.booking_id,
-                  bookingReference:
-                    booking.booking_reference,
-                  ownerName:
-                    customerName,
-                  ownerEmail:
-                    customer.email || null,
-                  dogName:
-                    formatName(
-                      dog.name || ""
-                    ) || "Dog",
-                  dogBreed:
-                    dog.breed
-                      ? formatName(dog.breed)
-                      : null,
-                  startDate:
-                    booking.start_date,
-                  endDate:
-                    booking.end_date,
-                  bookingStatus:
-                    "Completed",
-                  paymentStatus:
-                    "Fully paid",
-                  totalCost:
-                    formatMoney(
-                      Number(
-                        booking.total_cost || 0
-                      )
-                    ),
-                  depositAmount:
-                    formatMoney(
-                      Number(
-                        booking.deposit_amount ||
-                          0
-                      )
-                    ),
-                  balanceAmount:
-                    formatMoney(
-                      Number(
-                        booking.balance_amount ||
-                          0
-                      )
-                    ),
-                  notes:
-                    booking.notes,
-                }),
-              }
-            );
+        await updateBookingCalendarEvent({
+          bookingId: booking.booking_id,
+          bookingReference: booking.booking_reference,
+          ownerName: customerName,
+          ownerEmail: customer.email || null,
+          dogName: formatName(dog.name || "") || "Dog",
+          dogBreed: dog.breed ? formatName(dog.breed) : null,
+          startDate: booking.start_date,
+          endDate: booking.end_date,
+          bookingStatus: "Completed",
+          paymentStatus: "Fully paid",
+          totalCost: formatMoney(Number(booking.total_cost || 0)),
+          depositAmount: formatMoney(Number(booking.deposit_amount || 0)),
+          balanceAmount: formatMoney(Number(booking.balance_amount || 0)),
+          notes: booking.notes,
+        });
 
-            if (!response.ok) {
-              throw new Error(
-                await getResponseError(
-                  response,
-                  "The Google booking calendar could not be updated."
-                )
-              );
-            }
+        return booking.booking_id;
+      }),
+    );
 
-            return booking.booking_id;
-          }
-        )
-      );
-
-    const calendarFailures:
-      CalendarFailure[] = [];
+    const calendarFailures: CalendarFailure[] = [];
 
     let calendarUpdated = 0;
 
-    calendarResults.forEach(
-      (calendarResult, index) => {
-        const booking =
-          completedBookings[index];
+    calendarResults.forEach((calendarResult, index) => {
+      const booking = completedBookings[index];
 
-        if (
-          calendarResult.status ===
-          "fulfilled"
-        ) {
-          calendarUpdated += 1;
-          return;
-        }
-
-        const errorMessage =
-          calendarResult.reason instanceof Error
-            ? calendarResult.reason.message
-            : "Unknown Google Calendar error.";
-
-        calendarFailures.push({
-          bookingId:
-            booking.booking_id,
-          bookingReference:
-            booking.booking_reference,
-          error:
-            errorMessage,
-        });
-
-        console.error(
-          `Google Calendar completion update failed for ${booking.booking_reference}:`,
-          calendarResult.reason
-        );
+      if (calendarResult.status === "fulfilled") {
+        calendarUpdated += 1;
+        return;
       }
-    );
 
-    const followUpRequired =
-      calendarFailures.length > 0;
+      const errorMessage =
+        calendarResult.reason instanceof Error
+          ? calendarResult.reason.message
+          : "Unknown Google Calendar error.";
+
+      calendarFailures.push({
+        bookingId: booking.booking_id,
+        bookingReference: booking.booking_reference,
+        error: errorMessage,
+      });
+
+      console.error(
+        `Google Calendar completion update failed for ${booking.booking_reference}:`,
+        calendarResult.reason,
+      );
+    });
+
+    const followUpRequired = calendarFailures.length > 0;
 
     return NextResponse.json(
       {
         success: true,
         databaseCompleted: true,
-        processed:
-          completedBookings.length,
-        completed:
-          completedBookings.length,
+        processed: completedBookings.length,
+        completed: completedBookings.length,
         calendarUpdated,
         calendarFailures,
         followUpRequired,
 
-        bookings:
-          completedBookings.map(
-            (booking) => ({
-              id:
-                booking.booking_id,
-              bookingReference:
-                booking.booking_reference,
-              previousStatus:
-                booking.previous_status,
-              newStatus:
-                booking.new_status,
-              startDate:
-                booking.start_date,
-              endDate:
-                booking.end_date,
-            })
-          ),
+        bookings: completedBookings.map((booking) => ({
+          id: booking.booking_id,
+          bookingReference: booking.booking_reference,
+          previousStatus: booking.previous_status,
+          newStatus: booking.new_status,
+          startDate: booking.start_date,
+          endDate: booking.end_date,
+        })),
 
         message: followUpRequired
           ? `${completedBookings.length} booking(s) were completed, but ${calendarFailures.length} Google Calendar event(s) could not be updated.`
           : `${completedBookings.length} booking(s) were completed and their Google Calendar events were updated.`,
       },
       {
-        status:
-          followUpRequired
-            ? 207
-            : 200,
-      }
+        status: followUpRequired ? 207 : 200,
+      },
     );
   } catch (error) {
-    console.error(
-      "Automatic booking completion failed:",
-      error
-    );
+    console.error("Automatic booking completion failed:", error);
 
     return NextResponse.json(
       {
@@ -516,7 +343,7 @@ export async function POST(request: Request) {
       },
       {
         status: 500,
-      }
+      },
     );
   }
 }
