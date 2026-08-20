@@ -15,6 +15,27 @@ import PageCard from "@/components/PageCard";
 import Button from "@/components/Buttons";
 import MessageBox from "@/components/MessageBox";
 import LoadingScreen from "@/components/LoadingScreen";
+import { authenticatedApiRequest } from "@/lib/client/authenticated-api";
+
+type SaveAvailabilityDateResponse = {
+  success: boolean;
+  availabilitySaved: boolean;
+  followUpRequired: boolean;
+  availability?: {
+    id: string;
+    date: string;
+    available: boolean;
+    totalSpaces: number;
+    spacesAvailable: number;
+    notes: string | null;
+  };
+  calendar?: {
+    updated: boolean;
+    error: string | null;
+  };
+  message?: string;
+  error?: string;
+};
 
 type Availability = {
   id: string;
@@ -57,7 +78,6 @@ export default function AmendAvailabilityPage() {
   const [bulkSyncCurrent, setBulkSyncCurrent] = useState(0);
   const [bulkSyncTotal, setBulkSyncTotal] = useState(0);
 
-
   useEffect(() => {
     loadAvailability();
   }, [calendarMonth, calendarMonths]);
@@ -82,15 +102,15 @@ export default function AmendAvailabilityPage() {
     setIsError(false);
 
     const monthStart = formatDateForDatabase(
-      new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1)
+      new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1),
     );
 
     const monthEnd = formatDateForDatabase(
       new Date(
         calendarMonth.getFullYear(),
         calendarMonth.getMonth() + calendarMonths,
-        0
-      )
+        0,
+      ),
     );
 
     const { data, error } = await supabase
@@ -197,270 +217,249 @@ export default function AmendAvailabilityPage() {
     });
   }
 
-async function saveSelectedDate() {
-  if (!selectedDateForm) {
-    return;
-  }
-
-  setMessage("");
-  setIsError(false);
-
-  if (selectedDateForm.total_spaces < 0) {
-    setIsError(true);
-    setMessage("Total spaces cannot be less than zero.");
-    return;
-  }
-
-  if (selectedDateForm.spaces_available < 0) {
-    setIsError(true);
-    setMessage("Spaces available cannot be less than zero.");
-    return;
-  }
-
-  if (
-    selectedDateForm.spaces_available >
-    selectedDateForm.total_spaces
-  ) {
-    setIsError(true);
-    setMessage(
-      "Spaces available cannot be higher than total spaces."
-    );
-    return;
-  }
-
-  setSaving(true);
-
-  const { data: savedAvailability, error } = await supabase
-    .from("availability")
-    .upsert(
-      {
-        date: selectedDateForm.date,
-        available: selectedDateForm.available,
-        total_spaces: selectedDateForm.total_spaces,
-        spaces_available: selectedDateForm.spaces_available,
-        notes: selectedDateForm.notes.trim() || null,
-        updated_at: new Date().toISOString(),
-      },
-      {
-        onConflict: "date",
-      }
-    )
-    .select(
-      "id, date, available, total_spaces, spaces_available, notes"
-    )
-    .single();
-
-  if (error || !savedAvailability) {
-    setSaving(false);
-    setIsError(true);
-    setMessage(
-      error?.message || "Unable to save availability."
-    );
-    return;
-  }
-
-  const calendarResponse = await fetch(
-    "/api/google/sync-availability-event",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        availabilityId: savedAvailability.id,
-        date: savedAvailability.date,
-        available: savedAvailability.available,
-        totalSpaces: savedAvailability.total_spaces,
-        spacesAvailable: savedAvailability.spaces_available,
-        notes: savedAvailability.notes,
-      }),
-    }
-  );
-
-  if (!calendarResponse.ok) {
-    const calendarErrorText = await calendarResponse.text();
-
-    console.error(
-      "Google availability calendar error:",
-      calendarErrorText
-    );
-
-    let calendarErrorMessage =
-      "Availability was saved, but the Google Calendar event could not be updated.";
-
-    try {
-      const calendarError = JSON.parse(calendarErrorText);
-
-      if (calendarError.error) {
-        calendarErrorMessage = calendarError.error;
-      }
-    } catch {
-      if (calendarErrorText) {
-        calendarErrorMessage = calendarErrorText;
-      }
+  async function saveSelectedDate() {
+    if (!selectedDateForm || saving) {
+      return;
     }
 
-    setSaving(false);
-    setIsError(true);
-    setMessage(calendarErrorMessage);
+    setMessage("");
+    setIsError(false);
+
+    if (
+      !Number.isInteger(selectedDateForm.total_spaces) ||
+      selectedDateForm.total_spaces < 0
+    ) {
+      setIsError(true);
+      setMessage("Total spaces must be a whole number of zero or greater.");
+      return;
+    }
+
+    if (
+      !Number.isInteger(selectedDateForm.spaces_available) ||
+      selectedDateForm.spaces_available < 0
+    ) {
+      setIsError(true);
+      setMessage("Spaces available must be a whole number of zero or greater.");
+      return;
+    }
+
+    if (selectedDateForm.spaces_available > selectedDateForm.total_spaces) {
+      setIsError(true);
+      setMessage("Spaces available cannot be higher than total spaces.");
+      return;
+    }
+
+    if (selectedDateForm.available && selectedDateForm.total_spaces === 0) {
+      setIsError(true);
+      setMessage("An available date must have at least one total space.");
+      return;
+    }
+
+    if (
+      !selectedDateForm.available &&
+      (selectedDateForm.total_spaces !== 0 ||
+        selectedDateForm.spaces_available !== 0)
+    ) {
+      setIsError(true);
+      setMessage(
+        "An unavailable date must have zero total spaces and zero spaces available.",
+      );
+      return;
+    }
+
+    setSaving(true);
+
+    const result = await authenticatedApiRequest<SaveAvailabilityDateResponse>(
+      "/api/admin/availability/date",
+      {
+        body: {
+          date: selectedDateForm.date,
+          available: selectedDateForm.available,
+          totalSpaces: selectedDateForm.total_spaces,
+          spacesAvailable: selectedDateForm.spaces_available,
+          notes: selectedDateForm.notes,
+        },
+      },
+    );
+
+    if (result.unauthenticated) {
+      setSaving(false);
+      window.location.href = "/login";
+      return;
+    }
+
+    if (!result.ok) {
+      setSaving(false);
+      setIsError(true);
+      setMessage(result.error || "Unable to save availability.");
+      return;
+    }
+
+    if (!result.data || !result.data.availabilitySaved) {
+      setSaving(false);
+      setIsError(true);
+      setMessage(
+        result.data?.error ||
+          "The availability service did not save the selected date.",
+      );
+      return;
+    }
 
     await loadAvailability();
-    return;
-  }
 
-  setSaving(false);
-  setIsError(false);
-  setMessage(
-    "Availability saved and Google Calendar updated successfully."
-  );
-
-  await loadAvailability();
-}
-
-
-async function applyBulkAvailability() {
-  setMessage("");
-  setIsError(false);
-
-  if (!bulkStartDate || !bulkEndDate) {
-    setIsError(true);
-    setMessage("Please choose a start date and end date.");
-    return;
-  }
-
-  if (bulkEndDate < bulkStartDate) {
-    setIsError(true);
-    setMessage("End date cannot be before start date.");
-    return;
-  }
-
-  if (bulkTotalSpaces < 0) {
-    setIsError(true);
-    setMessage("Total spaces cannot be less than zero.");
-    return;
-  }
-
-  if (bulkSpacesAvailable < 0) {
-    setIsError(true);
-    setMessage("Spaces available cannot be less than zero.");
-    return;
-  }
-
-  if (bulkSpacesAvailable > bulkTotalSpaces) {
-    setIsError(true);
-    setMessage(
-      "Spaces available cannot be higher than total spaces."
-    );
-    return;
-  }
-
-  const dates = getDatesInRange(
-    bulkStartDate,
-    bulkEndDate
-  );
-
-  const availabilityRows = dates.map((date) => ({
-    date,
-    available: bulkAvailable,
-    total_spaces: bulkTotalSpaces,
-    spaces_available: bulkSpacesAvailable,
-    notes: bulkNotes.trim() || null,
-    updated_at: new Date().toISOString(),
-  }));
-
-  setSaving(true);
-
-  const { data: savedAvailability, error } = await supabase
-    .from("availability")
-    .upsert(availabilityRows, {
-      onConflict: "date",
-    })
-    .select(
-      "id, date, available, total_spaces, spaces_available, notes"
-    );
-
-  if (error || !savedAvailability) {
     setSaving(false);
-    setIsError(true);
-    setMessage(
-      error?.message || "Unable to update availability."
-    );
-    return;
-  }
 
-  setBulkSyncCurrent(0);
-  setBulkSyncTotal(savedAvailability.length);
-
-let calendarSyncFailures = 0;
-
-for (let index = 0; index < savedAvailability.length; index += 1) {
-  const availabilityRecord = savedAvailability[index];
-
-  try {
-    const calendarResponse = await fetch(
-      "/api/google/sync-availability-event",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          availabilityId: availabilityRecord.id,
-          date: availabilityRecord.date,
-          available: availabilityRecord.available,
-          totalSpaces: availabilityRecord.total_spaces,
-          spacesAvailable: availabilityRecord.spaces_available,
-          notes: availabilityRecord.notes,
-        }),
-      }
-    );
-
-    if (!calendarResponse.ok) {
-      calendarSyncFailures += 1;
-
-      const calendarErrorText = await calendarResponse.text();
-
-      console.error(
-        `Google Calendar sync failed for ${availabilityRecord.date}:`,
-        calendarErrorText
+    if (result.data.followUpRequired) {
+      setIsError(true);
+      setMessage(
+        result.data.message ||
+          result.data.calendar?.error ||
+          "Availability was saved, but Google Calendar could not be updated.",
       );
+      return;
     }
-  } catch (calendarError) {
-    calendarSyncFailures += 1;
 
-    console.error(
-      `Google Calendar sync failed for ${availabilityRecord.date}:`,
-      calendarError
-    );
-  }
-
-  setBulkSyncCurrent(index + 1);
-}
-
-setSaving(false);
-
-  setBulkStartDate("");
-  setBulkEndDate("");
-  setBulkAvailable(true);
-  setBulkTotalSpaces(1);
-  setBulkSpacesAvailable(1);
-  setBulkNotes("");
-
-  await loadAvailability();
-
-  if (calendarSyncFailures > 0) {
-    setIsError(true);
+    setIsError(false);
     setMessage(
-      `Availability was saved for ${savedAvailability.length} date(s), but ${calendarSyncFailures} Google Calendar event(s) could not be synced.`
+      result.data.message ||
+        "Availability was saved and Google Calendar was updated successfully.",
     );
-    return;
   }
 
-  setIsError(false);
-  setMessage(
-    `Availability and Google Calendar were updated for ${savedAvailability.length} date(s).`
-  );
-}
+  async function applyBulkAvailability() {
+    setMessage("");
+    setIsError(false);
+
+    if (!bulkStartDate || !bulkEndDate) {
+      setIsError(true);
+      setMessage("Please choose a start date and end date.");
+      return;
+    }
+
+    if (bulkEndDate < bulkStartDate) {
+      setIsError(true);
+      setMessage("End date cannot be before start date.");
+      return;
+    }
+
+    if (bulkTotalSpaces < 0) {
+      setIsError(true);
+      setMessage("Total spaces cannot be less than zero.");
+      return;
+    }
+
+    if (bulkSpacesAvailable < 0) {
+      setIsError(true);
+      setMessage("Spaces available cannot be less than zero.");
+      return;
+    }
+
+    if (bulkSpacesAvailable > bulkTotalSpaces) {
+      setIsError(true);
+      setMessage("Spaces available cannot be higher than total spaces.");
+      return;
+    }
+
+    const dates = getDatesInRange(bulkStartDate, bulkEndDate);
+
+    const availabilityRows = dates.map((date) => ({
+      date,
+      available: bulkAvailable,
+      total_spaces: bulkTotalSpaces,
+      spaces_available: bulkSpacesAvailable,
+      notes: bulkNotes.trim() || null,
+      updated_at: new Date().toISOString(),
+    }));
+
+    setSaving(true);
+
+    const { data: savedAvailability, error } = await supabase
+      .from("availability")
+      .upsert(availabilityRows, {
+        onConflict: "date",
+      })
+      .select("id, date, available, total_spaces, spaces_available, notes");
+
+    if (error || !savedAvailability) {
+      setSaving(false);
+      setIsError(true);
+      setMessage(error?.message || "Unable to update availability.");
+      return;
+    }
+
+    setBulkSyncCurrent(0);
+    setBulkSyncTotal(savedAvailability.length);
+
+    let calendarSyncFailures = 0;
+
+    for (let index = 0; index < savedAvailability.length; index += 1) {
+      const availabilityRecord = savedAvailability[index];
+
+      try {
+        const calendarResponse = await fetch(
+          "/api/google/sync-availability-event",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              availabilityId: availabilityRecord.id,
+              date: availabilityRecord.date,
+              available: availabilityRecord.available,
+              totalSpaces: availabilityRecord.total_spaces,
+              spacesAvailable: availabilityRecord.spaces_available,
+              notes: availabilityRecord.notes,
+            }),
+          },
+        );
+
+        if (!calendarResponse.ok) {
+          calendarSyncFailures += 1;
+
+          const calendarErrorText = await calendarResponse.text();
+
+          console.error(
+            `Google Calendar sync failed for ${availabilityRecord.date}:`,
+            calendarErrorText,
+          );
+        }
+      } catch (calendarError) {
+        calendarSyncFailures += 1;
+
+        console.error(
+          `Google Calendar sync failed for ${availabilityRecord.date}:`,
+          calendarError,
+        );
+      }
+
+      setBulkSyncCurrent(index + 1);
+    }
+
+    setSaving(false);
+
+    setBulkStartDate("");
+    setBulkEndDate("");
+    setBulkAvailable(true);
+    setBulkTotalSpaces(1);
+    setBulkSpacesAvailable(1);
+    setBulkNotes("");
+
+    await loadAvailability();
+
+    if (calendarSyncFailures > 0) {
+      setIsError(true);
+      setMessage(
+        `Availability was saved for ${savedAvailability.length} date(s), but ${calendarSyncFailures} Google Calendar event(s) could not be synced.`,
+      );
+      return;
+    }
+
+    setIsError(false);
+    setMessage(
+      `Availability and Google Calendar were updated for ${savedAvailability.length} date(s).`,
+    );
+  }
 
   if (loading) {
     return <LoadingScreen message="Loading availability..." />;
@@ -506,8 +505,7 @@ setSaving(false);
                       "bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200",
                     unavailable:
                       "bg-red-50 text-red-700 line-through border border-red-300",
-                    selected:
-                      "bg-[#8B6A4E] text-white border border-[#8B6A4E]",
+                    selected: "bg-[#8B6A4E] text-white border border-[#8B6A4E]",
                   }}
                   classNames={{
                     months:
@@ -525,10 +523,8 @@ setSaving(false);
                     weekdays: "grid grid-cols-7 mb-2",
                     weekday:
                       "text-center text-xs md:text-sm font-semibold text-[#8B6A4E]",
-                    week:
-                      "grid grid-cols-7 gap-1.5 md:gap-2 mb-1 md:mb-2",
-                    day:
-                      "h-8 w-8 md:h-9 md:w-9 flex items-center justify-center rounded-full text-xs md:text-sm font-medium transition-all duration-200",
+                    week: "grid grid-cols-7 gap-1.5 md:gap-2 mb-1 md:mb-2",
+                    day: "h-8 w-8 md:h-9 md:w-9 flex items-center justify-center rounded-full text-xs md:text-sm font-medium transition-all duration-200",
                     today: "ring-2 ring-[#8B6A4E] ring-offset-2",
                   }}
                   className="mx-auto"
@@ -607,7 +603,8 @@ setSaving(false);
                             total_spaces: Number(e.target.value),
                           })
                         }
-                        className="w-full min-h-11 rounded-lg border border-[#D9CBB8] bg-white px-3 py-2 text-sm md:text-base text-[#5C4033] outline-none focus:border-[#8B6A4E] focus:ring-2 focus:ring-[#8B6A4E]/20 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"                      />
+                        className="w-full min-h-11 rounded-lg border border-[#D9CBB8] bg-white px-3 py-2 text-sm md:text-base text-[#5C4033] outline-none focus:border-[#8B6A4E] focus:ring-2 focus:ring-[#8B6A4E]/20 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+                      />
                     </div>
 
                     <div>
@@ -626,7 +623,8 @@ setSaving(false);
                             spaces_available: Number(e.target.value),
                           })
                         }
-                        className="w-full min-h-11 rounded-lg border border-[#D9CBB8] bg-white px-3 py-2 text-sm md:text-base text-[#5C4033] outline-none focus:border-[#8B6A4E] focus:ring-2 focus:ring-[#8B6A4E]/20 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"                      />
+                        className="w-full min-h-11 rounded-lg border border-[#D9CBB8] bg-white px-3 py-2 text-sm md:text-base text-[#5C4033] outline-none focus:border-[#8B6A4E] focus:ring-2 focus:ring-[#8B6A4E]/20 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+                      />
                     </div>
 
                     <div>
@@ -699,26 +697,26 @@ setSaving(false);
                 </div>
 
                 <label className="mt-4 flex min-h-11 items-center justify-between gap-4 rounded-lg border border-[#D9CBB8] bg-[#FFFDF9] px-3 py-3 text-sm md:text-base font-medium text-[#5C4033] md:col-span-2">
-                Available
-                <input
-                  type="checkbox"
-                  checked={bulkAvailable}
-                  onChange={(e) => {
-                    const isAvailable = e.target.checked;
+                  Available
+                  <input
+                    type="checkbox"
+                    checked={bulkAvailable}
+                    onChange={(e) => {
+                      const isAvailable = e.target.checked;
 
-                    setBulkAvailable(isAvailable);
+                      setBulkAvailable(isAvailable);
 
-                    if (isAvailable) {
-                      setBulkTotalSpaces(1);
-                      setBulkSpacesAvailable(1);
-                    } else {
-                      setBulkTotalSpaces(0);
-                      setBulkSpacesAvailable(0);
-                    }
-                  }}
-                  className="h-5 w-5 accent-[#8B6A4E]"
-                />
-              </label>
+                      if (isAvailable) {
+                        setBulkTotalSpaces(1);
+                        setBulkSpacesAvailable(1);
+                      } else {
+                        setBulkTotalSpaces(0);
+                        setBulkSpacesAvailable(0);
+                      }
+                    }}
+                    className="h-5 w-5 accent-[#8B6A4E]"
+                  />
+                </label>
 
                 <div>
                   <label className="block text-sm md:text-base font-medium text-[#5C4033] mb-2">
@@ -731,7 +729,8 @@ setSaving(false);
                     value={bulkTotalSpaces}
                     disabled={!bulkAvailable}
                     onChange={(e) => setBulkTotalSpaces(Number(e.target.value))}
-                    className="w-full min-h-11 rounded-lg border border-[#D9CBB8] bg-white px-3 py-2 text-sm md:text-base text-[#5C4033] outline-none focus:border-[#8B6A4E] focus:ring-2 focus:ring-[#8B6A4E]/20 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"                  />
+                    className="w-full min-h-11 rounded-lg border border-[#D9CBB8] bg-white px-3 py-2 text-sm md:text-base text-[#5C4033] outline-none focus:border-[#8B6A4E] focus:ring-2 focus:ring-[#8B6A4E]/20 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+                  />
                 </div>
 
                 <div>
@@ -747,11 +746,10 @@ setSaving(false);
                     onChange={(e) =>
                       setBulkSpacesAvailable(Number(e.target.value))
                     }
-                    className="w-full min-h-11 rounded-lg border border-[#D9CBB8] bg-white px-3 py-2 text-sm md:text-base text-[#5C4033] outline-none focus:border-[#8B6A4E] focus:ring-2 focus:ring-[#8B6A4E]/20 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"                  />
+                    className="w-full min-h-11 rounded-lg border border-[#D9CBB8] bg-white px-3 py-2 text-sm md:text-base text-[#5C4033] outline-none focus:border-[#8B6A4E] focus:ring-2 focus:ring-[#8B6A4E]/20 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+                  />
                 </div>
               </div>
-
-
 
               <div className="mt-4">
                 <label className="block text-sm md:text-base font-medium text-[#5C4033] mb-2">
@@ -782,7 +780,8 @@ setSaving(false);
                 <div className="mt-5">
                   <div className="mb-2 flex items-center justify-between gap-3 text-xs md:text-sm text-[#5C4033]">
                     <span>
-                      Syncing Google Calendar: {bulkSyncCurrent} of {bulkSyncTotal} dates
+                      Syncing Google Calendar: {bulkSyncCurrent} of{" "}
+                      {bulkSyncTotal} dates
                     </span>
 
                     <span className="font-semibold">
@@ -795,7 +794,7 @@ setSaving(false);
                       className="h-full rounded-full bg-[#8B6A4E] transition-all duration-300"
                       style={{
                         width: `${Math.round(
-                          (bulkSyncCurrent / bulkSyncTotal) * 100
+                          (bulkSyncCurrent / bulkSyncTotal) * 100,
                         )}%`,
                       }}
                     />
