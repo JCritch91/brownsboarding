@@ -5,6 +5,7 @@ import { formatDisplayDate, formatMoney, formatName } from "@/lib/helpers";
 
 import { syncAvailabilityCalendarEvent } from "@/lib/services/availability-calendar-sync-service";
 import { updateBookingCalendarEvent } from "@/lib/services/booking-calendar-service";
+import { sendBookingCancellationEmail } from "@/lib/services/booking-cancellation-email-service";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -378,8 +379,6 @@ export async function POST(request: Request) {
       );
     }
 
-    const requestOrigin = new URL(request.url).origin;
-
     const customerName =
       `${customer.first_name || ""} ${customer.last_name || ""}`.trim() ||
       customer.email ||
@@ -518,32 +517,14 @@ export async function POST(request: Request) {
         throw new Error("The customer does not have an email address.");
       }
 
-      const emailResponse = await fetch(
-        `${requestOrigin}/api/send-booking-cancelled-email`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            bookingReference: booking.booking_reference,
-            customerEmail: customer.email,
-            customerName,
-            dogName,
-            startDate: formatDisplayDate(booking.start_date),
-            endDate: formatDisplayDate(booking.end_date),
-          }),
-        },
-      );
-
-      if (!emailResponse.ok) {
-        const responseText = await emailResponse.text();
-
-        throw new Error(
-          responseText ||
-            "The cancellation email route returned an unsuccessful response.",
-        );
-      }
+      await sendBookingCancellationEmail({
+        bookingReference: booking.booking_reference,
+        customerEmail: customer.email,
+        customerName,
+        dogName,
+        startDate: formatDisplayDate(booking.start_date),
+        endDate: formatDisplayDate(booking.end_date),
+      });
 
       cancellationEmailSent = true;
     };
