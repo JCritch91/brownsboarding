@@ -13,6 +13,7 @@ import Button from "@/components/Buttons";
 import LoadingScreen from "@/components/LoadingScreen";
 import DogForm, { type DogFormValues } from "@/components/dogs/DogForm";
 import { authenticatedApiRequest } from "@/lib/client/authenticated-api";
+import ConfirmationModal from "@/components/modals/ConfirmationModal";
 
 type UpdateAdminDogResponse = {
   success: boolean;
@@ -61,6 +62,7 @@ export default function AdminEditDogPage() {
   const [dogActive, setDogActive] = useState(true);
 
   const [meetAndGreetCompleted, setMeetAndGreetCompleted] = useState(false);
+  const [showActiveStatusModal, setShowActiveStatusModal] = useState(false);
 
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
@@ -215,22 +217,23 @@ export default function AdminEditDogPage() {
     window.location.href = `/admin/customers/${customerId}`;
   }
 
-  function toggleDogActiveStatus() {
-    const newActiveStatus = !dogActive;
-
-    const confirmed = window.confirm(
-      newActiveStatus
-        ? `Reactivate ${formatName(form.name || "this dog")}?`
-        : `Deactivate ${formatName(
-            form.name || "this dog",
-          )}?\n\nThe dog will no longer be available for new bookings.`,
-    );
-
-    if (!confirmed) {
+  function requestDogActiveStatusChange() {
+    if (saving) {
       return;
     }
 
-    setDogActive(newActiveStatus);
+    setMessage("");
+    setIsError(false);
+    setShowActiveStatusModal(true);
+  }
+
+  function confirmDogActiveStatusChange() {
+    if (saving) {
+      return;
+    }
+
+    setDogActive((current) => !current);
+    setShowActiveStatusModal(false);
   }
 
   if (loading) {
@@ -265,7 +268,7 @@ export default function AdminEditDogPage() {
             dogActive ? (
               <button
                 type="button"
-                onClick={toggleDogActiveStatus}
+                onClick={requestDogActiveStatusChange}
                 disabled={saving}
                 className="inline-flex min-h-11 w-fit items-center justify-center rounded-lg border border-red-400 px-4 py-2 text-sm font-semibold text-red-600 transition-all duration-300 hover:scale-105 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100 md:text-base"
               >
@@ -274,7 +277,7 @@ export default function AdminEditDogPage() {
             ) : (
               <button
                 type="button"
-                onClick={toggleDogActiveStatus}
+                onClick={requestDogActiveStatusChange}
                 disabled={saving}
                 className="inline-flex min-h-11 w-fit items-center justify-center rounded-lg border border-green-500 px-4 py-2 text-sm font-semibold text-green-700 transition-all duration-300 hover:scale-105 hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100 md:text-base"
               >
@@ -284,6 +287,65 @@ export default function AdminEditDogPage() {
           }
         />
       </PageCard>
+
+      <ConfirmationModal
+        isOpen={showActiveStatusModal}
+        title={dogActive ? "Deactivate Dog" : "Reactivate Dog"}
+        confirmText={dogActive ? "Deactivate Dog" : "Reactivate Dog"}
+        cancelText="Go Back"
+        isConfirming={saving}
+        variant={dogActive ? "danger" : "primary"}
+        onConfirm={confirmDogActiveStatusChange}
+        onCancel={() => {
+          if (!saving) {
+            setShowActiveStatusModal(false);
+          }
+        }}
+      >
+        <div className="space-y-4">
+          <dl className="rounded-xl border border-[#D9CBB8] bg-[#FFFDF9] p-4">
+            <div>
+              <dt className="text-xs font-semibold text-[#8B6A4E]">Dog</dt>
+              <dd className="mt-1 text-lg font-semibold text-[#5C4033]">
+                {formatName(form.name || "Dog")}
+              </dd>
+            </div>
+
+            {form.breed && (
+              <div className="mt-3">
+                <dt className="text-xs font-semibold text-[#8B6A4E]">Breed</dt>
+                <dd className="mt-1 text-[#5C4033]">
+                  {formatName(form.breed)}
+                </dd>
+              </div>
+            )}
+          </dl>
+
+          {dogActive ? (
+            <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-red-800">
+              <p className="font-semibold">This dog will become inactive.</p>
+
+              <ul className="mt-2 list-disc space-y-1 pl-5">
+                <li>The dog will not be available for new bookings.</li>
+                <li>Existing and historic booking records will be retained.</li>
+                <li>You must save the form to apply this change.</li>
+              </ul>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-green-300 bg-green-50 p-3 text-green-800">
+              <p className="font-semibold">This dog will become active.</p>
+
+              <ul className="mt-2 list-disc space-y-1 pl-5">
+                <li>The dog will become available for new bookings.</li>
+                <li>
+                  Normal vaccination and availability checks will still apply.
+                </li>
+                <li>You must save the form to apply this change.</li>
+              </ul>
+            </div>
+          )}
+        </div>
+      </ConfirmationModal>
     </AdminPageLayout>
   );
 }
