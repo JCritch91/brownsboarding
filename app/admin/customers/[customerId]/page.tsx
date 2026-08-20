@@ -21,6 +21,17 @@ import {
   authenticatedApiRequest,
 } from "@/lib/client/authenticated-api";
 
+type UpdateMeetAndGreetApprovalResponse = {
+  success: boolean;
+  meetAndGreetApprovalUpdated: boolean;
+  customer?: {
+    id: string;
+    meetAndGreetApproved: boolean;
+  };
+  message?: string;
+  error?: string;
+};
+
 type UpdateCustomerActiveStatusResponse = {
   success: boolean;
   customerStatusUpdated: boolean;
@@ -423,36 +434,55 @@ async function toggleMeetAndGreetApproval() {
   setMessage("");
   setIsError(false);
 
-  const { error } = await supabase
-    .from("profiles")
-    .update({
-      meet_and_greet_approved: newApprovalStatus,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", customer.id);
+  const result =
+    await authenticatedApiRequest<UpdateMeetAndGreetApprovalResponse>(
+      `/api/admin/customers/${customerId}/meet-and-greet`,
+      {
+        method: "PATCH",
+        body: {
+          approved: newApprovalStatus,
+        },
+      }
+    );
 
-  if (error) {
+  if (result.unauthenticated) {
     setAccountActionLoading(false);
-    setIsError(true);
-    setMessage(error.message);
+    window.location.href = "/login";
     return;
   }
 
-  setCustomer((currentCustomer) =>
-    currentCustomer
-      ? {
-          ...currentCustomer,
-          meet_and_greet_approved: newApprovalStatus,
-        }
-      : currentCustomer
-  );
+  if (!result.ok) {
+    setAccountActionLoading(false);
+    setIsError(true);
+    setMessage(
+      result.error ||
+        "Meet & Greet approval could not be updated."
+    );
+    return;
+  }
+
+  if (
+    !result.data ||
+    !result.data.meetAndGreetApprovalUpdated
+  ) {
+    setAccountActionLoading(false);
+    setIsError(true);
+    setMessage(
+      result.data?.error ||
+        "The customer service did not update the Meet & Greet approval."
+    );
+    return;
+  }
+
+  await loadCustomerData();
 
   setAccountActionLoading(false);
   setIsError(false);
   setMessage(
-    newApprovalStatus
-      ? "Meet & Greet approval added successfully."
-      : "Meet & Greet approval removed successfully."
+    result.data.message ||
+      (newApprovalStatus
+        ? "Meet & Greet approval added successfully."
+        : "Meet & Greet approval removed successfully.")
   );
 }
 
