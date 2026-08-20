@@ -37,6 +37,30 @@ type SaveAvailabilityDateResponse = {
   error?: string;
 };
 
+type SaveBulkAvailabilityResponse = {
+  success: boolean;
+  availabilitySaved: boolean;
+  followUpRequired: boolean;
+  requestedDates: number;
+  savedDates: number;
+  calendarUpdated: number;
+  calendarFailed: number;
+  calendarFailures?: Array<{
+    date: string;
+    error: string;
+  }>;
+  availability?: Array<{
+    id: string;
+    date: string;
+    available: boolean;
+    totalSpaces: number;
+    spacesAvailable: number;
+    notes: string | null;
+  }>;
+  message?: string;
+  error?: string;
+};
+
 type Availability = {
   id: string;
   date: string;
@@ -327,6 +351,10 @@ export default function AmendAvailabilityPage() {
   }
 
   async function applyBulkAvailability() {
+    if (saving) {
+      return;
+    }
+
     setMessage("");
     setIsError(false);
 
@@ -342,15 +370,15 @@ export default function AmendAvailabilityPage() {
       return;
     }
 
-    if (bulkTotalSpaces < 0) {
+    if (!Number.isInteger(bulkTotalSpaces) || bulkTotalSpaces < 0) {
       setIsError(true);
-      setMessage("Total spaces cannot be less than zero.");
+      setMessage("Total spaces must be a whole number of zero or greater.");
       return;
     }
 
-    if (bulkSpacesAvailable < 0) {
+    if (!Number.isInteger(bulkSpacesAvailable) || bulkSpacesAvailable < 0) {
       setIsError(true);
-      setMessage("Spaces available cannot be less than zero.");
+      setMessage("Spaces available must be a whole number of zero or greater.");
       return;
     }
 
@@ -360,83 +388,93 @@ export default function AmendAvailabilityPage() {
       return;
     }
 
-    const dates = getDatesInRange(bulkStartDate, bulkEndDate);
-
-    const availabilityRows = dates.map((date) => ({
-      date,
-      available: bulkAvailable,
-      total_spaces: bulkTotalSpaces,
-      spaces_available: bulkSpacesAvailable,
-      notes: bulkNotes.trim() || null,
-      updated_at: new Date().toISOString(),
-    }));
-
-    setSaving(true);
-
-    const { data: savedAvailability, error } = await supabase
-      .from("availability")
-      .upsert(availabilityRows, {
-        onConflict: "date",
-      })
-      .select("id, date, available, total_spaces, spaces_available, notes");
-
-    if (error || !savedAvailability) {
-      setSaving(false);
+    if (bulkAvailable && bulkTotalSpaces === 0) {
       setIsError(true);
-      setMessage(error?.message || "Unable to update availability.");
+      setMessage("Available dates must have at least one total space.");
       return;
     }
 
-    setBulkSyncCurrent(0);
-    setBulkSyncTotal(savedAvailability.length);
-
-    let calendarSyncFailures = 0;
-
-    for (let index = 0; index < savedAvailability.length; index += 1) {
-      const availabilityRecord = savedAvailability[index];
-
-      try {
-        const calendarResponse = await fetch(
-          "/api/google/sync-availability-event",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              availabilityId: availabilityRecord.id,
-              date: availabilityRecord.date,
-              available: availabilityRecord.available,
-              totalSpaces: availabilityRecord.total_spaces,
-              spacesAvailable: availabilityRecord.spaces_available,
-              notes: availabilityRecord.notes,
-            }),
-          },
-        );
-
-        if (!calendarResponse.ok) {
-          calendarSyncFailures += 1;
-
-          const calendarErrorText = await calendarResponse.text();
-
-          console.error(
-            `Google Calendar sync failed for ${availabilityRecord.date}:`,
-            calendarErrorText,
-          );
-        }
-      } catch (calendarError) {
-        calendarSyncFailures += 1;
-
-        console.error(
-          `Google Calendar sync failed for ${availabilityRecord.date}:`,
-          calendarError,
-        );
-      }
-
-      setBulkSyncCurrent(index + 1);
+    if (
+      !bulkAvailable &&
+      (bulkTotalSpaces !== 0 || bulkSpacesAvailable !== 0)
+    ) {
+      setIsError(true);
+      setMessage(
+        "Unavailable dates must have zero total spaces and zero spaces available.",
+      );
+      return;
     }
 
-    setSaving(false);
+    if (bulkNotes.trim().length > 1000) {
+      setIsError(true);
+      setMessage("Availability notes must not exceed 1,000 characters.");
+      return;
+    }
+
+    const dates = getDatesInRange(bulkStartDate, bulkEndDate);
+
+    if (dates.length === 0) {
+      setIsError(true);
+      setMessage("The selected date range does not contain any dates.");
+      return;
+    }
+
+    if (dates.length > 366) {
+      setIsError(true);
+      setMessage("A bulk availability update cannot exceed 366 dates.");
+      return;
+    }
+
+    setSaving(true);
+    setBulkSyncCurrent(0);
+    setBulkSyncTotal(dates.length);
+
+    const result = await authenticatedApiRequest<SaveBulkAvailabilityResponse>(
+      "/api/admin/availability/bulk",
+      {
+        body: {
+          startDate: bulkStartDate,
+          endDate: bulkEndDate,
+          available: bulkAvailable,
+          totalSpaces: bulkTotalSpaces,
+          spacesAvailable: bulkSpacesAvailable,
+          notes: bulkNotes,
+        },
+      },
+    );
+
+    if (result.unauthenticated) {
+      setSaving(false);
+      setBulkSyncCurrent(0);
+      setBulkSyncTotal(0);
+      window.location.href = "/login";
+      return;
+    }
+
+    if (!result.ok) {
+      setSaving(false);
+      setBulkSyncCurrent(0);
+      setBulkSyncTotal(0);
+      setIsError(true);
+      setMessage(result.error || "Unable to update availability.");
+      return;
+    }
+
+    if (!result.data || !result.data.availabilitySaved) {
+      setSaving(false);
+      setBulkSyncCurrent(0);
+      setBulkSyncTotal(0);
+      setIsError(true);
+      setMessage(
+        result.data?.error ||
+          "The availability service did not save the selected date range.",
+      );
+      return;
+    }
+
+    setBulkSyncCurrent(result.data.calendarUpdated);
+
+    await loadAvailability();
 
     setBulkStartDate("");
     setBulkEndDate("");
@@ -445,19 +483,23 @@ export default function AmendAvailabilityPage() {
     setBulkSpacesAvailable(1);
     setBulkNotes("");
 
-    await loadAvailability();
+    setSaving(false);
+    setBulkSyncCurrent(0);
+    setBulkSyncTotal(0);
 
-    if (calendarSyncFailures > 0) {
+    if (result.data.followUpRequired) {
       setIsError(true);
       setMessage(
-        `Availability was saved for ${savedAvailability.length} date(s), but ${calendarSyncFailures} Google Calendar event(s) could not be synced.`,
+        result.data.message ||
+          `Availability was saved for ${result.data.savedDates} date(s), but ${result.data.calendarFailed} Google Calendar event(s) could not be updated.`,
       );
       return;
     }
 
     setIsError(false);
     setMessage(
-      `Availability and Google Calendar were updated for ${savedAvailability.length} date(s).`,
+      result.data.message ||
+        `Availability and Google Calendar were updated for ${result.data.savedDates} date(s).`,
     );
   }
 
