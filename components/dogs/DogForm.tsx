@@ -1,6 +1,6 @@
 "use client";
 
-import { type FormEvent, type ReactNode } from "react";
+import { type FormEvent, useEffect, useState, type ReactNode } from "react";
 
 import Button from "@/components/Buttons";
 import MessageBox from "@/components/MessageBox";
@@ -54,6 +54,22 @@ export default function DogForm({
   onMeetAndGreetChange,
   additionalActions,
 }: DogFormProps) {
+  const savedBreedIsListed = DOG_BREEDS.some((breed) => breed === form.breed);
+
+  const [selectedBreed, setSelectedBreed] = useState(
+    form.breed && !savedBreedIsListed ? "Other" : form.breed,
+  );
+
+  const [otherBreed, setOtherBreed] = useState(
+    form.breed && !savedBreedIsListed ? form.breed : "",
+  );
+
+  useEffect(() => {
+    const breedIsListed = DOG_BREEDS.some((breed) => breed === form.breed);
+
+    setSelectedBreed(form.breed && !breedIsListed ? "Other" : form.breed);
+    setOtherBreed(form.breed && !breedIsListed ? form.breed : "");
+  }, [form.breed]);
   return (
     <form onSubmit={onSubmit} className="space-y-6 md:space-y-10">
       {/* Dog Details */}
@@ -82,9 +98,21 @@ export default function DogForm({
 
             <select
               id="breed"
-              value={form.breed}
-              onChange={(event) => onChange("breed", event.target.value)}
-              className="min-h-11 w-full rounded-lg border border-[#D9CBB8] bg-white px-3 py-2 text-[#5C4033] outline-none focus:border-[#8B6A4E] focus:ring-2 focus:ring-6A4E]/20"
+              value={selectedBreed}
+              onChange={(event) => {
+                const breed = event.target.value;
+
+                setSelectedBreed(breed);
+
+                if (breed === "Other") {
+                  onChange("breed", otherBreed);
+                  return;
+                }
+
+                setOtherBreed("");
+                onChange("breed", breed);
+              }}
+              className="min-h-11 w-full rounded-lg border border-[#D9CBB8] bg-white px-3 py-2 text-sm text-[#5C4033] outline-none transition-colors focus:border-[#8B6A4E] focus:ring-2 focus:ring-[#8B6A4E]/20 md:text-base"
             >
               <option value="">Select a breed</option>
 
@@ -94,6 +122,32 @@ export default function DogForm({
                 </option>
               ))}
             </select>
+
+            {selectedBreed === "Other" && (
+              <div className="mt-4">
+                <label
+                  htmlFor="otherBreed"
+                  className="mb-2 block text-sm font-medium text-[#5C4033]"
+                >
+                  Other breed
+                </label>
+
+                <input
+                  id="otherBreed"
+                  type="text"
+                  value={otherBreed}
+                  onChange={(event) => {
+                    const breed = event.target.value;
+
+                    setOtherBreed(breed);
+                    onChange("breed", breed);
+                  }}
+                  placeholder="Enter the dog breed"
+                  required
+                  className="min-h-11 w-full rounded-lg border border-[#D9CBB8] bg-white px-3 py-2 text-sm text-[#5C4033] outline-none transition-colors placeholder:text-[#B89C82] focus:border-[#8B6A4E] focus:ring-2 focus:ring-[#8B6A4E]/20 md:text-base"
+                />
+              </div>
+            )}
           </div>
 
           <FormInput
