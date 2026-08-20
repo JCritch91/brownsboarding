@@ -1,15 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-import {
-  formatDisplayDate,
-  formatMoney,
-  formatName,
-} from "@/lib/helpers";
+import { formatDisplayDate, formatMoney, formatName } from "@/lib/helpers";
+import { updateBookingCalendarEvent } from "@/lib/services/booking-calendar-service";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
 type PaymentType = "Deposit" | "Balance";
@@ -20,34 +17,23 @@ type RecordPaymentRequestBody = {
   paymentDate?: unknown;
 };
 
-function isValidPaymentType(
-  value: unknown
-): value is PaymentType {
+function isValidPaymentType(value: unknown): value is PaymentType {
   return value === "Deposit" || value === "Balance";
 }
 
-function isValidDatabaseDate(
-  value: unknown
-): value is string {
-  if (
-    typeof value !== "string" ||
-    !/^\d{4}-\d{2}-\d{2}$/.test(value)
-  ) {
+function isValidDatabaseDate(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     return false;
   }
 
   const date = new Date(`${value}T00:00:00Z`);
 
   return (
-    !Number.isNaN(date.getTime()) &&
-    date.toISOString().slice(0, 10) === value
+    !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value
   );
 }
 
-async function getResponseError(
-  response: Response,
-  fallbackMessage: string
-) {
+async function getResponseError(response: Response, fallbackMessage: string) {
   const responseText = await response.text();
 
   if (!responseText) {
@@ -65,54 +51,45 @@ async function getResponseError(
 
 export async function POST(request: Request) {
   try {
-    const authorizationHeader =
-      request.headers.get("authorization");
+    const authorizationHeader = request.headers.get("authorization");
 
-    const accessToken =
-      authorizationHeader?.replace("Bearer ", "");
+    const accessToken = authorizationHeader?.replace("Bearer ", "");
 
     if (!accessToken) {
       return NextResponse.json(
         {
-          error:
-            "You must be signed in as an administrator.",
+          error: "You must be signed in as an administrator.",
         },
         {
           status: 401,
-        }
+        },
       );
     }
 
     const {
       data: { user },
       error: userError,
-    } = await supabaseAdmin.auth.getUser(
-      accessToken
-    );
+    } = await supabaseAdmin.auth.getUser(accessToken);
 
     if (userError || !user) {
       return NextResponse.json(
         {
-          error:
-            "Unable to verify the signed-in user.",
+          error: "Unable to verify the signed-in user.",
         },
         {
           status: 401,
-        }
+        },
       );
     }
 
-    const {
-      data: adminProfile,
-      error: adminProfileError,
-    } = await supabaseAdmin
+    const { data: adminProfile, error: adminProfileError } = await supabaseAdmin
       .from("profiles")
       .select(
         `
         id,
         is_admin,
         active
-        `
+        `,
       )
       .eq("id", user.id)
       .maybeSingle();
@@ -124,83 +101,70 @@ export async function POST(request: Request) {
         },
         {
           status: 500,
-        }
+        },
       );
     }
 
-    if (
-      !adminProfile ||
-      !adminProfile.is_admin ||
-      !adminProfile.active
-    ) {
+    if (!adminProfile || !adminProfile.is_admin || !adminProfile.active) {
       return NextResponse.json(
         {
-          error:
-            "You do not have permission to record booking payments.",
+          error: "You do not have permission to record booking payments.",
         },
         {
           status: 403,
-        }
+        },
       );
     }
 
-    const body =
-      (await request.json()) as RecordPaymentRequestBody;
+    const body = (await request.json()) as RecordPaymentRequestBody;
 
     const bookingId = body.bookingId;
     const paymentType = body.paymentType;
     const paymentDate = body.paymentDate;
 
-    if (
-      typeof bookingId !== "string" ||
-      !bookingId.trim()
-    ) {
+    if (typeof bookingId !== "string" || !bookingId.trim()) {
       return NextResponse.json(
         {
           error: "Booking ID is missing.",
         },
         {
           status: 400,
-        }
+        },
       );
     }
 
     if (!isValidPaymentType(paymentType)) {
       return NextResponse.json(
         {
-          error:
-            "Payment type must be Deposit or Balance.",
+          error: "Payment type must be Deposit or Balance.",
         },
         {
           status: 400,
-        }
+        },
       );
     }
 
     if (!isValidDatabaseDate(paymentDate)) {
       return NextResponse.json(
         {
-          error:
-            "Payment date must be a valid date in YYYY-MM-DD format.",
+          error: "Payment date must be a valid date in YYYY-MM-DD format.",
         },
         {
           status: 400,
-        }
+        },
       );
     }
 
-    const today =
-      new Date().toISOString().split("T")[0];
+    const today = new Date().toISOString().split("T")[0];
 
     if (paymentDate > today) {
       return NextResponse.json(
         {
-          error:
-            "The payment date cannot be in the future.",
+          error: "The payment date cannot be in the future.",
         },
         {
           status: 400,
-        }
+        },
       );
     }
 
@@ -210,10 +174,7 @@ export async function POST(request: Request) {
      * retain the details required for calendar and email
      * follow-up operations.
      */
-    const {
-      data: booking,
-      error: bookingLoadError,
-    } = await supabaseAdmin
+    const { data: booking, error: bookingLoadError } = await supabaseAdmin
       .from("bookings")
       .select(
         `
@@ -228,7 +189,7 @@ export async function POST(request: Request) {
         total_cost,
         deposit_amount,
         balance_amount
-        `
+        `,
       )
       .eq("id", bookingId)
       .maybeSingle();
@@ -240,7 +201,7 @@ export async function POST(request: Request) {
         },
         {
           status: 500,
-        }
+        },
       );
     }
 
@@ -251,44 +212,33 @@ export async function POST(request: Request) {
         },
         {
           status: 404,
-        }
+        },
       );
     }
 
-    if (
-      paymentType === "Deposit" &&
-      booking.status !== "Deposit Pending"
-    ) {
+    if (paymentType === "Deposit" && booking.status !== "Deposit Pending") {
       return NextResponse.json(
         {
-          error:
-            `A deposit cannot be recorded while the booking status is "${booking.status}".`,
+          error: `A deposit cannot be recorded while the booking status is "${booking.status}".`,
         },
         {
           status: 409,
-        }
+        },
       );
     }
 
-    if (
-      paymentType === "Balance" &&
-      booking.status !== "Balance Pending"
-    ) {
+    if (paymentType === "Balance" && booking.status !== "Balance Pending") {
       return NextResponse.json(
         {
-          error:
-            `A balance payment cannot be recorded while the booking status is "${booking.status}".`,
+          error: `A balance payment cannot be recorded while the booking status is "${booking.status}".`,
         },
         {
           status: 409,
-        }
+        },
       );
     }
 
-    const {
-      data: customer,
-      error: customerLoadError,
-    } = await supabaseAdmin
+    const { data: customer, error: customerLoadError } = await supabaseAdmin
       .from("profiles")
       .select(
         `
@@ -296,7 +246,7 @@ export async function POST(request: Request) {
         first_name,
         last_name,
         email
-        `
+        `,
       )
       .eq("id", booking.owner_id)
       .maybeSingle();
@@ -308,7 +258,7 @@ export async function POST(request: Request) {
         },
         {
           status: 500,
-        }
+        },
       );
     }
 
@@ -320,14 +270,11 @@ export async function POST(request: Request) {
         },
         {
           status: 404,
-        }
+        },
       );
     }
 
-    const {
-      data: dog,
-      error: dogLoadError,
-    } = await supabaseAdmin
+    const { data: dog, error: dogLoadError } = await supabaseAdmin
       .from("dogs")
       .select(
         `
@@ -335,7 +282,7 @@ export async function POST(request: Request) {
         owner_id,
         name,
         breed
-        `
+        `,
       )
       .eq("id", booking.dog_id)
       .eq("owner_id", booking.owner_id)
@@ -348,19 +295,18 @@ export async function POST(request: Request) {
         },
         {
           status: 500,
-        }
+        },
       );
     }
 
     if (!dog) {
       return NextResponse.json(
         {
-          error:
-            "The dog associated with this booking could not be found.",
+          error: "The dog associated with this booking could not be found.",
         },
         {
           status: 404,
-        }
+        },
       );
     }
 
@@ -368,142 +314,101 @@ export async function POST(request: Request) {
      * Atomically create the payment record and update
      * the booking status and paid date.
      */
-    const {
-      data: paymentRows,
-      error: paymentError,
-    } = await supabaseAdmin.rpc(
+    const { data: paymentRows, error: paymentError } = await supabaseAdmin.rpc(
       "record_booking_payment_atomic",
       {
         p_booking_id: booking.id,
         p_payment_type: paymentType,
         p_payment_date: paymentDate,
-      }
+      },
     );
 
     if (paymentError) {
-      console.error(
-        "Atomic booking payment failed:",
-        paymentError
-      );
+      console.error("Atomic booking payment failed:", paymentError);
 
       const errorMessage =
-        paymentError.message ||
-        "The payment could not be recorded.";
+        paymentError.message || "The payment could not be recorded.";
 
-      if (
-        errorMessage.includes(
-          "PAYMENT_ALREADY_RECORDED"
-        )
-      ) {
+      if (errorMessage.includes("PAYMENT_ALREADY_RECORDED")) {
         return NextResponse.json(
           {
-            error:
-              `The ${paymentType.toLowerCase()} payment has already been recorded.`,
+            error: `The ${paymentType.toLowerCase()} payment has already been recorded.`,
           },
           {
             status: 409,
-          }
+          },
         );
       }
 
-      if (
-        errorMessage.includes(
-          "INVALID_DEPOSIT_STATUS"
-        )
-      ) {
+      if (errorMessage.includes("INVALID_DEPOSIT_STATUS")) {
         return NextResponse.json(
           {
-            error:
-              "The booking is no longer awaiting a deposit.",
+            error: "The booking is no longer awaiting a deposit.",
           },
           {
             status: 409,
-          }
+          },
         );
       }
 
-      if (
-        errorMessage.includes(
-          "INVALID_BALANCE_STATUS"
-        )
-      ) {
+      if (errorMessage.includes("INVALID_BALANCE_STATUS")) {
         return NextResponse.json(
           {
-            error:
-              "The booking is no longer awaiting its balance.",
+            error: "The booking is no longer awaiting its balance.",
           },
           {
             status: 409,
-          }
+          },
         );
       }
 
-      if (
-        errorMessage.includes(
-          "PAYMENT_DATE_IN_FUTURE"
-        )
-      ) {
+      if (errorMessage.includes("PAYMENT_DATE_IN_FUTURE")) {
         return NextResponse.json(
           {
-            error:
-              "The payment date cannot be in the future.",
+            error: "The payment date cannot be in the future.",
           },
           {
             status: 400,
-          }
+          },
         );
       }
 
-      if (
-        errorMessage.includes(
-          "BOOKING_NOT_FOUND"
-        )
-      ) {
+      if (errorMessage.includes("BOOKING_NOT_FOUND")) {
         return NextResponse.json(
           {
             error: "Booking could not be found.",
           },
           {
             status: 404,
-          }
+          },
         );
       }
 
       if (
-        errorMessage.includes(
-          "DEPOSIT_AMOUNT_MISSING"
-        ) ||
-        errorMessage.includes(
-          "INVALID_DEPOSIT_AMOUNT"
-        )
+        errorMessage.includes("DEPOSIT_AMOUNT_MISSING") ||
+        errorMessage.includes("INVALID_DEPOSIT_AMOUNT")
       ) {
         return NextResponse.json(
           {
-            error:
-              "The booking does not contain a valid deposit amount.",
+            error: "The booking does not contain a valid deposit amount.",
           },
           {
             status: 409,
-          }
+          },
         );
       }
 
       if (
-        errorMessage.includes(
-          "BALANCE_AMOUNT_MISSING"
-        ) ||
-        errorMessage.includes(
-          "INVALID_BALANCE_AMOUNT"
-        )
+        errorMessage.includes("BALANCE_AMOUNT_MISSING") ||
+        errorMessage.includes("INVALID_BALANCE_AMOUNT")
       ) {
         return NextResponse.json(
           {
-            error:
-              "The booking does not contain a valid balance amount.",
+            error: "The booking does not contain a valid balance amount.",
           },
           {
             status: 409,
-          }
+          },
         );
       }
 
@@ -513,113 +418,70 @@ export async function POST(request: Request) {
         },
         {
           status: 500,
-        }
+        },
       );
     }
 
-    const paymentResult =
-      Array.isArray(paymentRows)
-        ? paymentRows[0]
-        : paymentRows;
+    const paymentResult = Array.isArray(paymentRows)
+      ? paymentRows[0]
+      : paymentRows;
 
     if (!paymentResult) {
       return NextResponse.json(
         {
-          error:
-            "The payment completed without returning a payment result.",
+          error: "The payment completed without returning a payment result.",
         },
         {
           status: 500,
-        }
+        },
       );
     }
 
     const customerName =
-      `${customer.first_name || ""} ${
-        customer.last_name || ""
-      }`.trim() ||
+      `${customer.first_name || ""} ${customer.last_name || ""}`.trim() ||
       customer.email ||
       "Customer";
 
-    const dogName =
-      formatName(dog.name || "") || "Dog";
+    const dogName = formatName(dog.name || "") || "Dog";
 
-    const dogBreed = dog.breed
-      ? formatName(dog.breed)
-      : null;
+    const dogBreed = dog.breed ? formatName(dog.breed) : null;
 
     const newStatus =
-      paymentType === "Deposit"
-        ? "Balance Pending"
-        : "Balance Paid";
+      paymentType === "Deposit" ? "Balance Pending" : "Balance Paid";
 
     const paymentStatus =
       paymentType === "Deposit"
         ? "Deposit received, balance outstanding"
         : "Fully paid";
 
-    const requestOrigin =
-      new URL(request.url).origin;
+    const requestOrigin = new URL(request.url).origin;
 
     /*
      * Calendar and email are independent follow-up
      * operations, so run both concurrently.
      */
     const calendarOperation = async () => {
-      const calendarResponse = await fetch(
-        `${requestOrigin}/api/google/update-booking-event`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-          body: JSON.stringify({
-            bookingId: booking.id,
-            bookingReference:
-              booking.booking_reference,
-            ownerName: customerName,
-            ownerEmail:
-              customer.email || null,
-            dogName,
-            dogBreed,
-            startDate: booking.start_date,
-            endDate: booking.end_date,
-            bookingStatus: newStatus,
-            paymentStatus,
-            totalCost: formatMoney(
-              Number(booking.total_cost || 0)
-            ),
-            depositAmount: formatMoney(
-              Number(
-                booking.deposit_amount || 0
-              )
-            ),
-            balanceAmount: formatMoney(
-              Number(
-                booking.balance_amount || 0
-              )
-            ),
-            notes: booking.notes,
-          }),
-        }
-      );
-
-      if (!calendarResponse.ok) {
-        throw new Error(
-          await getResponseError(
-            calendarResponse,
-            "The Google booking calendar could not be updated."
-          )
-        );
-      }
+      await updateBookingCalendarEvent({
+        bookingId: booking.id,
+        bookingReference: booking.booking_reference,
+        ownerName: customerName,
+        ownerEmail: customer.email || null,
+        dogName,
+        dogBreed,
+        startDate: booking.start_date,
+        endDate: booking.end_date,
+        bookingStatus: newStatus,
+        paymentStatus,
+        totalCost: formatMoney(Number(booking.total_cost || 0)),
+        depositAmount: formatMoney(Number(booking.deposit_amount || 0)),
+        balanceAmount: formatMoney(Number(booking.balance_amount || 0)),
+        notes: booking.notes,
+      });
     };
 
     const emailOperation = async () => {
       if (!customer.email) {
-        throw new Error(
-          "The customer does not have an email address."
-        );
+        throw new Error("The customer does not have an email address.");
       }
 
       if (paymentType === "Deposit") {
@@ -628,45 +490,29 @@ export async function POST(request: Request) {
           {
             method: "POST",
             headers: {
-              "Content-Type":
-                "application/json",
+              "Content-Type": "application/json",
             },
             body: JSON.stringify({
               bookingId: booking.id,
-              bookingReference:
-                booking.booking_reference,
-              customerEmail:
-                customer.email,
+              bookingReference: booking.booking_reference,
+              customerEmail: customer.email,
               customerName,
               dogName,
-              startDate:
-                formatDisplayDate(
-                  booking.start_date
-                ),
-              endDate:
-                formatDisplayDate(
-                  booking.end_date
-                ),
-              depositPaidDate:
-                formatDisplayDate(paymentDate),
-              invoiceNumber:
-                paymentResult.invoice_number,
-              depositAmount:
-                formatMoney(
-                  Number(
-                    paymentResult.payment_amount
-                  )
-                ),
+              startDate: formatDisplayDate(booking.start_date),
+              endDate: formatDisplayDate(booking.end_date),
+              depositPaidDate: formatDisplayDate(paymentDate),
+              invoiceNumber: paymentResult.invoice_number,
+              depositAmount: formatMoney(Number(paymentResult.payment_amount)),
             }),
-          }
+          },
         );
 
         if (!emailResponse.ok) {
           throw new Error(
             await getResponseError(
               emailResponse,
-              "The deposit receipt email could not be sent."
-            )
+              "The deposit receipt email could not be sent.",
+            ),
           );
         }
 
@@ -678,62 +524,41 @@ export async function POST(request: Request) {
         {
           method: "POST",
           headers: {
-            "Content-Type":
-              "application/json",
+            "Content-Type": "application/json",
           },
           body: JSON.stringify({
             bookingId: booking.id,
-            bookingReference:
-              booking.booking_reference,
-            customerEmail:
-              customer.email,
+            bookingReference: booking.booking_reference,
+            customerEmail: customer.email,
             customerName,
             dogName,
-            startDate:
-              formatDisplayDate(
-                booking.start_date
-              ),
-            endDate:
-              formatDisplayDate(
-                booking.end_date
-              ),
-            balancePaidDate:
-              formatDisplayDate(paymentDate),
-            balanceAmount:
-              formatMoney(
-                Number(
-                  paymentResult.payment_amount
-                )
-              ),
-            invoiceNumber:
-              paymentResult.invoice_number,
+            startDate: formatDisplayDate(booking.start_date),
+            endDate: formatDisplayDate(booking.end_date),
+            balancePaidDate: formatDisplayDate(paymentDate),
+            balanceAmount: formatMoney(Number(paymentResult.payment_amount)),
+            invoiceNumber: paymentResult.invoice_number,
           }),
-        }
+        },
       );
 
       if (!emailResponse.ok) {
         throw new Error(
           await getResponseError(
             emailResponse,
-            "The balance receipt email could not be sent."
-          )
+            "The balance receipt email could not be sent.",
+          ),
         );
       }
     };
 
-    const [
-      calendarResult,
-      emailResult,
-    ] = await Promise.allSettled([
+    const [calendarResult, emailResult] = await Promise.allSettled([
       calendarOperation(),
       emailOperation(),
     ]);
 
-    const calendarUpdated =
-      calendarResult.status === "fulfilled";
+    const calendarUpdated = calendarResult.status === "fulfilled";
 
-    const emailSent =
-      emailResult.status === "fulfilled";
+    const emailSent = emailResult.status === "fulfilled";
 
     const calendarError =
       calendarResult.status === "rejected"
@@ -754,35 +579,30 @@ export async function POST(request: Request) {
         `Payment calendar update failed for ${booking.booking_reference}:`,
         calendarResult.status === "rejected"
           ? calendarResult.reason
-          : calendarError
+          : calendarError,
       );
     }
 
     if (!emailSent) {
       console.error(
         `Payment receipt email failed for ${booking.booking_reference}:`,
-        emailResult.status === "rejected"
-          ? emailResult.reason
-          : emailError
+        emailResult.status === "rejected" ? emailResult.reason : emailError,
       );
     }
 
-    const followUpRequired =
-      !calendarUpdated || !emailSent;
+    const followUpRequired = !calendarUpdated || !emailSent;
 
     const failedOperations: string[] = [];
 
     if (!calendarUpdated) {
-      failedOperations.push(
-        "the Google booking calendar update"
-      );
+      failedOperations.push("the Google booking calendar update");
     }
 
     if (!emailSent) {
       failedOperations.push(
         paymentType === "Deposit"
           ? "the deposit receipt email"
-          : "the balance receipt email"
+          : "the balance receipt email",
       );
     }
 
@@ -794,21 +614,16 @@ export async function POST(request: Request) {
 
         payment: {
           id: paymentResult.payment_id,
-          invoiceNumber:
-            paymentResult.invoice_number,
+          invoiceNumber: paymentResult.invoice_number,
           type: paymentType,
-          amount: Number(
-            paymentResult.payment_amount
-          ),
+          amount: Number(paymentResult.payment_amount),
           date: paymentDate,
         },
 
         booking: {
           id: booking.id,
-          bookingReference:
-            booking.booking_reference,
-          previousStatus:
-            booking.status,
+          bookingReference: booking.booking_reference,
+          previousStatus: booking.status,
           newStatus,
         },
 
@@ -824,24 +639,18 @@ export async function POST(request: Request) {
 
         message: followUpRequired
           ? `The ${paymentType.toLowerCase()} payment was recorded, but the following operation(s) could not be completed: ${failedOperations.join(
-              ", "
+              ", ",
             )}.`
           : paymentType === "Deposit"
             ? "The deposit payment was recorded, the booking calendar was updated and the deposit receipt was sent."
             : "The balance payment was recorded, the booking calendar was updated and the balance receipt was sent.",
       },
       {
-        status:
-          followUpRequired
-            ? 207
-            : 200,
-      }
+        status: followUpRequired ? 207 : 200,
+      },
     );
   } catch (error) {
-    console.error(
-      "Booking payment recording failed:",
-      error
-    );
+    console.error("Booking payment recording failed:", error);
 
     return NextResponse.json(
       {
@@ -852,7 +661,7 @@ export async function POST(request: Request) {
       },
       {
         status: 500,
-      }
+      },
     );
   }
 }
