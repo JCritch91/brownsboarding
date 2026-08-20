@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import { formatDisplayDate, formatMoney, formatName } from "@/lib/helpers";
 
 import { syncAvailabilityCalendarEvent } from "@/lib/services/availability-calendar-sync-service";
+import { updateBookingCalendarEvent } from "@/lib/services/booking-calendar-service";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -488,40 +489,22 @@ export async function POST(request: Request) {
         return;
       }
 
-      const calendarResponse = await fetch(
-        `${requestOrigin}/api/google/update-booking-event`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            bookingId: booking.id,
-            bookingReference: booking.booking_reference,
-            ownerName: customerName,
-            ownerEmail: customer.email || null,
-            dogName,
-            dogBreed,
-            startDate: booking.start_date,
-            endDate: booking.end_date,
-            bookingStatus: "Cancelled",
-            paymentStatus: "Cancelled",
-            totalCost: formatMoney(Number(booking.total_cost || 0)),
-            depositAmount: formatMoney(Number(booking.deposit_amount || 0)),
-            balanceAmount: formatMoney(Number(booking.balance_amount || 0)),
-            notes: booking.notes,
-          }),
-        },
-      );
-
-      if (!calendarResponse.ok) {
-        const responseText = await calendarResponse.text();
-
-        throw new Error(
-          responseText ||
-            "The Google booking calendar returned an unsuccessful response.",
-        );
-      }
+      await updateBookingCalendarEvent({
+        bookingId: booking.id,
+        bookingReference: booking.booking_reference,
+        ownerName: customerName,
+        ownerEmail: customer.email || null,
+        dogName,
+        dogBreed,
+        startDate: booking.start_date,
+        endDate: booking.end_date,
+        bookingStatus: "Cancelled",
+        paymentStatus: "Cancelled",
+        totalCost: formatMoney(Number(booking.total_cost || 0)),
+        depositAmount: formatMoney(Number(booking.deposit_amount || 0)),
+        balanceAmount: formatMoney(Number(booking.balance_amount || 0)),
+        notes: booking.notes,
+      });
 
       bookingCalendarUpdated = true;
     };
