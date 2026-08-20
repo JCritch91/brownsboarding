@@ -14,9 +14,11 @@ import {
   buildBookingConfirmationEmailPayload,
 } from "@/lib/services/booking-payloads";
 
-import { syncAvailabilityCalendarEvent } from "@/lib/services/availability-calendar-sync-service";
-
 import { createBookingCalendarEvent } from "@/lib/services/booking-calendar-service";
+
+import { sendBookingConfirmationEmail } from "@/lib/services/booking-confirmation-email-service";
+
+import { syncAvailabilityCalendarEvent } from "@/lib/services/availability-calendar-sync-service";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -642,8 +644,6 @@ export async function POST(request: Request) {
     const availabilityCalendarSynced =
       availabilityCalendarFailures.length === 0;
 
-    const requestOrigin = new URL(request.url).origin;
-
     const customerName =
       `${customer.first_name || ""} ${customer.last_name || ""}`.trim() ||
       customer.email ||
@@ -707,31 +707,12 @@ export async function POST(request: Request) {
       confirmationEmailError = "The customer does not have an email address.";
     } else {
       try {
-        const emailResponse = await fetch(
-          `${requestOrigin}/api/send-booking-confirmation-email`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(confirmationEmailPayload),
-          },
-        );
+        await sendBookingConfirmationEmail({
+          ...confirmationEmailPayload,
+          customerEmail: customer.email,
+        });
 
-        if (!emailResponse.ok) {
-          const responseText = await emailResponse.text();
-
-          confirmationEmailError =
-            responseText ||
-            "The confirmation email route returned an unsuccessful response.";
-
-          console.error(
-            `Booking confirmation email failed for ${booking.booking_reference}:`,
-            confirmationEmailError,
-          );
-        } else {
-          confirmationEmailSent = true;
-        }
+        confirmationEmailSent = true;
       } catch (emailError) {
         confirmationEmailError =
           emailError instanceof Error
