@@ -69,6 +69,9 @@ export default function AdminBookingsPage() {
   const [bookingToCancel, setBookingToCancel] =
     useState<BookingWithCustomer | null>(null);
   const [cancellingBooking, setCancellingBooking] = useState(false);
+  const [bookingToConfirm, setBookingToConfirm] =
+    useState<BookingWithCustomer | null>(null);
+  const [confirmingBooking, setConfirmingBooking] = useState(false);
 
   useEffect(() => {
     checkAdminAndLoadBookings();
@@ -168,19 +171,22 @@ export default function AdminBookingsPage() {
     setBookings(bookingsWithCustomers);
   }
 
-  async function confirmBooking(booking: BookingWithCustomer) {
-    const shortNoticeBooking = isWithinTwoWeeks(booking.start_date);
-
-    const confirmed = window.confirm(
-      shortNoticeBooking
-        ? "This booking starts within 14 days.\n\nConfirming this booking will skip the deposit stage and move it straight to Balance Pending.\n\nDo you wish to continue?"
-        : "Are you sure you want to confirm this booking?\n\nThis will calculate the cost, reduce availability, update Google Calendar and send the customer a confirmation email.",
-    );
-
-    if (!confirmed) {
+  function requestBookingConfirmation(booking: BookingWithCustomer) {
+    if (confirmingBooking) {
       return;
     }
 
+    setBookingToConfirm(booking);
+  }
+
+  async function confirmSelectedBooking() {
+    if (!bookingToConfirm || confirmingBooking) {
+      return;
+    }
+
+    const booking = bookingToConfirm;
+
+    setConfirmingBooking(true);
     setMessage("");
     setIsError(false);
 
@@ -194,43 +200,49 @@ export default function AdminBookingsPage() {
     );
 
     if (result.unauthenticated) {
+      setConfirmingBooking(false);
+      setBookingToConfirm(null);
       window.location.href = "/login";
       return;
     }
 
     if (!result.ok) {
+      setConfirmingBooking(false);
+      setBookingToConfirm(null);
       setIsError(true);
       setMessage(result.error || "The booking could not be confirmed.");
-
       await loadBookings();
       return;
     }
 
     if (!result.data || !result.data.databaseConfirmed) {
+      setConfirmingBooking(false);
+      setBookingToConfirm(null);
       setIsError(true);
       setMessage(
         result.data?.error ||
           "The confirmation service did not confirm the booking.",
       );
-
       await loadBookings();
       return;
     }
 
     if (result.data.followUpRequired) {
+      setConfirmingBooking(false);
+      setBookingToConfirm(null);
       setIsError(true);
       setMessage(
         result.data.message ||
           "The booking was confirmed, but one or more calendar or email operations could not be completed.",
       );
-
       await loadBookings();
       return;
     }
 
+    setConfirmingBooking(false);
+    setBookingToConfirm(null);
     setIsError(false);
     setMessage(result.data.message || "Booking confirmed successfully.");
-
     await loadBookings();
   }
 
@@ -647,7 +659,7 @@ export default function AdminBookingsPage() {
                 <AdminBookingCard
                   key={booking.id}
                   booking={booking}
-                  onConfirm={confirmBooking}
+                  onConfirm={requestBookingConfirmation}
                   onCancel={requestBookingCancellation}
                   onMarkDepositPaid={markDepositPaid}
                   onMarkBalancePaid={markBalancePaid}
@@ -657,6 +669,84 @@ export default function AdminBookingsPage() {
           )}
         </div>
       </PageCard>
+
+      <ConfirmationModal
+        isOpen={bookingToConfirm !== null}
+        title="Confirm Booking"
+        confirmText="Confirm Booking"
+        cancelText="Review Later"
+        isConfirming={confirmingBooking}
+        variant="primary"
+        onConfirm={confirmSelectedBooking}
+        onCancel={() => {
+          if (!confirmingBooking) {
+            setBookingToConfirm(null);
+          }
+        }}
+      >
+        {bookingToConfirm && (
+          <div className="space-y-4">
+            <p>
+              Please review the booking information before confirming the
+              customer’s stay.
+            </p>
+
+            <dl className="grid gap-3 rounded-xl border border-[#D9CBB8] bg-[#FFFDF9] p-4 sm:grid-cols-2">
+              <div>
+                <dt className="text-xs font-semibold text-[#8B6A4E]">
+                  Booking reference
+                </dt>
+                <dd className="mt-1 font-semibold text-[#5C4033]">
+                  {bookingToConfirm.booking_reference}
+                </dd>
+              </div>
+
+              <div>
+                <dt className="text-xs font-semibold text-[#8B6A4E]">Dog</dt>
+                <dd className="mt-1 font-semibold text-[#5C4033]">
+                  {formatName(bookingToConfirm.dogs?.name || "Dog")}
+                </dd>
+              </div>
+
+              <div>
+                <dt className="text-xs font-semibold text-[#8B6A4E]">
+                  Start date
+                </dt>
+                <dd className="mt-1 text-[#5C4033]">
+                  {formatDisplayDate(bookingToConfirm.start_date)}
+                </dd>
+              </div>
+
+              <div>
+                <dt className="text-xs font-semibold text-[#8B6A4E]">
+                  End date
+                </dt>
+                <dd className="mt-1 text-[#5C4033]">
+                  {formatDisplayDate(bookingToConfirm.end_date)}
+                </dd>
+              </div>
+            </dl>
+
+            {isWithinTwoWeeks(bookingToConfirm.start_date) ? (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-800">
+                <p className="font-semibold">Short-notice booking</p>
+                <p className="mt-1">
+                  This booking starts within 14 days. The deposit stage will be
+                  skipped and the booking will move directly to Balance Pending.
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-blue-300 bg-blue-50 p-3 text-blue-800">
+                <p>
+                  Confirming this booking will calculate the price, reduce
+                  availability, update the configured Google calendars and send
+                  the customer a confirmation email.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </ConfirmationModal>
 
       <ConfirmationModal
         isOpen={bookingToCancel !== null}
