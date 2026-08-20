@@ -21,6 +21,23 @@ import LoadingScreen from "@/components/LoadingScreen";
 import DogForm, {
   type DogFormValues,
 } from "@/components/dogs/DogForm";
+import {
+  authenticatedApiRequest,
+} from "@/lib/client/authenticated-api";
+
+type UpdateAdminDogResponse = {
+  success: boolean;
+  dogUpdated: boolean;
+  dog?: {
+    id: string;
+    ownerId: string;
+    name: string;
+    active: boolean;
+    meetAndGreetCompleted: boolean;
+  };
+  message?: string;
+  error?: string;
+};
 
 const emptyForm: DogFormValues = {
   name: "",
@@ -179,72 +196,76 @@ export default function AdminEditDogPage() {
     }));
   }
 
-  async function handleSave(
-    event: FormEvent<HTMLFormElement>
-  ) {
-    event.preventDefault();
+async function handleSave(
+  event: FormEvent<HTMLFormElement>
+) {
+  event.preventDefault();
 
-    setSaving(true);
-    setMessage("");
-    setIsError(false);
-
-    const validationMessage =
-      validateDogDetails(form);
-
-    if (validationMessage) {
-      setSaving(false);
-      setIsError(true);
-      setMessage(validationMessage);
-      return;
-    }
-
-    const { error } = await supabase
-      .from("dogs")
-      .update({
-        name: formatName(form.name),
-        breed: formatName(form.breed),
-        date_of_birth:
-          form.date_of_birth || null,
-        weight_kg: form.weight_kg
-          ? Number(form.weight_kg)
-          : null,
-        gender: form.gender || null,
-        neutered: form.neutered === "yes",
-        vaccinated:
-          form.vaccinated === "yes",
-        vaccination_expiry:
-          form.vaccinated === "yes"
-            ? form.vaccination_expiry || null
-            : null,
-        microchip_number:
-          form.microchip_number.trim(),
-        medical_notes:
-          form.medical_notes.trim(),
-        medication_notes:
-          form.medication_notes.trim(),
-        feeding_notes:
-          form.feeding_notes.trim(),
-        behaviour_notes:
-          form.behaviour_notes.trim(),
-        meet_and_greet_completed:
-          meetAndGreetCompleted,
-        active: dogActive,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", dogId)
-      .eq("owner_id", customerId);
-
-    setSaving(false);
-
-    if (error) {
-      setIsError(true);
-      setMessage(error.message);
-      return;
-    }
-
-    window.location.href =
-      `/admin/customers/${customerId}`;
+  if (saving) {
+    return;
   }
+
+  setMessage("");
+  setIsError(false);
+
+  const validationMessage =
+    validateDogDetails(form);
+
+  if (validationMessage) {
+    setIsError(true);
+    setMessage(validationMessage);
+    return;
+  }
+
+  setSaving(true);
+
+  const result =
+    await authenticatedApiRequest<UpdateAdminDogResponse>(
+      `/api/admin/customers/${customerId}/dogs/${dogId}`,
+      {
+        method: "PATCH",
+        body: {
+          ...form,
+          meetAndGreetCompleted,
+          active: dogActive,
+        },
+      }
+    );
+
+  setSaving(false);
+
+  if (result.unauthenticated) {
+    window.location.href = "/login";
+    return;
+  }
+
+  if (!result.ok) {
+    setIsError(true);
+    setMessage(
+      result.error ||
+        "The dog's details could not be updated."
+    );
+    return;
+  }
+
+  if (
+    !result.data ||
+    !result.data.dogUpdated
+  ) {
+    setIsError(true);
+    setMessage(
+      result.data?.error ||
+        "The dog service did not update the dog."
+    );
+    return;
+  }
+
+  setIsError(false);
+
+  window.location.href =
+    `/admin/customers/${customerId}`;
+}
+
 
   function toggleDogActiveStatus() {
     const newActiveStatus = !dogActive;
