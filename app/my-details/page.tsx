@@ -19,7 +19,6 @@ import CustomerPageLayout from "@/components/CustomerPageLayout";
 import PageCard from "@/components/PageCard";
 import Button from "@/components/Buttons";
 import LoadingScreen from "@/components/LoadingScreen";
-import { ACTIVE_BOOKING_STATUSES } from "@/types/booking";
 import { authenticatedApiRequest } from "@/lib/client/authenticated-api";
 import ConfirmationModal from "@/components/modals/ConfirmationModal";
 
@@ -65,8 +64,6 @@ export default function MyDetailsPage() {
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
 
-  const [userId, setUserId] = useState("");
-
   const [form, setForm] = useState<CustomerFormValues>({
     first_name: "",
     last_name: "",
@@ -100,8 +97,6 @@ export default function MyDetailsPage() {
       window.location.href = "/login";
       return;
     }
-
-    setUserId(user.id);
 
     const { data, error } = await supabase
       .from("profiles")
@@ -357,8 +352,7 @@ export default function MyDetailsPage() {
       >
         <div className="space-y-4">
           <p>
-            Please confirm that you want to delete your Browns Boarding
-            account.
+            Please confirm that you want to delete your Browns Boarding account.
           </p>
 
           <div className="rounded-xl border border-[#D9CBB8] bg-[#FFFDF9] p-4">
