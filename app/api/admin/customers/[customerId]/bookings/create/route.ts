@@ -286,18 +286,6 @@ export async function POST(request: Request, context: RouteContext) {
       );
     }
 
-    if (!dog.meet_and_greet_completed) {
-      return NextResponse.json(
-        {
-          error:
-            "The selected dog must complete a Meet & Greet before a booking can be created.",
-        },
-        {
-          status: 409,
-        },
-      );
-    }
-
     if (!dog.vaccinated) {
       return NextResponse.json(
         {
