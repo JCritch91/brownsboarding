@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 import { getDatesInRange } from "@/lib/helpers";
+import { syncAvailabilityCalendarEvent } from "@/lib/services/availability-calendar-sync-service";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -36,26 +37,6 @@ function isValidDatabaseDate(value: unknown): value is string {
 
 function isValidNonNegativeInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value >= 0;
-}
-
-async function getResponseError(response: Response, fallbackMessage: string) {
-  const responseText = await response.text();
-
-  if (!responseText) {
-    return fallbackMessage;
-  }
-
-  try {
-    const responseData = JSON.parse(responseText) as {
-      error?: unknown;
-    };
-
-    return typeof responseData.error === "string"
-      ? responseData.error
-      : fallbackMessage;
-  } catch {
-    return responseText;
-  }
 }
 
 export async function POST(request: Request) {
@@ -353,8 +334,6 @@ export async function POST(request: Request) {
       );
     }
 
-    const requestOrigin = new URL(request.url).origin;
-
     /*
      * Each calendar event is independent.
      * Promise.allSettled ensures every saved date is
@@ -362,32 +341,14 @@ export async function POST(request: Request) {
      */
     const calendarResults = await Promise.allSettled(
       savedAvailability.map(async (availabilityRecord) => {
-        const calendarResponse = await fetch(
-          `${requestOrigin}/api/google/sync-availability-event`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              availabilityId: availabilityRecord.id,
-              date: availabilityRecord.date,
-              available: availabilityRecord.available,
-              totalSpaces: availabilityRecord.total_spaces,
-              spacesAvailable: availabilityRecord.spaces_available,
-              notes: availabilityRecord.notes,
-            }),
-          },
-        );
-
-        if (!calendarResponse.ok) {
-          throw new Error(
-            await getResponseError(
-              calendarResponse,
-              "The Google Calendar event could not be updated.",
-            ),
-          );
-        }
+        await syncAvailabilityCalendarEvent({
+          availabilityId: availabilityRecord.id,
+          date: availabilityRecord.date,
+          available: availabilityRecord.available,
+          totalSpaces: availabilityRecord.total_spaces,
+          spacesAvailable: availabilityRecord.spaces_available,
+          notes: availabilityRecord.notes,
+        });
 
         return {
           date: availabilityRecord.date,
