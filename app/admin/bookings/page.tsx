@@ -12,6 +12,7 @@ import type {
   Booking,
   BookingCustomerSummary,
   BookingFilter,
+  BookingStatus,
   BookingWithCustomer,
 } from "@/types/booking";
 import AdminBookingCard from "@/components/bookings/AdminBookingCard";
@@ -62,7 +63,7 @@ export default function AdminBookingsPage() {
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
 
-  const [selectedFilter, setSelectedFilter] = useState<BookingFilter>("All");
+  const [selectedFilter, setSelectedFilter] = useState<BookingFilter>("Live");
 
   useEffect(() => {
     checkAdminAndLoadBookings();
@@ -571,10 +572,21 @@ export default function AdminBookingsPage() {
     (booking) => booking.status === "Cancelled",
   );
 
+  const liveBookingStatuses: BookingStatus[] = [
+    "Pending",
+    "Deposit Pending",
+    "Balance Pending",
+    "Balance Paid",
+  ];
+
   const filteredBookings =
-    selectedFilter === "All"
-      ? bookings
-      : bookings.filter((booking) => booking.status === selectedFilter);
+    selectedFilter === "Live"
+      ? bookings.filter((booking) =>
+          liveBookingStatuses.includes(booking.status),
+        )
+      : selectedFilter === "All"
+        ? bookings
+        : bookings.filter((booking) => booking.status === selectedFilter);
 
   if (loading) {
     return <LoadingScreen message="Loading admin bookings..." />;

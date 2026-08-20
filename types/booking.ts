@@ -6,7 +6,7 @@ export type BookingStatus =
   | "Completed"
   | "Cancelled";
 
-export type BookingFilter = "All" | BookingStatus;
+export type BookingFilter = "Live" | "All" | BookingStatus;
 
 export type BookingDogSummary = {
   name: string;
