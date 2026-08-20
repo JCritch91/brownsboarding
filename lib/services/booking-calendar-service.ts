@@ -1,6 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 
-import { createGoogleBookingEvent } from "@/lib/google-calendar";
+import {
+  createGoogleBookingEvent,
+  updateGoogleBookingEvent,
+} from "@/lib/google-calendar";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -27,6 +30,14 @@ export type CreateBookingCalendarEventInput = {
 export type CreateBookingCalendarEventResult = {
   success: true;
   created: boolean;
+  eventId: string;
+  eventLink: string | null;
+  message: string;
+};
+
+export type UpdateBookingCalendarEventResult = {
+  success: true;
+  updated: true;
   eventId: string;
   eventLink: string | null;
   message: string;
@@ -257,5 +268,87 @@ export async function createBookingCalendarEvent(
     eventId: event.id,
     eventLink: event.htmlLink || null,
     message: "Google Calendar event created successfully.",
+  };
+}
+
+export async function updateBookingCalendarEvent(
+  input: CreateBookingCalendarEventInput,
+): Promise<UpdateBookingCalendarEventResult> {
+  validateBookingCalendarInput(input);
+
+  const bookingId = input.bookingId.trim();
+
+  const { data: calendarEvent, error: calendarEventError } = await supabaseAdmin
+    .from("google_calendar_events")
+    .select(
+      `
+      id,
+      google_event_id
+      `,
+    )
+    .eq("booking_id", bookingId)
+    .maybeSingle();
+
+  if (calendarEventError) {
+    throw new Error(calendarEventError.message);
+  }
+
+  if (!calendarEvent) {
+    throw new Error("No Google Calendar event exists for this booking.");
+  }
+
+  if (!calendarEvent.google_event_id) {
+    throw new Error(
+      "The booking calendar tracking record does not contain an event ID.",
+    );
+  }
+
+  const updatedEvent = await updateGoogleBookingEvent(
+    calendarEvent.google_event_id,
+    {
+      bookingId,
+      bookingReference: input.bookingReference.trim(),
+      ownerName: input.ownerName.trim(),
+      ownerEmail: input.ownerEmail?.trim() || null,
+      dogName: input.dogName.trim(),
+      dogBreed: input.dogBreed?.trim() || null,
+      startDate: input.startDate,
+      endDate: input.endDate,
+      bookingStatus: input.bookingStatus.trim(),
+      paymentStatus: input.paymentStatus.trim(),
+      totalCost: input.totalCost?.trim() || null,
+      depositAmount: input.depositAmount?.trim() || null,
+      balanceAmount: input.balanceAmount?.trim() || null,
+      notes: input.notes?.trim() || null,
+    },
+  );
+
+  if (!updatedEvent.id) {
+    throw new Error(
+      "Google Calendar updated the booking event without returning an event ID.",
+    );
+  }
+
+  const { error: updateTrackingError } = await supabaseAdmin
+    .from("google_calendar_events")
+    .update({
+      google_event_id: updatedEvent.id,
+      google_event_link: updatedEvent.htmlLink || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", calendarEvent.id);
+
+  if (updateTrackingError) {
+    throw new Error(
+      `Google Calendar was updated, but the tracking record could not be updated: ${updateTrackingError.message}`,
+    );
+  }
+
+  return {
+    success: true,
+    updated: true,
+    eventId: updatedEvent.id,
+    eventLink: updatedEvent.htmlLink || null,
+    message: "Google Calendar event updated successfully.",
   };
 }
