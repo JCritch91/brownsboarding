@@ -5,6 +5,7 @@ import { type FormEvent, type ReactNode } from "react";
 import Button from "@/components/Buttons";
 import MessageBox from "@/components/MessageBox";
 import { FormInput, FormSelect, FormTextarea } from "@/components/FormInput";
+import { DOG_BREEDS } from "@/lib/constants/dog-breeds";
 
 export type DogFormValues = {
   name: string;
@@ -71,14 +72,29 @@ export default function DogForm({
             required
           />
 
-          <FormInput
-            id="breed"
-            label="Breed *"
-            type="text"
-            value={form.breed}
-            onChange={(event) => onChange("breed", event.target.value)}
-            required
-          />
+          <div>
+            <label
+              htmlFor="breed"
+              className="mb-2 block text-sm font-medium text-[#5C4033]"
+            >
+              Breed
+            </label>
+
+            <select
+              id="breed"
+              value={form.breed}
+              onChange={(event) => onChange("breed", event.target.value)}
+              className="min-h-11 w-full rounded-lg border border-[#D9CBB8] bg-white px-3 py-2 text-[#5C4033] outline-none focus:border-[#8B6A4E] focus:ring-2 focus:ring-6A4E]/20"
+            >
+              <option value="">Select a breed</option>
+
+              {DOG_BREEDS.map((breed) => (
+                <option key={breed} value={breed}>
+                  {breed}
+                </option>
+              ))}
+            </select>
+          </div>
 
           <FormInput
             id="dateOfBirth"
