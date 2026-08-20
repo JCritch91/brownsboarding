@@ -32,8 +32,8 @@ export default function AboutPage() {
 
             <p className="text-[#8B6A4E] text-lg leading-relaxed mt-4 md:mt-6">
               Whether your dog is staying overnight, visiting for day care or
-              coming along for their first meet and greet, our focus is always on
-              comfort, trust and personal care.
+              coming along for their first meet and greet, our focus is always
+              on comfort, trust and personal care.
             </p>
 
             <p className="text-[#8B6A4E] text-lg leading-relaxed mt-4 md:mt-6">
@@ -47,7 +47,7 @@ export default function AboutPage() {
       </section>
 
       {/* Why Browns Boarding */}
-      <section className="py-12 md:py-[#D9CBB820 bg-[#E8DDCF]">
+      <section className="bg-[#E8DDCF] py-12 md:py-20">
         <div className="max-w-6xl mx-auto px-4 md:px-6">
           <SectionHeading
             title="What We Offer"
@@ -66,8 +66,8 @@ export default function AboutPage() {
             </InfoCard>
 
             <InfoCard title="Safe & Secure">
-              We aim to provide a calm, safe and comfortable space where your dog
-              can settle and enjoy their stay.
+              We aim to provide a calm, safe and comfortable space where your
+              dog can settle and enjoy their stay.
             </InfoCard>
 
             <InfoCard title="Meet & Greet First">

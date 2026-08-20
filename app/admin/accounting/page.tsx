@@ -3,11 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { ensureActiveAdminUser } from "@/lib/appActions";
-import {
-  formatDisplayDate,
-  formatMoney,
-  formatName,
-} from "@/lib/helpers";
+import { formatDisplayDate, formatMoney, formatName } from "@/lib/helpers";
 
 import AdminPageLayout from "@/components/AdminPageLayout";
 import PageCard from "@/components/PageCard";
@@ -105,7 +101,7 @@ export default function AdminAccountingPage() {
           name,
           breed
         )
-        `
+        `,
       )
       .order("payment_date", { ascending: false });
 
@@ -117,7 +113,7 @@ export default function AdminAccountingPage() {
     const paymentData = (data ?? []) as unknown as Payment[];
 
     const ownerIds = Array.from(
-      new Set(paymentData.map((payment) => payment.owner_id))
+      new Set(paymentData.map((payment) => payment.owner_id)),
     );
 
     let profiles: CustomerProfile[] = [];
@@ -138,7 +134,7 @@ export default function AdminAccountingPage() {
 
     const paymentsWithCustomers = paymentData.map((payment) => {
       const customer = profiles.find(
-        (profile) => profile.id === payment.owner_id
+        (profile) => profile.id === payment.owner_id,
       );
 
       return {
@@ -161,7 +157,7 @@ export default function AdminAccountingPage() {
 
   const totalReceived = payments.reduce(
     (sum, payment) => sum + Number(payment.amount || 0),
-    0
+    0,
   );
 
   const depositTotal = payments
@@ -199,8 +195,7 @@ export default function AdminAccountingPage() {
     }
 
     const matchesType =
-      paymentTypeFilter === "All" ||
-      payment.payment_type === paymentTypeFilter;
+      paymentTypeFilter === "All" || payment.payment_type === paymentTypeFilter;
 
     return matchesDate && matchesType;
   });
@@ -212,7 +207,7 @@ export default function AdminAccountingPage() {
 
     const total = filteredPayments.reduce(
       (sum, payment) => sum + Number(payment.amount || 0),
-      0
+      0,
     );
 
     doc.setFontSize(18);
@@ -229,72 +224,61 @@ export default function AdminAccountingPage() {
     doc.setFontSize(12);
     doc.text(`Total: ${formatMoney(total)}`, 14, 62);
 
-autoTable(doc, {
-    startY: 72,
-    head: [
-      [
-        "Invoice",
-        "Date Paid",
-        "Booking Dates",
-        "Customer",
-        "Dog",
-        "Type",
-        "Notes",
-        "Amount",
+    autoTable(doc, {
+      startY: 72,
+      head: [
+        [
+          "Invoice",
+          "Date Paid",
+          "Booking Dates",
+          "Customer",
+          "Dog",
+          "Type",
+          "Notes",
+          "Amount",
+        ],
       ],
-    ],
-    body: filteredPayments.map((payment) => [
-      payment.invoice_number,
-      formatDisplayDate(payment.payment_date),
-      payment.bookings
-        ? `${formatDisplayDate(payment.bookings.start_date)} to ${formatDisplayDate(
-            payment.bookings.end_date
-          )}`
-        : "-",
-      getCustomerName(payment),
-      formatName(payment.dogs?.name || "") || "Dog",
-      payment.payment_type,
-      payment.notes || "-",
-      formatMoney(payment.amount),
-    ]),
-    foot: [
-      [
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "Total",
-        formatMoney(total),
-      ],
-    ],
-    styles: {
-      fontSize: 8,
-      cellPadding: 2,
-    },
-    headStyles: {
-      fillColor: [139, 106, 78],
-      textColor: [255, 255, 255],
-    },
-    footStyles: {
-      fillColor: [245, 239, 230],
-      textColor: [92, 64, 51],
-      fontStyle: "bold",
-    },
-  });
+      body: filteredPayments.map((payment) => [
+        payment.invoice_number,
+        formatDisplayDate(payment.payment_date),
+        payment.bookings
+          ? `${formatDisplayDate(payment.bookings.start_date)} to ${formatDisplayDate(
+              payment.bookings.end_date,
+            )}`
+          : "-",
+        getCustomerName(payment),
+        formatName(payment.dogs?.name || "") || "Dog",
+        payment.payment_type,
+        payment.notes || "-",
+        formatMoney(payment.amount),
+      ]),
+      foot: [["", "", "", "", "", "", "Total", formatMoney(total)]],
+      styles: {
+        fontSize: 8,
+        cellPadding: 2,
+      },
+      headStyles: {
+        fillColor: [139, 106, 78],
+        textColor: [255, 255, 255],
+      },
+      footStyles: {
+        fillColor: [245, 239, 230],
+        textColor: [92, 64, 51],
+        fontStyle: "bold",
+      },
+    });
 
-  const filename = `browns-boarding-accounting-${generatedDate.replaceAll(
-    "/",
-    "-"
-  )}.pdf`;
+    const filename = `browns-boarding-accounting-${generatedDate.replaceAll(
+      "/",
+      "-",
+    )}.pdf`;
 
-  doc.save(filename);
-}
+    doc.save(filename);
+  }
 
-if (loading) {
-  return <LoadingScreen message="Loading your details..." />;
-}
+  if (loading) {
+    return <LoadingScreen message="Loading your details..." />;
+  }
 
   return (
     <AdminPageLayout>
@@ -307,11 +291,7 @@ if (loading) {
           </Button>
         }
       >
-        {message && (
-          <MessageBox type="error">
-            {message}
-          </MessageBox>
-        )}
+        {message && <MessageBox type="error">{message}</MessageBox>}
 
         {/* Summary Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
@@ -451,16 +431,11 @@ if (loading) {
                         {payment.bookings ? (
                           <>
                             <p>
-                              {formatDisplayDate(
-                                payment.bookings.start_date
-                              )}
+                              {formatDisplayDate(payment.bookings.start_date)}
                             </p>
 
                             <p className="text-sm text-[#8B6A4E]">
-                              to{" "}
-                              {formatDisplayDate(
-                                payment.bookings.end_date
-                              )}
+                              to {formatDisplayDate(payment.bookings.end_date)}
                             </p>
                           </>
                         ) : (
@@ -515,10 +490,9 @@ if (loading) {
                     <td className="p-3 md:p-4 border-t-2 border-[#D9CBB8] text-right">
                       {formatMoney(
                         filteredPayments.reduce(
-                          (sum, payment) =>
-                            sum + Number(payment.amount || 0),
-                          0
-                        )
+                          (sum, payment) => sum + Number(payment.amount || 0),
+                          0,
+                        ),
                       )}
                     </td>
                   </tr>
@@ -531,4 +505,3 @@ if (loading) {
     </AdminPageLayout>
   );
 }
-``
