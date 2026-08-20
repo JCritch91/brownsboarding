@@ -7,18 +7,18 @@ import {
   validateBookingDates,
 } from "@/lib/helpers";
 
-import {
-  calculateBookingPricing,
-} from "@/lib/services/booking-confirmation-service";
+import { calculateBookingPricing } from "@/lib/services/booking-confirmation-service";
 
 import {
   buildBookingCalendarPayload,
   buildBookingConfirmationEmailPayload,
 } from "@/lib/services/booking-payloads";
 
+import { syncAvailabilityCalendarEvent } from "@/lib/services/availability-calendar-sync-service";
+
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
 type AvailabilityCalendarFailure = {
@@ -28,11 +28,9 @@ type AvailabilityCalendarFailure = {
 
 export async function POST(request: Request) {
   try {
-    const authorizationHeader =
-      request.headers.get("authorization");
+    const authorizationHeader = request.headers.get("authorization");
 
-    const accessToken =
-      authorizationHeader?.replace("Bearer ", "");
+    const accessToken = authorizationHeader?.replace("Bearer ", "");
 
     if (!accessToken) {
       return NextResponse.json(
@@ -41,16 +39,14 @@ export async function POST(request: Request) {
         },
         {
           status: 401,
-        }
+        },
       );
     }
 
     const {
       data: { user },
       error: userError,
-    } = await supabaseAdmin.auth.getUser(
-      accessToken
-    );
+    } = await supabaseAdmin.auth.getUser(accessToken);
 
     if (userError || !user) {
       return NextResponse.json(
@@ -59,14 +55,11 @@ export async function POST(request: Request) {
         },
         {
           status: 401,
-        }
+        },
       );
     }
 
-    const {
-      data: adminProfile,
-      error: adminProfileError,
-    } = await supabaseAdmin
+    const { data: adminProfile, error: adminProfileError } = await supabaseAdmin
       .from("profiles")
       .select("id, is_admin, active")
       .eq("id", user.id)
@@ -79,23 +72,18 @@ export async function POST(request: Request) {
         },
         {
           status: 500,
-        }
+        },
       );
     }
 
-    if (
-      !adminProfile ||
-      !adminProfile.is_admin ||
-      !adminProfile.active
-    ) {
+    if (!adminProfile || !adminProfile.is_admin || !adminProfile.active) {
       return NextResponse.json(
         {
-          error:
-            "You do not have permission to confirm bookings.",
+          error: "You do not have permission to confirm bookings.",
         },
         {
           status: 403,
-        }
+        },
       );
     }
 
@@ -103,29 +91,23 @@ export async function POST(request: Request) {
       bookingId?: unknown;
     };
 
-const bookingId = body.bookingId;
+    const bookingId = body.bookingId;
 
-    if (
-      typeof bookingId !== "string" ||
-      !bookingId.trim()
-    ) {
+    if (typeof bookingId !== "string" || !bookingId.trim()) {
       return NextResponse.json(
         {
           error: "Booking ID is missing.",
         },
         {
           status: 400,
-        }
+        },
       );
     }
 
-    const {
-      data: booking,
-      error: bookingLoadError,
-    } = await supabaseAdmin
+    const { data: booking, error: bookingLoadError } = await supabaseAdmin
       .from("bookings")
-    .select(
-    `
+      .select(
+        `
     id,
     booking_reference,
     owner_id,
@@ -140,8 +122,8 @@ const bookingId = body.bookingId;
     total_cost,
     deposit_amount,
     balance_amount
-    `
-    )
+    `,
+      )
       .eq("id", bookingId)
       .maybeSingle();
 
@@ -152,7 +134,7 @@ const bookingId = body.bookingId;
         },
         {
           status: 500,
-        }
+        },
       );
     }
 
@@ -163,26 +145,22 @@ const bookingId = body.bookingId;
         },
         {
           status: 404,
-        }
+        },
       );
     }
 
     if (booking.status !== "Pending") {
       return NextResponse.json(
         {
-          error:
-            `A booking with status "${booking.status}" cannot be confirmed.`,
+          error: `A booking with status "${booking.status}" cannot be confirmed.`,
         },
         {
           status: 409,
-        }
+        },
       );
     }
 
-    const {
-      data: customer,
-      error: customerLoadError,
-    } = await supabaseAdmin
+    const { data: customer, error: customerLoadError } = await supabaseAdmin
       .from("profiles")
       .select(
         `
@@ -191,7 +169,7 @@ const bookingId = body.bookingId;
         last_name,
         email,
         active
-        `
+        `,
       )
       .eq("id", booking.owner_id)
       .maybeSingle();
@@ -203,7 +181,7 @@ const bookingId = body.bookingId;
         },
         {
           status: 500,
-        }
+        },
       );
     }
 
@@ -215,7 +193,7 @@ const bookingId = body.bookingId;
         },
         {
           status: 404,
-        }
+        },
       );
     }
 
@@ -227,32 +205,30 @@ const bookingId = body.bookingId;
         },
         {
           status: 400,
-        }
+        },
       );
     }
 
-const bookingDateValidation =
-  validateBookingDates(
-    booking.start_date,
-    booking.end_date
-  );
+    const bookingDateValidation = validateBookingDates(
+      booking.start_date,
+      booking.end_date,
+    );
 
-if (bookingDateValidation) {
-  return NextResponse.json(
-    {
-      error: bookingDateValidation,
-    },
-    {
-      status: 400,
+    if (bookingDateValidation) {
+      return NextResponse.json(
+        {
+          error: bookingDateValidation,
+        },
+        {
+          status: 400,
+        },
+      );
     }
-  );
-}
 
-const { data: dog, error: dogLoadError } =
-  await supabaseAdmin
-    .from("dogs")
-    .select(
-      `
+    const { data: dog, error: dogLoadError } = await supabaseAdmin
+      .from("dogs")
+      .select(
+        `
       id,
       owner_id,
       name,
@@ -261,778 +237,623 @@ const { data: dog, error: dogLoadError } =
       vaccinated,
       vaccination_expiry,
       meet_and_greet_completed
-      `
-    )
-    .eq("id", booking.dog_id)
-    .eq("owner_id", booking.owner_id)
-    .maybeSingle();
+      `,
+      )
+      .eq("id", booking.dog_id)
+      .eq("owner_id", booking.owner_id)
+      .maybeSingle();
 
-if (dogLoadError) {
-  return NextResponse.json(
-    {
-      error: dogLoadError.message,
-    },
-    {
-      status: 500,
+    if (dogLoadError) {
+      return NextResponse.json(
+        {
+          error: dogLoadError.message,
+        },
+        {
+          status: 500,
+        },
+      );
     }
-  );
-}
 
-if (!dog) {
-  return NextResponse.json(
-    {
-      error:
-        "The dog associated with this booking could not be found.",
-    },
-    {
-      status: 404,
+    if (!dog) {
+      return NextResponse.json(
+        {
+          error: "The dog associated with this booking could not be found.",
+        },
+        {
+          status: 404,
+        },
+      );
     }
-  );
-}
 
-if (!dog.active) {
-  return NextResponse.json(
-    {
-      error:
-        "The booking cannot be confirmed because the dog is inactive.",
-    },
-    {
-      status: 400,
+    if (!dog.active) {
+      return NextResponse.json(
+        {
+          error: "The booking cannot be confirmed because the dog is inactive.",
+        },
+        {
+          status: 400,
+        },
+      );
     }
-  );
-}
 
-if (!dog.vaccinated) {
-  return NextResponse.json(
-    {
-      error:
-        "The booking cannot be confirmed because the dog's vaccination information is incomplete.",
-    },
-    {
-      status: 400,
+    if (!dog.vaccinated) {
+      return NextResponse.json(
+        {
+          error:
+            "The booking cannot be confirmed because the dog's vaccination information is incomplete.",
+        },
+        {
+          status: 400,
+        },
+      );
     }
-  );
-}
 
-if (!dog.vaccination_expiry) {
-  return NextResponse.json(
-    {
-      error:
-        "The booking cannot be confirmed because the dog's vaccination expiry date is missing.",
-    },
-    {
-      status: 400,
+    if (!dog.vaccination_expiry) {
+      return NextResponse.json(
+        {
+          error:
+            "The booking cannot be confirmed because the dog's vaccination expiry date is missing.",
+        },
+        {
+          status: 400,
+        },
+      );
     }
-  );
-}
 
-if (
-  dog.vaccination_expiry <
-  booking.start_date
-) {
-  return NextResponse.json(
-    {
-      error:
-        "The booking cannot be confirmed because the dog's vaccination will have expired before the stay begins.",
-    },
-    {
-      status: 400,
+    if (dog.vaccination_expiry < booking.start_date) {
+      return NextResponse.json(
+        {
+          error:
+            "The booking cannot be confirmed because the dog's vaccination will have expired before the stay begins.",
+        },
+        {
+          status: 400,
+        },
+      );
     }
-  );
-}
 
-const {
-  data: pricing,
-  error: pricingLoadError,
-} = await supabaseAdmin
-  .from("pricing_settings")
-  .select(
-    `
+    const { data: pricing, error: pricingLoadError } = await supabaseAdmin
+      .from("pricing_settings")
+      .select(
+        `
     id,
     nightly_rate,
     deposit_percentage,
     active
-    `
-  )
-  .eq("active", true)
-  .limit(1)
-  .maybeSingle();
+    `,
+      )
+      .eq("active", true)
+      .limit(1)
+      .maybeSingle();
 
-if (pricingLoadError) {
-  return NextResponse.json(
-    {
-      error: pricingLoadError.message,
-    },
-    {
-      status: 500,
+    if (pricingLoadError) {
+      return NextResponse.json(
+        {
+          error: pricingLoadError.message,
+        },
+        {
+          status: 500,
+        },
+      );
     }
-  );
-}
 
-if (!pricing) {
-  return NextResponse.json(
-    {
-      error:
-        "No active pricing settings could be found.",
-    },
-    {
-      status: 400,
+    if (!pricing) {
+      return NextResponse.json(
+        {
+          error: "No active pricing settings could be found.",
+        },
+        {
+          status: 400,
+        },
+      );
     }
-  );
-}
 
-const nightlyRate = Number(
-  pricing.nightly_rate
-);
+    const nightlyRate = Number(pricing.nightly_rate);
 
-const depositPercentage = Number(
-  pricing.deposit_percentage
-);
+    const depositPercentage = Number(pricing.deposit_percentage);
 
-if (
-  !Number.isFinite(nightlyRate) ||
-  nightlyRate < 0
-) {
-  return NextResponse.json(
-    {
-      error:
-        "The active nightly rate is invalid.",
-    },
-    {
-      status: 500,
+    if (!Number.isFinite(nightlyRate) || nightlyRate < 0) {
+      return NextResponse.json(
+        {
+          error: "The active nightly rate is invalid.",
+        },
+        {
+          status: 500,
+        },
+      );
     }
-  );
-}
 
-if (
-  !Number.isFinite(depositPercentage) ||
-  depositPercentage < 0 ||
-  depositPercentage > 100
-) {
-  return NextResponse.json(
-    {
-      error:
-        "The active deposit percentage is invalid.",
-    },
-    {
-      status: 500,
+    if (
+      !Number.isFinite(depositPercentage) ||
+      depositPercentage < 0 ||
+      depositPercentage > 100
+    ) {
+      return NextResponse.json(
+        {
+          error: "The active deposit percentage is invalid.",
+        },
+        {
+          status: 500,
+        },
+      );
     }
-  );
-}
 
-const occupiedDates = getDatesInRange(
-  booking.start_date,
-  booking.end_date
-);
+    const occupiedDates = getDatesInRange(booking.start_date, booking.end_date);
 
-/*
- * The departure date does not consume a boarding
- * space, so it is excluded from the availability
- * checks.
- */
-occupiedDates.pop();
+    /*
+     * The departure date does not consume a boarding
+     * space, so it is excluded from the availability
+     * checks.
+     */
+    occupiedDates.pop();
 
-if (occupiedDates.length === 0) {
-  return NextResponse.json(
-    {
-      error:
-        "The booking does not contain any occupied nights.",
-    },
-    {
-      status: 400,
+    if (occupiedDates.length === 0) {
+      return NextResponse.json(
+        {
+          error: "The booking does not contain any occupied nights.",
+        },
+        {
+          status: 400,
+        },
+      );
     }
-  );
-}
 
-const {
-  data: availabilityRecords,
-  error: availabilityLoadError,
-} = await supabaseAdmin
-  .from("availability")
-  .select(
-    `
+    const { data: availabilityRecords, error: availabilityLoadError } =
+      await supabaseAdmin
+        .from("availability")
+        .select(
+          `
     id,
     date,
     available,
     total_spaces,
     spaces_available
-    `
-  )
-  .gte("date", booking.start_date)
-  .lt("date", booking.end_date)
-  .order("date", { ascending: true });
+    `,
+        )
+        .gte("date", booking.start_date)
+        .lt("date", booking.end_date)
+        .order("date", { ascending: true });
 
-if (availabilityLoadError) {
-  return NextResponse.json(
-    {
-      error: availabilityLoadError.message,
-    },
-    {
-      status: 500,
+    if (availabilityLoadError) {
+      return NextResponse.json(
+        {
+          error: availabilityLoadError.message,
+        },
+        {
+          status: 500,
+        },
+      );
     }
-  );
-}
 
-const availabilityByDate = new Map(
-  (availabilityRecords || []).map(
-    (availabilityRecord) => [
-      availabilityRecord.date,
-      availabilityRecord,
-    ]
-  )
-);
-
-for (const occupiedDate of occupiedDates) {
-  const availabilityRecord =
-    availabilityByDate.get(occupiedDate);
-
-  if (!availabilityRecord) {
-    return NextResponse.json(
-      {
-        error:
-          `No availability has been configured for ${occupiedDate}.`,
-      },
-      {
-        status: 409,
-      }
+    const availabilityByDate = new Map(
+      (availabilityRecords || []).map((availabilityRecord) => [
+        availabilityRecord.date,
+        availabilityRecord,
+      ]),
     );
-  }
 
-  if (!availabilityRecord.available) {
-    return NextResponse.json(
-      {
-        error:
-          `${occupiedDate} is unavailable for bookings.`,
-      },
-      {
-        status: 409,
+    for (const occupiedDate of occupiedDates) {
+      const availabilityRecord = availabilityByDate.get(occupiedDate);
+
+      if (!availabilityRecord) {
+        return NextResponse.json(
+          {
+            error: `No availability has been configured for ${occupiedDate}.`,
+          },
+          {
+            status: 409,
+          },
+        );
       }
-    );
-  }
 
-  if (
-    availabilityRecord.spaces_available <= 0
-  ) {
-    return NextResponse.json(
-      {
-        error:
-          `${occupiedDate} is fully booked.`,
-      },
-      {
-        status: 409,
+      if (!availabilityRecord.available) {
+        return NextResponse.json(
+          {
+            error: `${occupiedDate} is unavailable for bookings.`,
+          },
+          {
+            status: 409,
+          },
+        );
       }
-    );
-  }
-}
 
-const pricingResult =
-  calculateBookingPricing(
-    booking.start_date,
-    booking.end_date,
-    nightlyRate,
-    depositPercentage
-  );
-
-const {
-  data: confirmationData,
-  error: confirmationError,
-} = await supabaseAdmin
-  .rpc("confirm_booking_atomic", {
-    p_booking_id: booking.id,
-    p_pricing_setting_id: pricing.id,
-    p_nightly_rate: nightlyRate,
-    p_number_of_nights:
-      pricingResult.numberOfNights,
-    p_total_cost:
-      pricingResult.totalCost,
-    p_deposit_amount:
-      pricingResult.depositAmount,
-    p_balance_amount:
-      pricingResult.balanceAmount,
-    p_new_status:
-      pricingResult.newStatus,
-  })
-  .single();
-
-if (confirmationError) {
-  console.error(
-    "Atomic booking confirmation failed:",
-    confirmationError
-  );
-
-  const errorMessage =
-    confirmationError.message ||
-    "The booking could not be confirmed.";
-
-  if (
-    errorMessage.includes(
-      "BOOKING_NOT_PENDING"
-    )
-  ) {
-    return NextResponse.json(
-      {
-        error:
-          "The booking has already been processed and can no longer be confirmed.",
-      },
-      {
-        status: 409,
+      if (availabilityRecord.spaces_available <= 0) {
+        return NextResponse.json(
+          {
+            error: `${occupiedDate} is fully booked.`,
+          },
+          {
+            status: 409,
+          },
+        );
       }
-    );
-  }
-
-  if (
-    errorMessage.includes(
-      "INSUFFICIENT_AVAILABILITY"
-    )
-  ) {
-    return NextResponse.json(
-      {
-        error:
-          "The booking could not be confirmed because one or more dates are no longer available.",
-      },
-      {
-        status: 409,
-      }
-    );
-  }
-
-  if (
-    errorMessage.includes(
-      "BOOKING_NOT_FOUND"
-    )
-  ) {
-    return NextResponse.json(
-      {
-        error:
-          "The booking could not be found.",
-      },
-      {
-        status: 404,
-      }
-    );
-  }
-
-  return NextResponse.json(
-    {
-      error: errorMessage,
-    },
-    {
-      status: 500,
     }
-  );
-}
 
-if (!confirmationData) {
-  return NextResponse.json(
-    {
-      error:
-        "The confirmation completed without returning a booking result.",
-    },
-    {
-      status: 500,
+    const pricingResult = calculateBookingPricing(
+      booking.start_date,
+      booking.end_date,
+      nightlyRate,
+      depositPercentage,
+    );
+
+    const { data: confirmationData, error: confirmationError } =
+      await supabaseAdmin
+        .rpc("confirm_booking_atomic", {
+          p_booking_id: booking.id,
+          p_pricing_setting_id: pricing.id,
+          p_nightly_rate: nightlyRate,
+          p_number_of_nights: pricingResult.numberOfNights,
+          p_total_cost: pricingResult.totalCost,
+          p_deposit_amount: pricingResult.depositAmount,
+          p_balance_amount: pricingResult.balanceAmount,
+          p_new_status: pricingResult.newStatus,
+        })
+        .single();
+
+    if (confirmationError) {
+      console.error("Atomic booking confirmation failed:", confirmationError);
+
+      const errorMessage =
+        confirmationError.message || "The booking could not be confirmed.";
+
+      if (errorMessage.includes("BOOKING_NOT_PENDING")) {
+        return NextResponse.json(
+          {
+            error:
+              "The booking has already been processed and can no longer be confirmed.",
+          },
+          {
+            status: 409,
+          },
+        );
+      }
+
+      if (errorMessage.includes("INSUFFICIENT_AVAILABILITY")) {
+        return NextResponse.json(
+          {
+            error:
+              "The booking could not be confirmed because one or more dates are no longer available.",
+          },
+          {
+            status: 409,
+          },
+        );
+      }
+
+      if (errorMessage.includes("BOOKING_NOT_FOUND")) {
+        return NextResponse.json(
+          {
+            error: "The booking could not be found.",
+          },
+          {
+            status: 404,
+          },
+        );
+      }
+
+      return NextResponse.json(
+        {
+          error: errorMessage,
+        },
+        {
+          status: 500,
+        },
+      );
     }
-  );
-}
 
-const {
-  data: updatedAvailability,
-  error: updatedAvailabilityError,
-} = await supabaseAdmin
-  .from("availability")
-  .select(
-    `
+    if (!confirmationData) {
+      return NextResponse.json(
+        {
+          error:
+            "The confirmation completed without returning a booking result.",
+        },
+        {
+          status: 500,
+        },
+      );
+    }
+
+    const { data: updatedAvailability, error: updatedAvailabilityError } =
+      await supabaseAdmin
+        .from("availability")
+        .select(
+          `
     id,
     date,
     available,
     total_spaces,
     spaces_available,
     notes
-    `
-  )
-  .gte("date", booking.start_date)
-  .lt("date", booking.end_date)
-  .order("date", { ascending: true });
+    `,
+        )
+        .gte("date", booking.start_date)
+        .lt("date", booking.end_date)
+        .order("date", { ascending: true });
 
-if (updatedAvailabilityError) {
-  return NextResponse.json(
-    {
-      success: true,
-      databaseConfirmed: true,
-      followUpRequired: true,
-      booking: {
-        id: booking.id,
-        bookingReference:
-          booking.booking_reference,
-        previousStatus:
-          booking.status,
-        newStatus:
-          pricingResult.newStatus,
-        startDate:
-          booking.start_date,
-        endDate:
-          booking.end_date,
-      },
-      error:
-        `The booking was confirmed, but the updated availability records could not be loaded: ${updatedAvailabilityError.message}`,
-    },
-    {
-      status: 207,
-    }
-  );
-}
-
-const availabilityCalendarFailures:
-  AvailabilityCalendarFailure[] = [];
-
-let availabilityCalendarSyncedDates = 0;
-
-const requestOrigin =
-  new URL(request.url).origin;
-
-for (
-  const availabilityRecord of
-    updatedAvailability || []
-) {
-  try {
-    const calendarResponse = await fetch(
-      `${requestOrigin}/api/google/sync-availability-event`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+    if (updatedAvailabilityError) {
+      return NextResponse.json(
+        {
+          success: true,
+          databaseConfirmed: true,
+          followUpRequired: true,
+          booking: {
+            id: booking.id,
+            bookingReference: booking.booking_reference,
+            previousStatus: booking.status,
+            newStatus: pricingResult.newStatus,
+            startDate: booking.start_date,
+            endDate: booking.end_date,
+          },
+          error: `The booking was confirmed, but the updated availability records could not be loaded: ${updatedAvailabilityError.message}`,
         },
-        body: JSON.stringify({
-          availabilityId:
-            availabilityRecord.id,
-          date:
-            availabilityRecord.date,
-          available:
-            availabilityRecord.available,
-          totalSpaces:
-            availabilityRecord.total_spaces,
-          spacesAvailable:
-            availabilityRecord.spaces_available,
-          notes:
-            availabilityRecord.notes,
-        }),
-      }
+        {
+          status: 207,
+        },
+      );
+    }
+
+    const availabilityCalendarFailures: AvailabilityCalendarFailure[] = [];
+
+    let availabilityCalendarSyncedDates = 0;
+
+    const availabilityCalendarResults = await Promise.allSettled(
+      (updatedAvailability || []).map(async (availabilityRecord) => {
+        await syncAvailabilityCalendarEvent({
+          availabilityId: availabilityRecord.id,
+          date: availabilityRecord.date,
+          available: availabilityRecord.available,
+          totalSpaces: availabilityRecord.total_spaces,
+          spacesAvailable: availabilityRecord.spaces_available,
+          notes: availabilityRecord.notes,
+        });
+
+        return availabilityRecord.date;
+      }),
     );
 
-    if (!calendarResponse.ok) {
-      const calendarErrorText =
-        await calendarResponse.text();
+    availabilityCalendarResults.forEach((calendarResult, index) => {
+      const availabilityRecord = (updatedAvailability || [])[index];
+
+      if (calendarResult.status === "fulfilled") {
+        availabilityCalendarSyncedDates += 1;
+        return;
+      }
+
+      const errorMessage =
+        calendarResult.reason instanceof Error
+          ? calendarResult.reason.message
+          : "Unknown Google Calendar error.";
 
       availabilityCalendarFailures.push({
-        date: availabilityRecord.date,
-        error:
-          calendarErrorText ||
-          "Google Calendar returned an unsuccessful response.",
+        date: availabilityRecord?.date || "unknown date",
+        error: errorMessage,
       });
 
       console.error(
-        `Availability calendar sync failed for ${availabilityRecord.date}:`,
-        calendarErrorText
+        `Availability calendar sync failed for ${
+          availabilityRecord?.date || "unknown date"
+        }:`,
+        calendarResult.reason,
       );
-
-      continue;
-    }
-
-    availabilityCalendarSyncedDates += 1;
-  } catch (calendarError) {
-    const errorMessage =
-      calendarError instanceof Error
-        ? calendarError.message
-        : "Unknown Google Calendar error.";
-
-    availabilityCalendarFailures.push({
-      date: availabilityRecord.date,
-      error: errorMessage,
     });
 
-    console.error(
-      `Availability calendar sync failed for ${availabilityRecord.date}:`,
-      calendarError
-    );
-  }
-}
+    const availabilityCalendarSynced =
+      availabilityCalendarFailures.length === 0;
 
-const availabilityCalendarSynced =
-  availabilityCalendarFailures.length === 0;
+    const requestOrigin = new URL(request.url).origin;
 
-  const customerName =
-  `${customer.first_name || ""} ${
-    customer.last_name || ""
-  }`.trim() ||
-  customer.email ||
-  "Customer";
+    const customerName =
+      `${customer.first_name || ""} ${customer.last_name || ""}`.trim() ||
+      customer.email ||
+      "Customer";
 
-const shortNoticeBooking = isWithinTwoWeeks(
-  booking.start_date
-);
+    const shortNoticeBooking = isWithinTwoWeeks(booking.start_date);
 
-const paymentStatus = shortNoticeBooking
-  ? "Full balance due"
-  : "Deposit due";
+    const paymentStatus = shortNoticeBooking
+      ? "Full balance due"
+      : "Deposit due";
 
-const bookingCalendarPayload =
-  buildBookingCalendarPayload({
-    bookingId: booking.id,
-    bookingReference:
-      booking.booking_reference,
-    customerName,
-    customerEmail:
-      customer.email,
-    dogName:
-      dog.name,
-    dogBreed:
-      dog.breed,
-    startDate:
-      booking.start_date,
-    endDate:
-      booking.end_date,
-    bookingStatus:
-      pricingResult.newStatus,
-    paymentStatus,
-    notes:
-      booking.notes,
-    pricing:
-      pricingResult,
-  });
+    const bookingCalendarPayload = buildBookingCalendarPayload({
+      bookingId: booking.id,
+      bookingReference: booking.booking_reference,
+      customerName,
+      customerEmail: customer.email,
+      dogName: dog.name,
+      dogBreed: dog.breed,
+      startDate: booking.start_date,
+      endDate: booking.end_date,
+      bookingStatus: pricingResult.newStatus,
+      paymentStatus,
+      notes: booking.notes,
+      pricing: pricingResult,
+    });
 
-let bookingCalendarCreated = false;
-let bookingCalendarError: string | null = null;
+    let bookingCalendarCreated = false;
+    let bookingCalendarError: string | null = null;
 
-try {
-  const bookingCalendarResponse = await fetch(
-    `${requestOrigin}/api/google/create-booking-event`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(
-        bookingCalendarPayload
-      ),
-    }
-  );
-
-  if (!bookingCalendarResponse.ok) {
-    const responseText =
-      await bookingCalendarResponse.text();
-
-    bookingCalendarError =
-      responseText ||
-      "Google Calendar returned an unsuccessful response.";
-
-    console.error(
-      `Booking calendar creation failed for ${booking.booking_reference}:`,
-      bookingCalendarError
-    );
-  } else {
-    bookingCalendarCreated = true;
-  }
-} catch (calendarError) {
-  bookingCalendarError =
-    calendarError instanceof Error
-      ? calendarError.message
-      : "Unknown Google booking calendar error.";
-
-  console.error(
-    `Booking calendar creation failed for ${booking.booking_reference}:`,
-    calendarError
-  );
-}
-
-const confirmationEmailPayload =
-  buildBookingConfirmationEmailPayload({
-    bookingReference:
-      booking.booking_reference,
-    customerEmail:
-      customer.email,
-    customerName,
-    dogName:
-      dog.name,
-    startDate:
-      booking.start_date,
-    endDate:
-      booking.end_date,
-    shortNoticeBooking,
-    pricing:
-      pricingResult,
-  });
-
-let confirmationEmailSent = false;
-let confirmationEmailError: string | null =
-  null;
-
-if (!customer.email) {
-  confirmationEmailError =
-    "The customer does not have an email address.";
-} else {
-  try {
-    const emailResponse = await fetch(
-      `${requestOrigin}/api/send-booking-confirmation-email`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
+    try {
+      const bookingCalendarResponse = await fetch(
+        `${requestOrigin}/api/google/create-booking-event`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(bookingCalendarPayload),
         },
-        body: JSON.stringify(
-          confirmationEmailPayload
-        ),
+      );
+
+      if (!bookingCalendarResponse.ok) {
+        const responseText = await bookingCalendarResponse.text();
+
+        bookingCalendarError =
+          responseText || "Google Calendar returned an unsuccessful response.";
+
+        console.error(
+          `Booking calendar creation failed for ${booking.booking_reference}:`,
+          bookingCalendarError,
+        );
+      } else {
+        bookingCalendarCreated = true;
       }
-    );
-
-    if (!emailResponse.ok) {
-      const responseText =
-        await emailResponse.text();
-
-      confirmationEmailError =
-        responseText ||
-        "The confirmation email route returned an unsuccessful response.";
+    } catch (calendarError) {
+      bookingCalendarError =
+        calendarError instanceof Error
+          ? calendarError.message
+          : "Unknown Google booking calendar error.";
 
       console.error(
-        `Booking confirmation email failed for ${booking.booking_reference}:`,
-        confirmationEmailError
+        `Booking calendar creation failed for ${booking.booking_reference}:`,
+        calendarError,
       );
-    } else {
-      confirmationEmailSent = true;
     }
-  } catch (emailError) {
-    confirmationEmailError =
-      emailError instanceof Error
-        ? emailError.message
-        : "Unknown booking confirmation email error.";
 
-    console.error(
-      `Booking confirmation email failed for ${booking.booking_reference}:`,
-      emailError
+    const confirmationEmailPayload = buildBookingConfirmationEmailPayload({
+      bookingReference: booking.booking_reference,
+      customerEmail: customer.email,
+      customerName,
+      dogName: dog.name,
+      startDate: booking.start_date,
+      endDate: booking.end_date,
+      shortNoticeBooking,
+      pricing: pricingResult,
+    });
+
+    let confirmationEmailSent = false;
+    let confirmationEmailError: string | null = null;
+
+    if (!customer.email) {
+      confirmationEmailError = "The customer does not have an email address.";
+    } else {
+      try {
+        const emailResponse = await fetch(
+          `${requestOrigin}/api/send-booking-confirmation-email`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(confirmationEmailPayload),
+          },
+        );
+
+        if (!emailResponse.ok) {
+          const responseText = await emailResponse.text();
+
+          confirmationEmailError =
+            responseText ||
+            "The confirmation email route returned an unsuccessful response.";
+
+          console.error(
+            `Booking confirmation email failed for ${booking.booking_reference}:`,
+            confirmationEmailError,
+          );
+        } else {
+          confirmationEmailSent = true;
+        }
+      } catch (emailError) {
+        confirmationEmailError =
+          emailError instanceof Error
+            ? emailError.message
+            : "Unknown booking confirmation email error.";
+
+        console.error(
+          `Booking confirmation email failed for ${booking.booking_reference}:`,
+          emailError,
+        );
+      }
+    }
+
+    const followUpRequired =
+      !availabilityCalendarSynced ||
+      !bookingCalendarCreated ||
+      !confirmationEmailSent;
+
+    const failedOperations: string[] = [];
+
+    if (!availabilityCalendarSynced) {
+      failedOperations.push(
+        `${availabilityCalendarFailures.length} availability calendar event(s)`,
+      );
+    }
+
+    if (!bookingCalendarCreated) {
+      failedOperations.push("the Google booking calendar event");
+    }
+
+    if (!confirmationEmailSent) {
+      failedOperations.push("the customer confirmation email");
+    }
+
+    return NextResponse.json(
+      {
+        success: true,
+        databaseConfirmed: true,
+        followUpRequired,
+
+        booking: {
+          id: booking.id,
+          bookingReference: booking.booking_reference,
+          previousStatus: booking.status,
+          newStatus: pricingResult.newStatus,
+          startDate: booking.start_date,
+          endDate: booking.end_date,
+          notes: booking.notes,
+        },
+
+        customer: {
+          id: customer.id,
+          name: customerName,
+          email: customer.email,
+        },
+
+        dog: {
+          id: dog.id,
+          name: dog.name,
+          breed: dog.breed,
+        },
+
+        pricing: {
+          pricingSettingId: pricing.id,
+          nightlyRate,
+          depositPercentage,
+          numberOfNights: pricingResult.numberOfNights,
+          totalCost: pricingResult.totalCost,
+          depositAmount: pricingResult.depositAmount,
+          balanceAmount: pricingResult.balanceAmount,
+        },
+
+        availability: {
+          records: updatedAvailability || [],
+          occupiedDates,
+          checkedDates: occupiedDates.length,
+          calendarSynced: availabilityCalendarSynced,
+          calendarSyncedDates: availabilityCalendarSyncedDates,
+          calendarFailures: availabilityCalendarFailures,
+        },
+
+        bookingCalendar: {
+          created: bookingCalendarCreated,
+          error: bookingCalendarError,
+        },
+
+        email: {
+          sent: confirmationEmailSent,
+          error: confirmationEmailError,
+        },
+
+        message: followUpRequired
+          ? `The booking was confirmed, but the following operation(s) could not be completed: ${failedOperations.join(
+              ", ",
+            )}.`
+          : "The booking was confirmed successfully, both Google calendars were updated and the confirmation email was sent.",
+      },
+      {
+        status: followUpRequired ? 207 : 200,
+      },
     );
-  }
-}
-
-const followUpRequired =
-  !availabilityCalendarSynced ||
-  !bookingCalendarCreated ||
-  !confirmationEmailSent;
-
-const failedOperations: string[] = [];
-
-if (!availabilityCalendarSynced) {
-  failedOperations.push(
-    `${availabilityCalendarFailures.length} availability calendar event(s)`
-  );
-}
-
-if (!bookingCalendarCreated) {
-  failedOperations.push(
-    "the Google booking calendar event"
-  );
-}
-
-if (!confirmationEmailSent) {
-  failedOperations.push(
-    "the customer confirmation email"
-  );
-}
-
-return NextResponse.json(
-  {
-    success: true,
-    databaseConfirmed: true,
-    followUpRequired,
-
-    booking: {
-      id: booking.id,
-      bookingReference:
-        booking.booking_reference,
-      previousStatus:
-        booking.status,
-      newStatus:
-        pricingResult.newStatus,
-      startDate:
-        booking.start_date,
-      endDate:
-        booking.end_date,
-      notes:
-        booking.notes,
-    },
-
-    customer: {
-      id: customer.id,
-      name: customerName,
-      email:
-        customer.email,
-    },
-
-    dog: {
-      id: dog.id,
-      name: dog.name,
-      breed: dog.breed,
-    },
-
-    pricing: {
-      pricingSettingId:
-        pricing.id,
-      nightlyRate,
-      depositPercentage,
-      numberOfNights:
-        pricingResult.numberOfNights,
-      totalCost:
-        pricingResult.totalCost,
-      depositAmount:
-        pricingResult.depositAmount,
-      balanceAmount:
-        pricingResult.balanceAmount,
-    },
-
-    availability: {
-      records:
-        updatedAvailability || [],
-      occupiedDates,
-      checkedDates:
-        occupiedDates.length,
-      calendarSynced:
-        availabilityCalendarSynced,
-      calendarSyncedDates:
-        availabilityCalendarSyncedDates,
-      calendarFailures:
-        availabilityCalendarFailures,
-    },
-
-    bookingCalendar: {
-      created:
-        bookingCalendarCreated,
-      error:
-        bookingCalendarError,
-    },
-
-    email: {
-      sent:
-        confirmationEmailSent,
-      error:
-        confirmationEmailError,
-    },
-
-    message: followUpRequired
-      ? `The booking was confirmed, but the following operation(s) could not be completed: ${failedOperations.join(
-          ", "
-        )}.`
-      : "The booking was confirmed successfully, both Google calendars were updated and the confirmation email was sent.",
-  },
-  {
-    status:
-      followUpRequired
-        ? 207
-        : 200,
-  }
-);
-
   } catch (error) {
-    console.error(
-      "Admin booking confirmation failed:",
-      error
-    );
+    console.error("Admin booking confirmation failed:", error);
 
     return NextResponse.json(
       {
@@ -1043,7 +864,7 @@ return NextResponse.json(
       },
       {
         status: 500,
-      }
+      },
     );
   }
 }
