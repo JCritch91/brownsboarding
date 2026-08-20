@@ -775,7 +775,7 @@ export default function AdminCustomerDetailsPage() {
                     {!customer.was_activated && (
                       <Button
                         type="button"
-                        variant="light"
+                        variant="dark"
                         onClick={resendActivationEmail}
                         disabled={accountActionLoading}
                         className="disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100"
