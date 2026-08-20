@@ -315,9 +315,7 @@ export default function MyBookingsPage() {
             </dl>
 
             <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-red-800">
-              <p>
-                Browns Boarding will be notified.
-              </p>
+              <p>Browns Boarding will be notified.</p>
             </div>
           </div>
         )}
