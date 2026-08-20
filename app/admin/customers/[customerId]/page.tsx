@@ -14,9 +14,7 @@ import { authenticatedApiRequest } from "@/lib/client/authenticated-api";
 import ConfirmationModal from "@/components/modals/ConfirmationModal";
 
 type CustomerConfirmationAction =
-  | "toggle-admin"
-  | "toggle-active"
-  | "resend-activation";
+  "toggle-admin" | "toggle-active" | "resend-activation";
 
 type ResendActivationEmailResponse = {
   success: boolean;
@@ -125,98 +123,98 @@ export default function AdminCustomerDetailsPage() {
 
   const [accountActionLoading, setAccountActionLoading] = useState(false);
   const [confirmationAction, setConfirmationAction] =
-  useState<CustomerConfirmationAction | null>(null);
+    useState<CustomerConfirmationAction | null>(null);
 
   useEffect(() => {
     checkAdminAndLoadCustomer();
   }, [customerId]);
 
-function requestAdminStatusChange() {
-  if (!customer || accountActionLoading) {
-    return;
+  function requestAdminStatusChange() {
+    if (!customer || accountActionLoading) {
+      return;
+    }
+
+    const makingAdmin = !customer.is_admin;
+
+    if (customer.id === currentUserId && !makingAdmin) {
+      setIsError(true);
+      setMessage("You cannot remove your own administrator access.");
+      return;
+    }
+
+    setMessage("");
+    setIsError(false);
+    setConfirmationAction("toggle-admin");
   }
 
-  const makingAdmin = !customer.is_admin;
+  async function toggleAdminStatus() {
+    if (!customer || accountActionLoading) {
+      return;
+    }
 
-  if (customer.id === currentUserId && !makingAdmin) {
-    setIsError(true);
-    setMessage("You cannot remove your own administrator access.");
-    return;
-  }
+    const makingAdmin = !customer.is_admin;
 
-  setMessage("");
-  setIsError(false);
-  setConfirmationAction("toggle-admin");
-}
+    setAccountActionLoading(true);
+    setMessage("");
+    setIsError(false);
 
-async function toggleAdminStatus() {
-  if (!customer || accountActionLoading) {
-    return;
-  }
-
-  const makingAdmin = !customer.is_admin;
-
-  setAccountActionLoading(true);
-  setMessage("");
-  setIsError(false);
-
-  const result = await authenticatedApiRequest<UpdateAdminStatusResponse>(
-    `/api/admin/customers/${customerId}/admin-status`,
-    {
-      method: "PATCH",
-      body: {
-        isAdmin: makingAdmin,
+    const result = await authenticatedApiRequest<UpdateAdminStatusResponse>(
+      `/api/admin/customers/${customerId}/admin-status`,
+      {
+        method: "PATCH",
+        body: {
+          isAdmin: makingAdmin,
+        },
       },
-    },
-  );
-
-  if (result.unauthenticated) {
-    setAccountActionLoading(false);
-    setConfirmationAction(null);
-    window.location.href = "/login";
-    return;
-  }
-
-  if (!result.ok) {
-    setAccountActionLoading(false);
-    setConfirmationAction(null);
-    setIsError(true);
-    setMessage(result.error || "Administrator access could not be updated.");
-    return;
-  }
-
-  if (!result.data || !result.data.adminStatusUpdated) {
-    setAccountActionLoading(false);
-    setConfirmationAction(null);
-    setIsError(true);
-    setMessage(
-      result.data?.error ||
-        "The role-management service did not update administrator access.",
     );
-    return;
+
+    if (result.unauthenticated) {
+      setAccountActionLoading(false);
+      setConfirmationAction(null);
+      window.location.href = "/login";
+      return;
+    }
+
+    if (!result.ok) {
+      setAccountActionLoading(false);
+      setConfirmationAction(null);
+      setIsError(true);
+      setMessage(result.error || "Administrator access could not be updated.");
+      return;
+    }
+
+    if (!result.data || !result.data.adminStatusUpdated) {
+      setAccountActionLoading(false);
+      setConfirmationAction(null);
+      setIsError(true);
+      setMessage(
+        result.data?.error ||
+          "The role-management service did not update administrator access.",
+      );
+      return;
+    }
+
+    const updatedAdminStatus = result.data.profile?.isAdmin ?? makingAdmin;
+
+    setCustomer((current) =>
+      current
+        ? {
+            ...current,
+            is_admin: updatedAdminStatus,
+          }
+        : current,
+    );
+
+    setAccountActionLoading(false);
+    setConfirmationAction(null);
+    setIsError(false);
+    setMessage(
+      result.data.message ||
+        (updatedAdminStatus
+          ? "Administrator access granted."
+          : "Administrator access removed."),
+    );
   }
-
-  const updatedAdminStatus = result.data.profile?.isAdmin ?? makingAdmin;
-
-  setCustomer((current) =>
-    current
-      ? {
-          ...current,
-          is_admin: updatedAdminStatus,
-        }
-      : current,
-  );
-
-  setAccountActionLoading(false);
-  setConfirmationAction(null);
-  setIsError(false);
-  setMessage(
-    result.data.message ||
-      (updatedAdminStatus
-        ? "Administrator access granted."
-        : "Administrator access removed."),
-  );
-}
 
   async function checkAdminAndLoadCustomer() {
     setLoading(true);
@@ -368,165 +366,164 @@ async function toggleAdminStatus() {
     });
   }
 
-function requestCustomerActiveStatusChange() {
-  if (!customer || accountActionLoading) {
-    return;
+  function requestCustomerActiveStatusChange() {
+    if (!customer || accountActionLoading) {
+      return;
+    }
+
+    setMessage("");
+    setIsError(false);
+    setConfirmationAction("toggle-active");
   }
 
-  setMessage("");
-  setIsError(false);
-  setConfirmationAction("toggle-active");
-}
+  async function toggleCustomerActiveStatus() {
+    if (!customer || accountActionLoading) {
+      return;
+    }
 
-async function toggleCustomerActiveStatus() {
-  if (!customer || accountActionLoading) {
-    return;
-  }
+    const requestedActiveStatus = !customer.active;
 
-  const requestedActiveStatus = !customer.active;
+    setAccountActionLoading(true);
+    setMessage("");
+    setIsError(false);
 
-  setAccountActionLoading(true);
-  setMessage("");
-  setIsError(false);
-
-  const result =
-    await authenticatedApiRequest<UpdateCustomerActiveStatusResponse>(
-      `/api/admin/customers/${customerId}/active-status`,
-      {
-        method: "PATCH",
-        body: {
-          active: requestedActiveStatus,
+    const result =
+      await authenticatedApiRequest<UpdateCustomerActiveStatusResponse>(
+        `/api/admin/customers/${customerId}/active-status`,
+        {
+          method: "PATCH",
+          body: {
+            active: requestedActiveStatus,
+          },
         },
-      },
-    );
+      );
 
-  if (result.unauthenticated) {
+    if (result.unauthenticated) {
+      setAccountActionLoading(false);
+      setConfirmationAction(null);
+      window.location.href = "/login";
+      return;
+    }
+
+    if (!result.ok) {
+      setAccountActionLoading(false);
+      setConfirmationAction(null);
+      setIsError(true);
+      setMessage(
+        result.error || "The customer account status could not be updated.",
+      );
+      return;
+    }
+
+    if (!result.data || !result.data.customerStatusUpdated) {
+      setAccountActionLoading(false);
+      setConfirmationAction(null);
+      setIsError(true);
+      setMessage(
+        result.data?.error ||
+          "The customer service did not update the account status.",
+      );
+      return;
+    }
+
+    await loadCustomerData();
+
     setAccountActionLoading(false);
     setConfirmationAction(null);
-    window.location.href = "/login";
-    return;
-  }
-
-  if (!result.ok) {
-    setAccountActionLoading(false);
-    setConfirmationAction(null);
-    setIsError(true);
+    setIsError(false);
     setMessage(
-      result.error || "The customer account status could not be updated.",
+      result.data.message ||
+        (requestedActiveStatus
+          ? "Customer account activated successfully."
+          : "Customer account deactivated successfully."),
     );
-    return;
   }
 
-  if (!result.data || !result.data.customerStatusUpdated) {
-    setAccountActionLoading(false);
-    setConfirmationAction(null);
-    setIsError(true);
-    setMessage(
-      result.data?.error ||
-        "The customer service did not update the account status.",
+  function requestActivationEmailResend() {
+    if (!customer || accountActionLoading) {
+      return;
+    }
+
+    if (customer.was_activated) {
+      setIsError(true);
+      setMessage("This customer has already activated their account.");
+      return;
+    }
+
+    if (!customer.email) {
+      setIsError(true);
+      setMessage("This customer does not have an email address.");
+      return;
+    }
+
+    setMessage("");
+    setIsError(false);
+    setConfirmationAction("resend-activation");
+  }
+
+  async function resendActivationEmail() {
+    if (!customer || accountActionLoading || !customer.email) {
+      return;
+    }
+
+    setAccountActionLoading(true);
+    setMessage("");
+    setIsError(false);
+
+    const result = await authenticatedApiRequest<ResendActivationEmailResponse>(
+      `/api/admin/customers/${customerId}/resend-activation`,
     );
-    return;
-  }
 
-  await loadCustomerData();
+    if (result.unauthenticated) {
+      setAccountActionLoading(false);
+      setConfirmationAction(null);
+      window.location.href = "/login";
+      return;
+    }
 
-  setAccountActionLoading(false);
-  setConfirmationAction(null);
-  setIsError(false);
-  setMessage(
-    result.data.message ||
-      (requestedActiveStatus
-        ? "Customer account activated successfully."
-        : "Customer account deactivated successfully."),
-  );
-}
+    if (!result.ok) {
+      setAccountActionLoading(false);
+      setConfirmationAction(null);
+      setIsError(true);
+      setMessage(result.error || "Unable to resend the activation email.");
+      return;
+    }
 
-function requestActivationEmailResend() {
-  if (!customer || accountActionLoading) {
-    return;
-  }
+    if (!result.data || !result.data.activationEmailSent) {
+      setAccountActionLoading(false);
+      setConfirmationAction(null);
+      setIsError(true);
+      setMessage(
+        result.data?.error ||
+          "The activation service did not send a new email.",
+      );
+      return;
+    }
 
-  if (customer.was_activated) {
-    setIsError(true);
-    setMessage("This customer has already activated their account.");
-    return;
-  }
-
-  if (!customer.email) {
-    setIsError(true);
-    setMessage("This customer does not have an email address.");
-    return;
-  }
-
-  setMessage("");
-  setIsError(false);
-  setConfirmationAction("resend-activation");
-}
-
-async function resendActivationEmail() {
-  if (!customer || accountActionLoading || !customer.email) {
-    return;
-  }
-
-  setAccountActionLoading(true);
-  setMessage("");
-  setIsError(false);
-
-  const result = await authenticatedApiRequest<ResendActivationEmailResponse>(
-    `/api/admin/customers/${customerId}/resend-activation`,
-  );
-
-  if (result.unauthenticated) {
     setAccountActionLoading(false);
     setConfirmationAction(null);
-    window.location.href = "/login";
-    return;
+    setIsError(false);
+    setMessage(result.data.message || "A new activation email has been sent.");
   }
 
-  if (!result.ok) {
-    setAccountActionLoading(false);
-    setConfirmationAction(null);
-    setIsError(true);
-    setMessage(result.error || "Unable to resend the activation email.");
-    return;
+  async function confirmCustomerAction() {
+    switch (confirmationAction) {
+      case "toggle-admin":
+        await toggleAdminStatus();
+        break;
+
+      case "toggle-active":
+        await toggleCustomerActiveStatus();
+        break;
+
+      case "resend-activation":
+        await resendActivationEmail();
+        break;
+
+      default:
+        break;
+    }
   }
-
-  if (!result.data || !result.data.activationEmailSent) {
-    setAccountActionLoading(false);
-    setConfirmationAction(null);
-    setIsError(true);
-    setMessage(
-      result.data?.error ||
-        "The activation service did not send a new email.",
-    );
-    return;
-  }
-
-  setAccountActionLoading(false);
-  setConfirmationAction(null);
-  setIsError(false);
-  setMessage(result.data.message || "A new activation email has been sent.");
-}
-
-async function confirmCustomerAction() {
-  switch (confirmationAction) {
-    case "toggle-admin":
-      await toggleAdminStatus();
-      break;
-
-    case "toggle-active":
-      await toggleCustomerActiveStatus();
-      break;
-
-    case "resend-activation":
-      await resendActivationEmail();
-      break;
-
-    default:
-      break;
-  }
-}
-
 
   function getCustomerName() {
     if (!customer) {
@@ -1290,9 +1287,7 @@ async function confirmCustomerAction() {
               </div>
 
               <div>
-                <dt className="text-xs font-semibold text-[#8B6A4E]">
-                  Email
-                </dt>
+                <dt className="text-xs font-semibold text-[#8B6A4E]">Email</dt>
                 <dd className="mt-1 break-all text-[#5C4033]">
                   {customer.email || "Not provided"}
                 </dd>
