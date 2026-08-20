@@ -1,10 +1,6 @@
 "use client";
 
-import {
-  useEffect,
-  useState,
-  type FormEvent,
-} from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useParams } from "next/navigation";
 import type { DateRange } from "react-day-picker";
 
@@ -22,7 +18,7 @@ import {
   isWithinTwoWeeks,
   validateBookingDates,
 } from "@/lib/helpers";
-
+import { authenticatedApiRequest } from "@/lib/client/authenticated-api";
 
 import AdminPageLayout from "@/components/AdminPageLayout";
 import PageCard from "@/components/PageCard";
@@ -32,6 +28,32 @@ import BookingForm, {
   type BookingFormAvailability,
   type BookingFormDog,
 } from "@/components/bookings/BookingForm";
+
+type CreateAdminBookingResponse = {
+  success: boolean;
+  bookingCreated: boolean;
+  booking?: {
+    id: string;
+    bookingReference: string;
+    ownerId: string;
+    dogId: string;
+    startDate: string;
+    endDate: string;
+    status: "Pending";
+    notes?: string | null;
+    createdAt?: string | null;
+  };
+  message?: string;
+  error?: string;
+};
+
+type ConfirmAdminBookingResponse = {
+  success: boolean;
+  databaseConfirmed: boolean;
+  followUpRequired: boolean;
+  message?: string;
+  error?: string;
+};
 
 type CustomerProfile = {
   id: string;
@@ -49,42 +71,41 @@ export default function AdminAddCustomerBookingPage() {
   const customerId = params.customerId;
 
   const [loading, setLoading] = useState(true);
+
   const [saving, setSaving] = useState(false);
 
-  const [bookingMode, setBookingMode] = useState<
-    "pending" | "confirmed"
-  >("pending");
+  const [bookingMode, setBookingMode] = useState<"pending" | "confirmed">(
+    "pending",
+  );
 
-  const [customer, setCustomer] =
-    useState<CustomerProfile | null>(null);
+  const [customer, setCustomer] = useState<CustomerProfile | null>(null);
 
-  const [dogs, setDogs] =
-    useState<BookingFormDog[]>([]);
+  const [dogs, setDogs] = useState<BookingFormDog[]>([]);
 
-  const [availability, setAvailability] =
-    useState<BookingFormAvailability[]>([]);
+  const [availability, setAvailability] = useState<BookingFormAvailability[]>(
+    [],
+  );
 
   const [selectedDog, setSelectedDog] = useState("");
+
   const [startDate, setStartDate] = useState("");
+
   const [endDate, setEndDate] = useState("");
+
   const [notes, setNotes] = useState("");
 
-  const [selectedRange, setSelectedRange] =
-    useState<DateRange | undefined>();
+  const [selectedRange, setSelectedRange] = useState<DateRange | undefined>();
 
-  const [calendarMonths, setCalendarMonths] =
-    useState(1);
+  const [calendarMonths, setCalendarMonths] = useState(1);
 
-  const [nightlyRate, setNightlyRate] =
-    useState<number | null>(null);
+  const [nightlyRate, setNightlyRate] = useState<number | null>(null);
 
-  const [pricingSettingId, setPricingSettingId] =
-  useState<string | null>(null);
-
-  const [depositPercentage, setDepositPercentage] =
-    useState<number | null>(null);
+  const [depositPercentage, setDepositPercentage] = useState<number | null>(
+    null,
+  );
 
   const [message, setMessage] = useState("");
+
   const [isError, setIsError] = useState(false);
 
   useEffect(() => {
@@ -93,23 +114,15 @@ export default function AdminAddCustomerBookingPage() {
 
   useEffect(() => {
     function updateCalendarMonths() {
-      setCalendarMonths(
-        window.innerWidth >= 768 ? 2 : 1
-      );
+      setCalendarMonths(window.innerWidth >= 768 ? 2 : 1);
     }
 
     updateCalendarMonths();
 
-    window.addEventListener(
-      "resize",
-      updateCalendarMonths
-    );
+    window.addEventListener("resize", updateCalendarMonths);
 
     return () => {
-      window.removeEventListener(
-        "resize",
-        updateCalendarMonths
-      );
+      window.removeEventListener("resize", updateCalendarMonths);
     };
   }, []);
 
@@ -118,8 +131,7 @@ export default function AdminAddCustomerBookingPage() {
     setMessage("");
     setIsError(false);
 
-    const { redirectTo } =
-      await ensureActiveAdminUser();
+    const { redirectTo } = await ensureActiveAdminUser();
 
     if (redirectTo) {
       window.location.href = redirectTo;
@@ -130,16 +142,12 @@ export default function AdminAddCustomerBookingPage() {
   }
 
   async function loadPageData() {
-    const today =
-      new Date().toISOString().split("T")[0];
+    const today = new Date().toISOString().split("T")[0];
 
     const [
       { data: customerData, error: customerError },
       { data: dogsData, error: dogsError },
-      {
-        data: availabilityData,
-        error: availabilityError,
-      },
+      { data: availabilityData, error: availabilityError },
     ] = await Promise.all([
       supabase
         .from("profiles")
@@ -150,7 +158,7 @@ export default function AdminAddCustomerBookingPage() {
           last_name,
           email,
           active
-          `
+          `,
         )
         .eq("id", customerId)
         .or("is_admin.eq.false,is_admin.is.null")
@@ -166,11 +174,13 @@ export default function AdminAddCustomerBookingPage() {
           meet_and_greet_completed,
           vaccinated,
           vaccination_expiry
-          `
+          `,
         )
         .eq("owner_id", customerId)
         .eq("active", true)
-        .order("name", { ascending: true }),
+        .order("name", {
+          ascending: true,
+        }),
 
       supabase
         .from("availability")
@@ -182,10 +192,12 @@ export default function AdminAddCustomerBookingPage() {
           total_spaces,
           spaces_available,
           notes
-          `
+          `,
         )
         .gte("date", today)
-        .order("date", { ascending: true }),
+        .order("date", {
+          ascending: true,
+        }),
     ]);
 
     if (customerError) {
@@ -217,30 +229,21 @@ export default function AdminAddCustomerBookingPage() {
     }
 
     try {
-      const pricing =
-        await getActivePricingSettings();
+      const pricing = await getActivePricingSettings();
 
       if (!pricing) {
-        throw new Error(
-          "No active pricing settings were found."
-        );
+        throw new Error("No active pricing settings were found.");
       }
 
-    setPricingSettingId(pricing.id);
+      setNightlyRate(Number(pricing.nightly_rate));
 
-    setNightlyRate(
-      Number(pricing.nightly_rate)
-    );
-
-    setDepositPercentage(
-      Number(pricing.deposit_percentage)
-    );
+      setDepositPercentage(Number(pricing.deposit_percentage));
     } catch (error) {
       setIsError(true);
       setMessage(
         error instanceof Error
           ? error.message
-          : "Unable to load pricing settings."
+          : "Unable to load pricing settings.",
       );
       setLoading(false);
       return;
@@ -248,14 +251,9 @@ export default function AdminAddCustomerBookingPage() {
 
     setCustomer(customerData as CustomerProfile);
 
-    setDogs(
-      (dogsData || []) as BookingFormDog[]
-    );
+    setDogs((dogsData || []) as BookingFormDog[]);
 
-    setAvailability(
-      (availabilityData ||
-        []) as BookingFormAvailability[]
-    );
+    setAvailability((availabilityData || []) as BookingFormAvailability[]);
 
     setLoading(false);
   }
@@ -265,30 +263,20 @@ export default function AdminAddCustomerBookingPage() {
       return "Customer";
     }
 
-    const firstName = formatName(
-      customer.first_name || ""
-    );
+    const firstName = formatName(customer.first_name || "");
 
-    const lastName = formatName(
-      customer.last_name || ""
-    );
+    const lastName = formatName(customer.last_name || "");
 
-    const fullName =
-      `${firstName} ${lastName}`.trim();
+    const fullName = `${firstName} ${lastName}`.trim();
 
-    return (
-      fullName ||
-      customer.email ||
-      "Customer"
-    );
+    return fullName || customer.email || "Customer";
   }
 
   function findAvailabilityForDate(date: Date) {
     const dateKey = formatDateForDatabase(date);
 
     return availability.find(
-      (availabilityRecord) =>
-        availabilityRecord.date === dateKey
+      (availabilityRecord) => availabilityRecord.date === dateKey,
     );
   }
 
@@ -301,24 +289,19 @@ export default function AdminAddCustomerBookingPage() {
   }
 
   function isUnavailableDate(date: Date) {
-    const availabilityRecord =
-      findAvailabilityForDate(date);
+    const availabilityRecord = findAvailabilityForDate(date);
 
     if (!availabilityRecord) {
       return true;
     }
 
     return (
-      !availabilityRecord.available ||
-      availabilityRecord.spaces_available <= 0
+      !availabilityRecord.available || availabilityRecord.spaces_available <= 0
     );
   }
 
-  function isLimitedAvailabilityDate(
-    date: Date
-  ) {
-    const availabilityRecord =
-      findAvailabilityForDate(date);
+  function isLimitedAvailabilityDate(date: Date) {
+    const availabilityRecord = findAvailabilityForDate(date);
 
     if (!availabilityRecord) {
       return false;
@@ -327,14 +310,12 @@ export default function AdminAddCustomerBookingPage() {
     return (
       availabilityRecord.available &&
       availabilityRecord.spaces_available > 0 &&
-      availabilityRecord.spaces_available <
-        availabilityRecord.total_spaces
+      availabilityRecord.spaces_available < availabilityRecord.total_spaces
     );
   }
 
   function isGoodAvailabilityDate(date: Date) {
-    const availabilityRecord =
-      findAvailabilityForDate(date);
+    const availabilityRecord = findAvailabilityForDate(date);
 
     if (!availabilityRecord) {
       return false;
@@ -343,14 +324,11 @@ export default function AdminAddCustomerBookingPage() {
     return (
       availabilityRecord.available &&
       availabilityRecord.spaces_available > 0 &&
-      availabilityRecord.spaces_available ===
-        availabilityRecord.total_spaces
+      availabilityRecord.spaces_available === availabilityRecord.total_spaces
     );
   }
 
-  function handleDateRangeSelect(
-    range: DateRange | undefined
-  ) {
+  function handleDateRangeSelect(range: DateRange | undefined) {
     setSelectedRange(range);
     setMessage("");
     setIsError(false);
@@ -361,15 +339,9 @@ export default function AdminAddCustomerBookingPage() {
       return;
     }
 
-    setStartDate(
-      formatDateForDatabase(range.from)
-    );
+    setStartDate(formatDateForDatabase(range.from));
 
-    setEndDate(
-      range.to
-        ? formatDateForDatabase(range.to)
-        : ""
-    );
+    setEndDate(range.to ? formatDateForDatabase(range.to) : "");
   }
 
   function clearDateSelection() {
@@ -382,31 +354,27 @@ export default function AdminAddCustomerBookingPage() {
 
   function checkAvailabilityForRange(
     rangeStartDate: string,
-    rangeEndDate: string
+    rangeEndDate: string,
   ) {
-    const occupiedDates = getDatesInRange(
-      rangeStartDate,
-      rangeEndDate
-    );
+    const occupiedDates = getDatesInRange(rangeStartDate, rangeEndDate);
 
     /*
-     * The departure date is excluded because the dog
-     * does not occupy a boarding space that night.
+     * The departure date is excluded
+     * because the dog does not occupy
+     * a boarding space that night.
      */
     occupiedDates.pop();
 
     for (const occupiedDate of occupiedDates) {
-      const availabilityRecord =
-        availability.find(
-          (record) =>
-            record.date === occupiedDate
-        );
+      const availabilityRecord = availability.find(
+        (record) => record.date === occupiedDate,
+      );
 
       if (!availabilityRecord) {
         return {
           available: false,
           message: `No availability has been configured for ${formatDisplayDate(
-            occupiedDate
+            occupiedDate,
           )}.`,
         };
       }
@@ -414,20 +382,14 @@ export default function AdminAddCustomerBookingPage() {
       if (!availabilityRecord.available) {
         return {
           available: false,
-          message: `${formatDisplayDate(
-            occupiedDate
-          )} is unavailable.`,
+          message: `${formatDisplayDate(occupiedDate)} is unavailable.`,
         };
       }
 
-      if (
-        availabilityRecord.spaces_available <= 0
-      ) {
+      if (availabilityRecord.spaces_available <= 0) {
         return {
           available: false,
-          message: `${formatDisplayDate(
-            occupiedDate
-          )} is fully booked.`,
+          message: `${formatDisplayDate(occupiedDate)} is fully booked.`,
         };
       }
     }
@@ -438,389 +400,271 @@ export default function AdminAddCustomerBookingPage() {
     };
   }
 
-  async function checkExistingBookingOverlap(
-    dogId: string,
-    newStartDate: string,
-    newEndDate: string
-  ) {
-    const { data, error } = await supabase
-      .from("bookings")
-      .select(
-        "id, start_date, end_date, status"
-      )
-      .eq("dog_id", dogId)
-      .in("status", [
-        "Pending",
-        "Deposit Pending",
-        "Balance Pending",
-        "Balance Paid",
-      ]);
+  async function handleBooking(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
 
-    if (error) {
-      return {
-        hasOverlap: false,
-        errorMessage: error.message,
-      };
+    if (saving) {
+      return;
     }
 
-    const hasOverlap = (data || []).some(
-      (existingBooking) =>
-        newStartDate <
-          existingBooking.end_date &&
-        newEndDate >
-          existingBooking.start_date
-    );
+    setMessage("");
+    setIsError(false);
 
-    return {
-      hasOverlap,
-      errorMessage: "",
-    };
-  }
-
-async function handleBooking(
-  event: FormEvent<HTMLFormElement>
-) {
-  event.preventDefault();
-
-  if (saving) {
-    return;
-  }
-
-  setMessage("");
-  setIsError(false);
-
-  if (!customer) {
-    setIsError(true);
-    setMessage("Customer could not be loaded.");
-    return;
-  }
-
-  if (!customer.active) {
-    setIsError(true);
-    setMessage(
-      "A booking cannot be created for an inactive customer."
-    );
-    return;
-  }
-
-  if (!selectedDog) {
-    setIsError(true);
-    setMessage("Please select a dog.");
-    return;
-  }
-
-  const validationMessage = validateBookingDates(
-    startDate,
-    endDate
-  );
-
-  if (validationMessage) {
-    setIsError(true);
-    setMessage(validationMessage);
-    return;
-  }
-
-  const dog = dogs.find(
-    (currentDog) => currentDog.id === selectedDog
-  );
-
-  if (!dog) {
-    setIsError(true);
-    setMessage("Unable to find the selected dog.");
-    return;
-  }
-
-  if (!dog.vaccinated) {
-    setIsError(true);
-    setMessage(
-      "This dog cannot be booked because its vaccination information is incomplete."
-    );
-    return;
-  }
-
-  if (
-    dog.vaccination_expiry &&
-    dog.vaccination_expiry < startDate
-  ) {
-    setIsError(true);
-    setMessage(
-      "This dog's vaccination will have expired before the booking begins."
-    );
-    return;
-  }
-
-  const availabilityCheck = checkAvailabilityForRange(
-    startDate,
-    endDate
-  );
-
-  if (!availabilityCheck.available) {
-    setIsError(true);
-    setMessage(availabilityCheck.message);
-    return;
-  }
-
-  const overlapCheck = await checkExistingBookingOverlap(
-    selectedDog,
-    startDate,
-    endDate
-  );
-
-  if (overlapCheck.errorMessage) {
-    setIsError(true);
-    setMessage(overlapCheck.errorMessage);
-    return;
-  }
-
-  if (overlapCheck.hasOverlap) {
-    setIsError(true);
-    setMessage(
-      "This dog already has a booking that overlaps with the selected dates."
-    );
-    return;
-  }
-
-  if (
-    bookingMode === "confirmed" &&
-    (
-      nightlyRate === null ||
-      depositPercentage === null ||
-      !pricingSettingId
-    )
-  ) {
-    setIsError(true);
-    setMessage(
-      "The active pricing settings could not be loaded."
-    );
-    return;
-  }
-
-  const shortNoticeBooking =
-    bookingMode === "confirmed" &&
-    isWithinTwoWeeks(startDate);
-
-  const numberOfNights = calculateNumberOfNights(
-    startDate,
-    endDate
-  );
-
-  const totalCost =
-    bookingMode === "confirmed" && nightlyRate !== null
-      ? numberOfNights * nightlyRate
-      : null;
-
-  const depositAmount =
-    bookingMode === "confirmed" &&
-    totalCost !== null &&
-    depositPercentage !== null
-      ? shortNoticeBooking
-        ? 0
-        : totalCost * (depositPercentage / 100)
-      : null;
-
-setSaving(true);
-
-const {
-  data: { session },
-  error: sessionError,
-} = await supabase.auth.getSession();
-
-if (sessionError || !session) {
-  setSaving(false);
-  window.location.href = "/login";
-  return;
-}
-
-/*
- * Every admin-created booking begins as Pending.
- *
- * If Confirm Immediately is selected, the secure
- * confirmation route will apply pricing, reduce
- * availability, update calendars and send email.
- */
-const {
-  data: newBooking,
-  error: bookingCreateError,
-} = await supabase
-  .from("bookings")
-  .insert({
-    owner_id: customerId,
-    dog_id: selectedDog,
-    start_date: startDate,
-    end_date: endDate,
-    status: "Pending",
-    notes: notes.trim() || null,
-    updated_at: new Date().toISOString(),
-  })
-  .select(
-    `
-    id,
-    booking_reference
-    `
-  )
-  .single();
-
-if (bookingCreateError || !newBooking) {
-  setSaving(false);
-  setIsError(true);
-  setMessage(
-    bookingCreateError?.message ||
-      "Unable to create the booking."
-  );
-  return;
-}
-
-/*
- * Pending mode stops here. No availability,
- * calendar or email operations are performed.
- */
-if (bookingMode === "pending") {
-  setSaving(false);
-
-  window.location.href =
-    `/admin/customers/${customerId}`;
-
-  return;
-}
-
-/*
- * Confirm Immediately uses the same secure route
- * as the Confirm Booking button on Admin Bookings.
- */
-let confirmationResponse: Response;
-
-try {
-  confirmationResponse = await fetch(
-    "/api/admin/bookings/confirm",
-    {
-      method: "POST",
-      headers: {
-        Authorization:
-          `Bearer ${session.access_token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        bookingId: newBooking.id,
-      }),
+    if (!customer) {
+      setIsError(true);
+      setMessage("Customer could not be loaded.");
+      return;
     }
-  );
-} catch (requestError) {
-  setSaving(false);
-  setIsError(true);
-  setMessage(
-    requestError instanceof Error
-      ? `The booking was created as Pending, but the confirmation service could not be contacted: ${requestError.message}`
-      : "The booking was created as Pending, but the confirmation service could not be contacted."
-  );
-  return;
-}
 
-const confirmationResult =
-  await confirmationResponse
-    .json()
-    .catch(() => null);
+    if (!customer.active) {
+      setIsError(true);
+      setMessage("A booking cannot be created for an inactive customer.");
+      return;
+    }
 
-/*
- * A failed confirmation leaves the newly created
- * booking as Pending. It can safely be confirmed
- * later from Admin Bookings.
- */
-if (!confirmationResponse.ok) {
-  setSaving(false);
-  setIsError(true);
-  setMessage(
-    confirmationResult?.error
-      ? `The booking was created as Pending, but it could not be confirmed: ${confirmationResult.error}`
-      : "The booking was created as Pending, but it could not be confirmed."
-  );
-  return;
-}
+    if (!selectedDog) {
+      setIsError(true);
+      setMessage("Please select a dog.");
+      return;
+    }
 
-if (!confirmationResult?.databaseConfirmed) {
-  setSaving(false);
-  setIsError(true);
-  setMessage(
-    confirmationResult?.error ||
-      "The booking was created as Pending, but the confirmation service did not confirm it."
-  );
-  return;
-}
+    const validationMessage = validateBookingDates(startDate, endDate);
 
-/*
- * HTTP 207 is still a successful database
- * confirmation, but one or more calendar or email
- * follow-up operations failed.
- */
-if (confirmationResult.followUpRequired) {
-  setSaving(false);
-  setIsError(true);
-  setMessage(
-    confirmationResult.message ||
-      "The booking was confirmed, but one or more calendar or email operations could not be completed."
-  );
-  return;
-}
+    if (validationMessage) {
+      setIsError(true);
+      setMessage(validationMessage);
+      return;
+    }
 
-setSaving(false);
+    const dog = dogs.find((currentDog) => currentDog.id === selectedDog);
 
-window.location.href =
-  `/admin/customers/${customerId}`;
-}
+    if (!dog) {
+      setIsError(true);
+      setMessage("Unable to find the selected dog.");
+      return;
+    }
 
-    const projectedNights =
-    startDate && endDate
-        ? calculateNumberOfNights(startDate, endDate)
-        : 0;
+    if (!dog.meet_and_greet_completed) {
+      setIsError(true);
+      setMessage(
+        "This dog must complete a Meet & Greet before a booking can be created.",
+      );
+      return;
+    }
 
-    const projectedTotal =
-    nightlyRate && projectedNights > 0
-        ? nightlyRate * projectedNights
-        : 0;
+    if (!dog.vaccinated) {
+      setIsError(true);
+      setMessage(
+        "This dog cannot be booked because its vaccination information is incomplete.",
+      );
+      return;
+    }
 
-    const projectedDeposit =
-    depositPercentage && projectedTotal > 0
-        ? projectedTotal * (depositPercentage / 100)
-        : 0;
+    if (!dog.vaccination_expiry) {
+      setIsError(true);
+      setMessage(
+        "This dog cannot be booked because its vaccination expiry date is missing.",
+      );
+      return;
+    }
 
-    const projectedBalance =
-    projectedTotal - projectedDeposit;
+    if (dog.vaccination_expiry < startDate) {
+      setIsError(true);
+      setMessage(
+        "This dog's vaccination will have expired before the booking begins.",
+      );
+      return;
+    }
 
-    const isProjectedShortNotice = startDate
+    const availabilityCheck = checkAvailabilityForRange(startDate, endDate);
+
+    if (!availabilityCheck.available) {
+      setIsError(true);
+      setMessage(availabilityCheck.message);
+      return;
+    }
+
+    if (
+      bookingMode === "confirmed" &&
+      (nightlyRate === null || depositPercentage === null)
+    ) {
+      setIsError(true);
+      setMessage("The active pricing settings could not be loaded.");
+      return;
+    }
+
+    setSaving(true);
+
+    const creationResult =
+      await authenticatedApiRequest<CreateAdminBookingResponse>(
+        `/api/admin/customers/${customerId}/bookings/create`,
+        {
+          body: {
+            dogId: selectedDog,
+            startDate,
+            endDate,
+            notes,
+          },
+        },
+      );
+
+    if (creationResult.unauthenticated) {
+      setSaving(false);
+      window.location.href = "/login";
+      return;
+    }
+
+    if (!creationResult.ok) {
+      setSaving(false);
+      setIsError(true);
+      setMessage(creationResult.error || "The booking could not be created.");
+      return;
+    }
+
+    if (
+      !creationResult.data ||
+      !creationResult.data.bookingCreated ||
+      !creationResult.data.booking
+    ) {
+      setSaving(false);
+      setIsError(true);
+      setMessage(
+        creationResult.data?.error ||
+          "The booking service did not create the booking.",
+      );
+      return;
+    }
+
+    const newBooking = creationResult.data.booking;
+
+    /*
+     * Pending mode stops after secure
+     * creation. No availability,
+     * calendar or email operations are
+     * performed.
+     */
+    if (bookingMode === "pending") {
+      setSaving(false);
+
+      window.location.href = `/admin/customers/${customerId}`;
+
+      return;
+    }
+
+    /*
+     * Confirm Immediately passes the
+     * new Pending booking to the
+     * existing secure confirmation
+     * route.
+     */
+    const confirmationResult =
+      await authenticatedApiRequest<ConfirmAdminBookingResponse>(
+        "/api/admin/bookings/confirm",
+        {
+          body: {
+            bookingId: newBooking.id,
+          },
+        },
+      );
+
+    setSaving(false);
+
+    if (confirmationResult.unauthenticated) {
+      window.location.href = "/login";
+      return;
+    }
+
+    /*
+     * A failed confirmation leaves the
+     * booking as Pending. It can be
+     * confirmed later from Admin
+     * Bookings.
+     */
+    if (!confirmationResult.ok) {
+      setIsError(true);
+      setMessage(
+        confirmationResult.error
+          ? `The booking was created as Pending, but it could not be confirmed: ${confirmationResult.error}`
+          : "The booking was created as Pending, but it could not be confirmed.",
+      );
+      return;
+    }
+
+    if (
+      !confirmationResult.data ||
+      !confirmationResult.data.databaseConfirmed
+    ) {
+      setIsError(true);
+      setMessage(
+        confirmationResult.data?.error ||
+          "The booking was created as Pending, but the confirmation service did not confirm it.",
+      );
+      return;
+    }
+
+    if (confirmationResult.data.followUpRequired) {
+      setIsError(true);
+      setMessage(
+        confirmationResult.data.message ||
+          "The booking was confirmed, but one or more calendar or email operations could not be completed.",
+      );
+      return;
+    }
+
+    setIsError(false);
+
+    window.location.href = `/admin/customers/${customerId}`;
+  }
+
+  const projectedNights =
+    startDate && endDate ? calculateNumberOfNights(startDate, endDate) : 0;
+
+  const projectedTotal =
+    nightlyRate !== null && projectedNights > 0
+      ? nightlyRate * projectedNights
+      : 0;
+
+  const isProjectedShortNotice = startDate
     ? isWithinTwoWeeks(startDate)
     : false;
 
-    if (loading) {
-    return (
-        <LoadingScreen message="Preparing booking form..." />
-    );
-    }
+  const projectedDeposit = isProjectedShortNotice
+    ? 0
+    : depositPercentage !== null && projectedTotal > 0
+      ? projectedTotal * (depositPercentage / 100)
+      : 0;
 
-    return (
+  const projectedBalance = projectedTotal - projectedDeposit;
+
+  if (loading) {
+    return <LoadingScreen message="Preparing booking form..." />;
+  }
+
+  return (
     <AdminPageLayout>
-        <PageCard
+      <PageCard
         title="Create Booking"
         subtitle={`Create a booking for ${getCustomerName()}.`}
         actions={
-            <Button href={`/admin/customers/${customerId}`}>
+          <Button href={`/admin/customers/${customerId}`}>
             Back to Customer
-            </Button>
+          </Button>
         }
-        >
+      >
         {dogs.length === 0 ? (
-            <div className="py-8 text-center md:py-12">
-                <p className="text-sm text-[#8B6A4E] md:text-lg">
-                    This customer needs an active dog before a
-                    booking can be created.
-                </p>
+          <div className="py-8 text-center md:py-12">
+            <p className="text-sm text-[#8B6A4E] md:text-lg">
+              This customer needs an active dog before a booking can be created.
+            </p>
 
-                <div className="mt-4 flex justify-center md:mt-6">
-                    <Button href={`/admin/customers/${customerId}/dogs/add`}>
-                        Add Dog
-                    </Button>
-                </div>
+            <div className="mt-4 flex justify-center md:mt-6">
+              <Button href={`/admin/customers/${customerId}/dogs/add`}>
+                Add Dog
+              </Button>
             </div>
+          </div>
         ) : (
-            <BookingForm
+          <BookingForm
             dogs={dogs}
             availability={availability}
             selectedDog={selectedDog}
@@ -834,9 +678,7 @@ window.location.href =
             projectedTotal={projectedTotal}
             projectedDeposit={projectedDeposit}
             projectedBalance={projectedBalance}
-            isProjectedShortNotice={
-                isProjectedShortNotice
-            }
+            isProjectedShortNotice={isProjectedShortNotice}
             saving={saving}
             message={message}
             isError={isError}
@@ -880,8 +722,9 @@ window.location.href =
                         </p>
 
                         <p className="mt-1 text-sm text-[#8B6A4E]">
-                          Save the booking request without reducing availability,
-                          creating calendar events or sending the confirmation email.
+                          Save the booking request without reducing
+                          availability, creating calendar events or sending the
+                          confirmation email.
                         </p>
                       </div>
                     </div>
@@ -927,23 +770,17 @@ window.location.href =
                 : "This booking will be created as Pending. It can then be reviewed and confirmed from Admin Bookings."
             }
             onDogChange={setSelectedDog}
-            onDateRangeSelect={
-                handleDateRangeSelect
-            }
+            onDateRangeSelect={handleDateRangeSelect}
             onClearDates={clearDateSelection}
             onNotesChange={setNotes}
             onSubmit={handleBooking}
             isPastDate={isPastDate}
             isUnavailableDate={isUnavailableDate}
-            isLimitedAvailabilityDate={
-                isLimitedAvailabilityDate
-            }
-            isGoodAvailabilityDate={
-                isGoodAvailabilityDate
-            }
-            />
+            isLimitedAvailabilityDate={isLimitedAvailabilityDate}
+            isGoodAvailabilityDate={isGoodAvailabilityDate}
+          />
         )}
-        </PageCard>
+      </PageCard>
     </AdminPageLayout>
-    );
+  );
 }
