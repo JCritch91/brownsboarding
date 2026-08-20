@@ -1,10 +1,6 @@
 "use client";
 
-import {
-  useEffect,
-  useState,
-  type FormEvent,
-} from "react";
+import { useEffect, useState, type FormEvent } from "react";
 
 import { supabase } from "@/lib/supabase";
 
@@ -14,22 +10,34 @@ import Button from "@/components/Buttons";
 import MessageBox from "@/components/MessageBox";
 import LoadingScreen from "@/components/LoadingScreen";
 import { FormInput } from "@/components/FormInput";
+import { authenticatedApiRequest } from "@/lib/client/authenticated-api";
+
+type CompleteActivationResponse = {
+  success: boolean;
+  profileActivated: boolean;
+  alreadyActivated: boolean;
+  profile?: {
+    id: string;
+    active: boolean;
+    wasActivated: boolean;
+    activatedAt?: string | null;
+  };
+  message?: string;
+  error?: string;
+};
 
 export default function SetPasswordPage() {
-  const [checkingSession, setCheckingSession] =
-    useState(true);
+  const [checkingSession, setCheckingSession] = useState(true);
 
   const [saving, setSaving] = useState(false);
 
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] =
-    useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
 
-  const [sessionAvailable, setSessionAvailable] =
-    useState(false);
+  const [sessionAvailable, setSessionAvailable] = useState(false);
 
   useEffect(() => {
     checkInvitationSession();
@@ -65,16 +73,14 @@ export default function SetPasswordPage() {
      */
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(
-      async (_event, newSession) => {
-        if (newSession) {
-          setSessionAvailable(true);
-          setMessage("");
-          setIsError(false);
-          setCheckingSession(false);
-        }
+    } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
+      if (newSession) {
+        setSessionAvailable(true);
+        setMessage("");
+        setIsError(false);
+        setCheckingSession(false);
       }
-    );
+    });
 
     window.setTimeout(() => {
       setCheckingSession(false);
@@ -85,9 +91,7 @@ export default function SetPasswordPage() {
     };
   }
 
-  async function handleSetPassword(
-    event: FormEvent<HTMLFormElement>
-  ) {
+  async function handleSetPassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (saving) {
@@ -99,9 +103,7 @@ export default function SetPasswordPage() {
 
     if (password.length < 8) {
       setIsError(true);
-      setMessage(
-        "Your password must contain at least 8 characters."
-      );
+      setMessage("Your password must contain at least 8 characters.");
       return;
     }
 
@@ -119,17 +121,16 @@ export default function SetPasswordPage() {
     if (sessionError || !session?.user) {
       setIsError(true);
       setMessage(
-        "The invitation session is missing or has expired. Please request a new invitation."
+        "The invitation session is missing or has expired. Please request a new invitation.",
       );
       return;
     }
 
     setSaving(true);
 
-    const { error: passwordError } =
-      await supabase.auth.updateUser({
-        password,
-      });
+    const { error: passwordError } = await supabase.auth.updateUser({
+      password,
+    });
 
     if (passwordError) {
       setSaving(false);
@@ -138,30 +139,46 @@ export default function SetPasswordPage() {
       return;
     }
 
-    const { error: profileError } = await supabase
-      .from("profiles")
-      .update({
-        active: true,
-        was_activated: true,
-        activated_at: new Date().toISOString(),
-        activation_token: null,
-        activation_token_expiry: null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", session.user.id);
+    const activationResult =
+      await authenticatedApiRequest<CompleteActivationResponse>(
+        "/api/account/complete-activation",
+      );
 
-    if (profileError) {
+    if (activationResult.unauthenticated) {
       setSaving(false);
       setIsError(true);
       setMessage(
-        `Your password was saved, but the profile could not be activated: ${profileError.message}`
+        "Your password was saved, but the invitation session expired before the profile could be activated. Please sign in using your new password or request a new invitation.",
       );
       return;
     }
 
+    if (!activationResult.ok) {
+      setSaving(false);
+      setIsError(true);
+      setMessage(
+        activationResult.error
+          ? `Your password was saved, but your profile could not be activated: ${activationResult.error}`
+          : "Your password was saved, but your profile could not be activated.",
+      );
+      return;
+    }
+
+    if (!activationResult.data || !activationResult.data.profileActivated) {
+      setSaving(false);
+      setIsError(true);
+      setMessage(
+        activationResult.data?.error ||
+          "Your password was saved, but the activation service did not activate your profile.",
+      );
+      return;
+    }
+
+    setSaving(false);
     setIsError(false);
     setMessage(
-      "Your password has been created and your account is now active."
+      activationResult.data.message ||
+        "Your password has been created and your account is now active.",
     );
 
     window.dispatchEvent(new Event("profile-updated"));
@@ -172,9 +189,7 @@ export default function SetPasswordPage() {
   }
 
   if (checkingSession) {
-    return (
-      <LoadingScreen message="Checking your invitation..." />
-    );
+    return <LoadingScreen message="Checking your invitation..." />;
   }
 
   return (
@@ -187,30 +202,22 @@ export default function SetPasswordPage() {
           {!sessionAvailable ? (
             <div className="space-y-4">
               <MessageBox type="error">
-                This invitation link is invalid or has expired.
-                Please contact Browns Boarding for a new
-                invitation.
+                This invitation link is invalid or has expired. Please contact
+                Browns Boarding for a new invitation.
               </MessageBox>
 
               <div className="flex justify-center">
-                <Button href="/login">
-                  Return to Login
-                </Button>
+                <Button href="/login">Return to Login</Button>
               </div>
             </div>
           ) : (
-            <form
-              onSubmit={handleSetPassword}
-              className="space-y-5"
-            >
+            <form onSubmit={handleSetPassword} className="space-y-5">
               <FormInput
                 id="password"
                 label="Password"
                 type="password"
                 value={password}
-                onChange={(event) =>
-                  setPassword(event.target.value)
-                }
+                onChange={(event) => setPassword(event.target.value)}
                 autoComplete="new-password"
                 minLength={8}
                 required
@@ -221,23 +228,18 @@ export default function SetPasswordPage() {
                 label="Confirm Password"
                 type="password"
                 value={confirmPassword}
-                onChange={(event) =>
-                  setConfirmPassword(event.target.value)
-                }
+                onChange={(event) => setConfirmPassword(event.target.value)}
                 autoComplete="new-password"
                 minLength={8}
                 required
               />
 
               <p className="text-sm text-[#8B6A4E]">
-                Your password must contain at least 8
-                characters.
+                Your password must contain at least 8 characters.
               </p>
 
               {message && (
-                <MessageBox
-                  type={isError ? "error" : "success"}
-                >
+                <MessageBox type={isError ? "error" : "success"}>
                   {message}
                 </MessageBox>
               )}
