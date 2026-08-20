@@ -21,6 +21,7 @@ import Button from "@/components/Buttons";
 import LoadingScreen from "@/components/LoadingScreen";
 import { ACTIVE_BOOKING_STATUSES } from "@/types/booking";
 import { authenticatedApiRequest } from "@/lib/client/authenticated-api";
+import ConfirmationModal from "@/components/modals/ConfirmationModal";
 
 type DeactivateAccountResponse = {
   success: boolean;
@@ -57,6 +58,8 @@ type UpdateProfileResponse = {
 
 export default function MyDetailsPage() {
   const [deletingAccount, setDeletingAccount] = useState(false);
+  const [showDeactivateAccountModal, setShowDeactivateAccountModal] =
+    useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -239,19 +242,18 @@ export default function MyDetailsPage() {
     }
   }
 
-  async function deleteAccount() {
+  function requestAccountDeactivation() {
     if (deletingAccount) {
       return;
     }
 
     setMessage("");
     setIsError(false);
+    setShowDeactivateAccountModal(true);
+  }
 
-    const confirmed = window.confirm(
-      "Are you sure you want to deactivate your account?\n\nYou will no longer be able to access the customer portal, and your dogs will be made inactive. Historical booking information will be retained.",
-    );
-
-    if (!confirmed) {
+  async function deactivateAccount() {
+    if (deletingAccount) {
       return;
     }
 
@@ -263,12 +265,14 @@ export default function MyDetailsPage() {
 
     if (result.unauthenticated) {
       setDeletingAccount(false);
+      setShowDeactivateAccountModal(false);
       window.location.href = "/login";
       return;
     }
 
     if (!result.ok) {
       setDeletingAccount(false);
+      setShowDeactivateAccountModal(false);
       setIsError(true);
       setMessage(result.error || "Your account could not be deactivated.");
       return;
@@ -276,6 +280,7 @@ export default function MyDetailsPage() {
 
     if (!result.data || !result.data.accountDeactivated) {
       setDeletingAccount(false);
+      setShowDeactivateAccountModal(false);
       setIsError(true);
       setMessage(
         result.data?.error ||
@@ -287,11 +292,12 @@ export default function MyDetailsPage() {
     const { error: signOutError } = await supabase.auth.signOut();
 
     setDeletingAccount(false);
+    setShowDeactivateAccountModal(false);
 
     if (signOutError) {
       setIsError(true);
       setMessage(
-        "Your account was deactivated, but the local session could not be cleared. Please close the browser or return to the login page.",
+        "Your account was deleted, but the local session could not be cleared. Please close the browser or return to the login page.",
       );
       return;
     }
@@ -325,15 +331,55 @@ export default function MyDetailsPage() {
           additionalActions={
             <button
               type="button"
-              onClick={deleteAccount}
+              onClick={requestAccountDeactivation}
               disabled={deletingAccount}
               className="inline-flex min-h-11 w-fit cursor-pointer items-center justify-center rounded-lg border border-red-400 px-4 py-2 text-sm font-semibold text-red-600 transition-all duration-300 hover:scale-105 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100 md:text-base"
             >
-              {deletingAccount ? "Deleting..." : "Delete Account"}
+              Delete Account
             </button>
           }
         />
       </PageCard>
+
+      <ConfirmationModal
+        isOpen={showDeactivateAccountModal}
+        title="Delete Account"
+        confirmText="Delete Account"
+        cancelText="Keep Account"
+        isConfirming={deletingAccount}
+        variant="danger"
+        onConfirm={deactivateAccount}
+        onCancel={() => {
+          if (!deletingAccount) {
+            setShowDeactivateAccountModal(false);
+          }
+        }}
+      >
+        <div className="space-y-4">
+          <p>
+            Please confirm that you want to delete your Browns Boarding
+            account.
+          </p>
+
+          <div className="rounded-xl border border-[#D9CBB8] bg-[#FFFDF9] p-4">
+            <p className="font-semibold text-[#5C4033]">
+              Deleting your account will:
+            </p>
+
+            <ul className="mt-3 list-disc space-y-2 pl-5">
+              <li>Prevent access to the customer portal.</li>
+              <li>Make all dogs associated with the account inactive.</li>
+              <li>Prevent new bookings from being requested.</li>
+              <li>Sign the account out after deactivation.</li>
+            </ul>
+          </div>
+
+          <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-800">
+            Historical booking information will be retained for business and
+            accounting records.
+          </div>
+        </div>
+      </ConfirmationModal>
     </CustomerPageLayout>
   );
 }
