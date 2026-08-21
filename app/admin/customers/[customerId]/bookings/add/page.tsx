@@ -444,38 +444,6 @@ export default function AdminAddCustomerBookingPage() {
       return;
     }
 
-    if (!dog.meet_and_greet_completed) {
-      setIsError(true);
-      setMessage(
-        "This dog must complete a Meet & Greet before a booking can be created.",
-      );
-      return;
-    }
-
-    if (!dog.vaccinated) {
-      setIsError(true);
-      setMessage(
-        "This dog cannot be booked because its vaccination information is incomplete.",
-      );
-      return;
-    }
-
-    if (!dog.vaccination_expiry) {
-      setIsError(true);
-      setMessage(
-        "This dog cannot be booked because its vaccination expiry date is missing.",
-      );
-      return;
-    }
-
-    if (dog.vaccination_expiry < startDate) {
-      setIsError(true);
-      setMessage(
-        "This dog's vaccination will have expired before the booking begins.",
-      );
-      return;
-    }
-
     const availabilityCheck = checkAvailabilityForRange(startDate, endDate);
 
     if (!availabilityCheck.available) {
