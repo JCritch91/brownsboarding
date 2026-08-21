@@ -1,4 +1,22 @@
+import { isTestEnvironment } from "@/lib/environment";
+
 export function createEmailTemplate(title: string, bodyContent: string) {
+  const environmentBanner = isTestEnvironment()
+    ? `
+      <div style="
+        padding: 14px 20px;
+        background: #FEF3C7;
+        border-bottom: 1px solid #F59E0B;
+        color: #92400E;
+        font-size: 14px;
+        font-weight: bold;
+        text-align: center;
+      ">
+        TEST ENVIRONMENT: This email was generated during Browns Boarding testing.
+      </div>
+    `
+    : "";
+
   return `
     <div style="
       font-family: Arial, sans-serif;
@@ -9,6 +27,7 @@ export function createEmailTemplate(title: string, bodyContent: string) {
       border-radius: 12px;
       overflow: hidden;
     ">
+          ${environmentBanner}
       <div style="
         background: #8B6A4E;
         padding: 24px;

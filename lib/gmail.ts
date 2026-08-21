@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { getEnvironmentSubjectPrefix } from "@/lib/environment";
 
 const gmailUser = process.env.GMAIL_USER;
 const gmailAppPassword = process.env.GMAIL_APP_PASSWORD;
@@ -29,7 +30,7 @@ export async function sendGmailEmail({ to, subject, html }: SendGmailOptions) {
   await gmailTransporter.sendMail({
     from: `"Browns Boarding" <${gmailUser}>`,
     to,
-    subject,
+    subject: `${getEnvironmentSubjectPrefix()}${subject}`,
     html,
   });
 }
