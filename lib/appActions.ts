@@ -5,11 +5,32 @@ export async function logout() {
   window.location.href = "/";
 }
 
-export async function getActivePricingSettings() {
+export async function getActivePricingSettings(effectiveDate?: string) {
+  const pricingDate = effectiveDate || new Date().toISOString().slice(0, 10);
+
   const { data, error } = await supabase
     .from("pricing_settings")
-    .select("id, nightly_rate, deposit_percentage")
+    .select(
+      `
+      id,
+      name,
+      nightly_rate,
+      deposit_percentage,
+      daycare_full_day_rate,
+      daycare_half_day_rate,
+      daycare_deposit_percentage,
+      effective_from,
+      active
+      `,
+    )
     .eq("active", true)
+    .lte("effective_from", pricingDate)
+    .order("effective_from", {
+      ascending: false,
+    })
+    .order("created_at", {
+      ascending: false,
+    })
     .limit(1)
     .maybeSingle();
 

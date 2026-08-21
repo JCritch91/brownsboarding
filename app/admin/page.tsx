@@ -14,6 +14,19 @@ import {
   type VaccinationProofSummary,
 } from "@/lib/vaccination-proof";
 import { ACTIVE_BOOKING_STATUSES } from "@/types/booking";
+import Button from "@/components/Buttons";
+import ConfirmationModal from "@/components/modals/ConfirmationModal";
+import { authenticatedApiRequest } from "@/lib/client/authenticated-api";
+
+type PricingSettings = {
+  id: string;
+  nightly_rate: number;
+  deposit_percentage: number;
+  daycare_full_day_rate: number;
+  daycare_half_day_rate: number;
+  daycare_deposit_percentage: number;
+  effective_from: string;
+};
 
 type AdminActionCounts = {
   pendingBookings: number;
@@ -29,6 +42,20 @@ type VaccinationProofRecord = VaccinationProofSummary;
 
 export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
+  const [pricing, setPricing] = useState<PricingSettings | null>(null);
+
+  const [showPricingModal, setShowPricingModal] = useState(false);
+
+  const [savingPricing, setSavingPricing] = useState(false);
+
+  const [pricingForm, setPricingForm] = useState({
+    boardingNightlyRate: "",
+    boardingDepositPercentage: "",
+    daycareFullDayRate: "",
+    daycareHalfDayRate: "",
+    daycareDepositPercentage: "",
+    effectiveFrom: "",
+  });
 
   const [counts, setCounts] = useState<AdminActionCounts>({
     pendingBookings: 0,
@@ -55,8 +82,69 @@ export default function AdminDashboardPage() {
     }
 
     await loadAdminCounts();
-
+    await loadPricing();
     setLoading(false);
+  }
+
+  async function loadPricing() {
+    const result = await authenticatedApiRequest<{
+      success: boolean;
+      pricing: PricingSettings;
+    }>("/api/admin/pricing", {
+      method: "GET",
+    });
+
+    if (!result.ok || !result.data?.pricing) {
+      return;
+    }
+
+    setPricing(result.data.pricing);
+
+    setPricingForm({
+      boardingNightlyRate: result.data.pricing.nightly_rate.toString(),
+      boardingDepositPercentage:
+        result.data.pricing.deposit_percentage.toString(),
+      daycareFullDayRate: result.data.pricing.daycare_full_day_rate.toString(),
+      daycareHalfDayRate: result.data.pricing.daycare_half_day_rate.toString(),
+      daycareDepositPercentage:
+        result.data.pricing.daycare_deposit_percentage.toString(),
+      effectiveFrom: result.data.pricing.effective_from,
+    });
+  }
+
+  async function savePricing() {
+    if (savingPricing) {
+      return;
+    }
+
+    setSavingPricing(true);
+
+    const result = await authenticatedApiRequest<{
+      success: boolean;
+      pricingCreated: boolean;
+    }>("/api/admin/pricing", {
+      method: "POST",
+      body: {
+        boardingNightlyRate: Number(pricingForm.boardingNightlyRate),
+        boardingDepositPercentage: Number(
+          pricingForm.boardingDepositPercentage,
+        ),
+        daycareFullDayRate: Number(pricingForm.daycareFullDayRate),
+        daycareHalfDayRate: Number(pricingForm.daycareHalfDayRate),
+        daycareDepositPercentage: Number(pricingForm.daycareDepositPercentage),
+        effectiveFrom: pricingForm.effectiveFrom,
+      },
+    });
+
+    setSavingPricing(false);
+
+    if (!result.ok || !result.data?.pricingCreated) {
+      return;
+    }
+
+    setShowPricingModal(false);
+
+    await loadPricing();
   }
 
   async function loadAdminCounts() {
@@ -253,6 +341,55 @@ export default function AdminDashboardPage() {
 
   return (
     <AdminPageLayout>
+      {pricing && (
+        <PageCard className="mb-4 md:mb-6" title="Current Pricing">
+          <div className="grid gap-6 md:grid-cols-2">
+            <div className="rounded-lg border border-[#D9CBB8] bg-[#FFFDF9] p-4">
+              <h3 className="text-lg font-semibold text-[#5C4033]">Boarding</h3>
+
+              <p className="mt-2 text-2xl font-bold text-[#5C4033]">
+                £{pricing.nightly_rate.toFixed(2)}
+              </p>
+
+              <p className="text-sm text-[#8B6A4E]">Per night</p>
+
+              <p className="mt-3 text-sm font-medium text-[#5C4033]">
+                Deposit: {pricing.deposit_percentage}%
+              </p>
+            </div>
+
+            <div className="rounded-lg border border-[#D9CBB8] bg-[#FFFDF9] p-4">
+              <h3 className="text-lg font-semibold text-[#5C4033]">
+                Doggy Day Care
+              </h3>
+
+              <p className="mt-2 text-sm text-[#5C4033]">
+                Full Day:
+                <strong> £{pricing.daycare_full_day_rate.toFixed(2)}</strong>
+              </p>
+
+              <p className="mt-1 text-sm text-[#5C4033]">
+                Half Day:
+                <strong> £{pricing.daycare_half_day_rate.toFixed(2)}</strong>
+              </p>
+
+              <p className="mt-3 text-sm font-medium text-[#5C4033]">
+                Deposit: {pricing.daycare_deposit_percentage}%
+              </p>
+            </div>
+
+            <div className="md:col-span-2 flex flex-col gap-3 border-t border-[#D9CBB8] pt-4 md:flex-row md:items-center md:justify-between">
+              <p className="text-sm text-[#8B6A4E]">
+                Effective From: {pricing.effective_from}
+              </p>
+
+              <Button type="button" onClick={() => setShowPricingModal(true)}>
+                Amend Pricing
+              </Button>
+            </div>
+          </div>
+        </PageCard>
+      )}
       <PageCard
         className="mb-4 md:mb-8"
         title="Admin Dashboard"
@@ -352,6 +489,135 @@ export default function AdminDashboardPage() {
           View customer profiles, dogs, booking history and account status.
         </DashboardCard>
       </div>
+      <ConfirmationModal
+        isOpen={showPricingModal}
+        title="Update Pricing"
+        confirmText="Save Pricing"
+        cancelText="Cancel"
+        isConfirming={savingPricing}
+        variant="primary"
+        onConfirm={savePricing}
+        onCancel={() => {
+          if (!savingPricing) {
+            setShowPricingModal(false);
+          }
+        }}
+      >
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <label className="mb-2 block text-sm font-medium text-[#5C4033]">
+              Boarding Nightly Rate (£)
+            </label>
+
+            <input
+              type="number"
+              step="0.01"
+              value={pricingForm.boardingNightlyRate}
+              onChange={(event) =>
+                setPricingForm((current) => ({
+                  ...current,
+                  boardingNightlyRate: event.target.value,
+                }))
+              }
+              className="w-full rounded-lg border border-[#D9CBB8] px-3 py-2"
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-[#5C4033]">
+              Boarding Deposit (%)
+            </label>
+
+            <input
+              type="number"
+              step="0.01"
+              value={pricingForm.boardingDepositPercentage}
+              onChange={(event) =>
+                setPricingForm((current) => ({
+                  ...current,
+                  boardingDepositPercentage: event.target.value,
+                }))
+              }
+              className="w-full rounded-lg border border-[#D9CBB8] px-3 py-2"
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-[#5C4033]">
+              Daycare Full Day (£)
+            </label>
+
+            <input
+              type="number"
+              step="0.01"
+              value={pricingForm.daycareFullDayRate}
+              onChange={(event) =>
+                setPricingForm((current) => ({
+                  ...current,
+                  daycareFullDayRate: event.target.value,
+                }))
+              }
+              className="w-full rounded-lg border border-[#D9CBB8] px-3 py-2"
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-[#5C4033]">
+              Daycare Half Day (£)
+            </label>
+
+            <input
+              type="number"
+              step="0.01"
+              value={pricingForm.daycareHalfDayRate}
+              onChange={(event) =>
+                setPricingForm((current) => ({
+                  ...current,
+                  daycareHalfDayRate: event.target.value,
+                }))
+              }
+              className="w-full rounded-lg border border-[#D9CBB8] px-3 py-2"
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-[#5C4033]">
+              Daycare Deposit (%)
+            </label>
+
+            <input
+              type="number"
+              step="0.01"
+              value={pricingForm.daycareDepositPercentage}
+              onChange={(event) =>
+                setPricingForm((current) => ({
+                  ...current,
+                  daycareDepositPercentage: event.target.value,
+                }))
+              }
+              className="w-full rounded-lg border border-[#D9CBB8] px-3 py-2"
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-medium text-[#5C4033]">
+              Effective From
+            </label>
+
+            <input
+              type="date"
+              value={pricingForm.effectiveFrom}
+              onChange={(event) =>
+                setPricingForm((current) => ({
+                  ...current,
+                  effectiveFrom: event.target.value,
+                }))
+              }
+              className="w-full rounded-lg border border-[#D9CBB8] px-3 py-2"
+            />
+          </div>
+        </div>
+      </ConfirmationModal>
     </AdminPageLayout>
   );
 }

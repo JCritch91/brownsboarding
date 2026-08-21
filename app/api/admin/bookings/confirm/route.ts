@@ -323,10 +323,18 @@ export async function POST(request: Request) {
     id,
     nightly_rate,
     deposit_percentage,
+    effective_from,
     active
     `,
       )
       .eq("active", true)
+      .lte("effective_from", booking.start_date)
+      .order("effective_from", {
+        ascending: false,
+      })
+      .order("created_at", {
+        ascending: false,
+      })
       .limit(1)
       .maybeSingle();
 
@@ -344,7 +352,8 @@ export async function POST(request: Request) {
     if (!pricing) {
       return NextResponse.json(
         {
-          error: "No active pricing settings could be found.",
+          error:
+            "No pricing settings are available for the booking start date.",
         },
         {
           status: 400,

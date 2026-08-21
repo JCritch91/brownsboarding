@@ -1,20 +1,29 @@
 "use client";
 
 import { useEffect, useState } from "react";
+
 import { getActivePricingSettings } from "@/lib/appActions";
+import { formatMoney } from "@/lib/helpers";
+
 import PublicPageLayout from "@/components/PublicPageLayout";
 import PublicHero from "@/components/PublicHero";
 import SectionHeading from "@/components/SectionHeading";
 import InfoCard from "@/components/InfoCard";
 import Button from "@/components/Buttons";
-import { formatMoney } from "@/lib/helpers";
+import MessageBox from "@/components/MessageBox";
+
+type Pricing = {
+  nightlyRate: number;
+  boardingDepositPercentage: number;
+  daycareFullDayRate: number;
+  daycareHalfDayRate: number;
+  daycareDepositPercentage: number;
+};
 
 export default function PricesPage() {
-  const [nightlyRate, setNightlyRate] = useState<number | null>(null);
-  const [depositPercentage, setDepositPercentage] = useState<number | null>(
-    null,
-  );
+  const [pricing, setPricing] = useState<Pricing | null>(null);
   const [loadingPricing, setLoadingPricing] = useState(true);
+  const [pricingError, setPricingError] = useState("");
 
   useEffect(() => {
     loadPricingSettings();
@@ -22,20 +31,35 @@ export default function PricesPage() {
 
   async function loadPricingSettings() {
     setLoadingPricing(true);
+    setPricingError("");
 
     try {
       const pricingData = await getActivePricingSettings();
 
-      if (pricingData) {
-        setNightlyRate(Number(pricingData.nightly_rate));
-        setDepositPercentage(Number(pricingData.deposit_percentage));
+      if (!pricingData) {
+        setPricing(null);
+        setPricingError(
+          "Current pricing is temporarily unavailable. Please contact Browns Boarding for a quote.",
+        );
+        return;
       }
+
+      setPricing({
+        nightlyRate: Number(pricingData.nightly_rate),
+        boardingDepositPercentage: Number(pricingData.deposit_percentage),
+        daycareFullDayRate: Number(pricingData.daycare_full_day_rate),
+        daycareHalfDayRate: Number(pricingData.daycare_half_day_rate),
+        daycareDepositPercentage: Number(
+          pricingData.daycare_deposit_percentage,
+        ),
+      });
     } catch (error) {
-      if (error instanceof Error) {
-        console.error("Error loading pricing settings:", error.message);
-      } else {
-        console.error("Unexpected pricing error:", error);
-      }
+      console.error("Error loading pricing settings:", error);
+
+      setPricing(null);
+      setPricingError(
+        "Current pricing is temporarily unavailable. Please contact Browns Boarding for a quote.",
+      );
     } finally {
       setLoadingPricing(false);
     }
@@ -49,57 +73,111 @@ export default function PricesPage() {
       />
 
       {/* Main Pricing */}
-      <section className="py-12 md:py-20 bg-[#F5EFE6]">
-        <div className="max-w-6xl mx-auto px-4 md:px-6">
+      <section className="bg-[#F5EFE6] py-12 md:py-20">
+        <div className="mx-auto max-w-6xl px-4 md:px-6">
           <SectionHeading
             title="Simple Pricing"
             subtitle="Clear pricing so you know what to expect before requesting a booking."
           />
 
-          <div className="grid gap-3 md:grid-cols-2 md:gap-8 max-w-4xl mx-auto">
-            <InfoCard title="Boarding from">
-              {loadingPricing ? (
-                <span>Loading price...</span>
-              ) : nightlyRate !== null ? (
-                <>
-                  <span className="block text-3xl md:text-4xl font-bold text-[#5C4033]">
-                    {formatMoney(nightlyRate)}
-                  </span>
+          {pricingError && (
+            <div className="mx-auto mb-6 max-w-4xl">
+              <MessageBox type="warning">{pricingError}</MessageBox>
+            </div>
+          )}
 
-                  <span className="block mt-2 text-[#8B6A4E]">per night</span>
-                </>
-              ) : (
-                <span>Price coming soon</span>
-              )}
+          <div className="mx-auto grid max-w-5xl gap-4 md:grid-cols-2 md:gap-8">
+            <InfoCard title="Home Boarding">
+              <div className="flex h-full flex-col">
+                <div>
+                  <p className="text-3xl font-bold text-[#5C4033] md:text-4xl">
+                    {loadingPricing
+                      ? "Loading..."
+                      : pricing
+                        ? formatMoney(pricing.nightlyRate)
+                        : "Contact us"}
+                  </p>
+
+                  <p className="mt-2 text-sm text-[#8B6A4E] md:text-base">
+                    Per night
+                  </p>
+                </div>
+
+                <div className="mt-6 border-t border-[#D9CBB8] pt-4">
+                  <p className="text-sm font-semibold text-[#5C4033] md:text-base">
+                    Deposit
+                  </p>
+
+                  <p className="mt-1 text-[#8B6A4E]">
+                    {loadingPricing
+                      ? "Loading..."
+                      : pricing
+                        ? `${pricing.boardingDepositPercentage}%`
+                        : "Contact us"}{" "}
+                    Due immediately when your booking is confirmed.
+                  </p>
+                </div>
+              </div>
             </InfoCard>
 
-            <InfoCard title="Deposit">
-              {loadingPricing ? (
-                <span>Loading deposit...</span>
-              ) : depositPercentage !== null ? (
-                <>
-                  <span className="block text-3xl md:text-4xl font-bold text-[#5C4033]">
-                    {depositPercentage}%
-                  </span>
+            <InfoCard title="Doggy Day Care">
+              <div className="flex h-full flex-col">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm font-semibold text-[#5C4033] md:text-base">
+                      Full Day
+                    </p>
 
-                  <span className="block mt-2 text-[#8B6A4E]">
-                    payable when your booking is confirmed.
-                  </span>
-                </>
-              ) : (
-                <span>Deposit information coming soon</span>
-              )}
+                    <p className="mt-2 text-2xl font-bold text-[#5C4033] md:text-3xl">
+                      {loadingPricing
+                        ? "Loading..."
+                        : pricing
+                          ? formatMoney(pricing.daycareFullDayRate)
+                          : "Contact us"}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-sm font-semibold text-[#5C4033] md:text-base">
+                      Half Day
+                    </p>
+
+                    <p className="mt-2 text-2xl font-bold text-[#5C4033] md:text-3xl">
+                      {loadingPricing
+                        ? "Loading..."
+                        : pricing
+                          ? formatMoney(pricing.daycareHalfDayRate)
+                          : "Contact us"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-6 border-t border-[#D9CBB8] pt-4">
+                  <p className="text-sm font-semibold text-[#5C4033] md:text-base">
+                    Deposit
+                  </p>
+
+                  <p className="mt-1 text-[#8B6A4E]">
+                    {loadingPricing
+                      ? "Loading..."
+                      : pricing
+                        ? `${pricing.daycareDepositPercentage}%`
+                        : "Contact us"}{" "}
+                    Due immediately when your booking is confirmed.
+                  </p>
+                </div>
+              </div>
             </InfoCard>
           </div>
         </div>
       </section>
 
       {/* What's Included */}
-      <section className="py-12 md:py-20 bg-[#E8DDCF]">
-        <div className="max-w-6xl mx-auto px-4 md:px-6">
+      <section className="bg-[#E8DDCF] py-12 md:py-20">
+        <div className="mx-auto max-w-6xl px-4 md:px-6">
           <SectionHeading
             title="What's Included?"
-            subtitle="Everything your dog needs for a safe, comfortable and caring stay."
+            subtitle="Everything your dog needs for safe, comfortable and caring support."
           />
 
           <div className="grid gap-3 md:grid-cols-3 md:gap-8">
@@ -122,8 +200,8 @@ export default function PricesPage() {
             </InfoCard>
 
             <InfoCard title="Regular updates">
-              Updates during your dog's stay so you know how they are getting
-              on.
+              Updates during your dog's stay so you know how the stay is
+              progressing.
             </InfoCard>
 
             <InfoCard title="Meet & greet">
@@ -134,8 +212,8 @@ export default function PricesPage() {
       </section>
 
       {/* Payment Information */}
-      <section className="py-12 md:py-20 bg-[#F5EFE6]">
-        <div className="max-w-6xl mx-auto px-4 md:px-6">
+      <section className="bg-[#F5EFE6] py-12 md:py-20">
+        <div className="mx-auto max-w-6xl px-4 md:px-6">
           <SectionHeading
             title="Payment Information"
             subtitle="A clear payment process from deposit through to final balance."
@@ -143,9 +221,7 @@ export default function PricesPage() {
 
           <div className="grid gap-3 md:grid-cols-3 md:gap-8">
             <InfoCard title="Deposit">
-              {depositPercentage !== null
-                ? `A ${depositPercentage}% deposit is payable when your booking is confirmed.`
-                : "A deposit is payable when your booking is confirmed."}
+              The deposit is due immediately when your booking is confirmed.
             </InfoCard>
 
             <InfoCard title="Remaining Balance">
@@ -160,9 +236,9 @@ export default function PricesPage() {
         </div>
       </section>
 
-      {/* Vaccination Requirements */}
-      <section className="py-12 md:py-20 bg-[#E8DDCF]">
-        <div className="max-w-6xl mx-auto px-4 md:px-6">
+      {/* Pre-stay Requirements */}
+      <section className="bg-[#E8DDCF] py-12 md:py-20">
+        <div className="mx-auto max-w-6xl px-4 md:px-6">
           <SectionHeading
             title="Pre-stay Requirements"
             subtitle="Keeping every dog safe is an important part of the booking process."
@@ -175,27 +251,27 @@ export default function PricesPage() {
               and managed through your customer account.
             </InfoCard>
 
-            <InfoCard title="Up-to-date Flea and Worm Treatment Required">
+            <InfoCard title="Up-to-date flea and worm treatment required">
               All dogs staying at Browns Boarding must also have up-to-date flea
-              and workm treatment before their stay.
+              and worm treatment before their stay.
             </InfoCard>
           </div>
         </div>
       </section>
 
       {/* CTA */}
-      <section className="py-12 md:py-20 bg-[#8B6A4E] text-white">
-        <div className="max-w-4xl mx-auto px-4 md:px-6 text-center">
-          <h2 className="text-3xl md:text-4xl font-bold text-[#F5EFE6]">
+      <section className="bg-[#8B6A4E] py-12 text-white md:py-20">
+        <div className="mx-auto max-w-4xl px-4 text-center md:px-6">
+          <h2 className="text-3xl font-bold text-[#F5EFE6] md:text-4xl">
             Ready to Book?
           </h2>
 
-          <p className="mt-3 md:mt-4 text-base md:text-lg text-[#F5EFE6]/90">
+          <p className="mt-3 text-base text-[#F5EFE6]/90 md:mt-4 md:text-lg">
             Create an account, add your dog's details and request a stay with
             Browns Boarding.
           </p>
 
-          <div className="mt-6 md:mt-8 flex flex-wrap gap-4 justify-center">
+          <div className="mt-6 flex flex-wrap justify-center gap-4 md:mt-8">
             <Button variant="light" href="/bookings">
               Book a Stay
             </Button>

@@ -286,40 +286,6 @@ export async function POST(request: Request, context: RouteContext) {
       );
     }
 
-    if (!dog.vaccinated) {
-      return NextResponse.json(
-        {
-          error: "The selected dog's vaccination information is incomplete.",
-        },
-        {
-          status: 409,
-        },
-      );
-    }
-
-    if (!dog.vaccination_expiry) {
-      return NextResponse.json(
-        {
-          error: "The selected dog's vaccination expiry date is missing.",
-        },
-        {
-          status: 409,
-        },
-      );
-    }
-
-    if (dog.vaccination_expiry < startDate) {
-      return NextResponse.json(
-        {
-          error:
-            "The selected dog's vaccination will have expired before the booking begins.",
-        },
-        {
-          status: 409,
-        },
-      );
-    }
-
     const { data: existingBookings, error: overlapLoadError } =
       await supabaseAdmin
         .from("bookings")
