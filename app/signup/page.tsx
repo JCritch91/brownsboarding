@@ -229,8 +229,11 @@ export default function SignupPage() {
       subtitle="(All fields marked with * are mandatory)"
       maxWidth="max-w-4xl"
     >
-      {" "}
-      {message && <MessageBox type="error">{message}</MessageBox>}
+      {message && (
+        <MessageBox type="error" className="mb-4 md:mb-6">
+          {message}
+        </MessageBox>
+      )}
       <form onSubmit={handleSignup} className="space-y-4 md:space-y-6">
         <div className="grid grid-cols-2 gap-3">
           <FormInput

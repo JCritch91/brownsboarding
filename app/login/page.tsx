@@ -92,7 +92,9 @@ export default function LoginPage() {
     >
       {/* Message */}
       {message && (
-        <MessageBox type={isError ? "error" : "info"}>{message}</MessageBox>
+        <MessageBox type={isError ? "error" : "info"} className="mb-4 md:mb-6">
+          {message}
+        </MessageBox>
       )}
 
       <form onSubmit={handleLogin} className="space-y-4 max-w-md mx-auto">
