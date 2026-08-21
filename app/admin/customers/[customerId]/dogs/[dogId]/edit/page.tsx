@@ -14,6 +14,7 @@ import LoadingScreen from "@/components/LoadingScreen";
 import DogForm, { type DogFormValues } from "@/components/dogs/DogForm";
 import { authenticatedApiRequest } from "@/lib/client/authenticated-api";
 import ConfirmationModal from "@/components/modals/ConfirmationModal";
+import AdminVaccinationProofPanel from "@/components/admin/AdminVaccinationProofPanel";
 
 type UpdateAdminDogResponse = {
   success: boolean;
@@ -264,6 +265,12 @@ export default function AdminEditDogPage() {
           meetAndGreetCompleted={meetAndGreetCompleted}
           allowMeetAndGreetManagement={true}
           onMeetAndGreetChange={setMeetAndGreetCompleted}
+          vaccinationProofContent={
+            <AdminVaccinationProofPanel
+              dogId={dogId}
+              dogName={formatName(form.name) || "Dog"}
+            />
+          }
           additionalActions={
             dogActive ? (
               <button
