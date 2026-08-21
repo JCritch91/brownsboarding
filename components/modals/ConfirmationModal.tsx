@@ -90,7 +90,7 @@ export default function ConfirmationModal({
             type="button"
             onClick={onCancel}
             disabled={isConfirming}
-            className="inline-flex min-h-11 items-center justify-center rounded-lg border border-[#D9CBB8] bg-white px-4 py-2 text-sm font-semibold text-[#5C4033] transition-colors hover:border-[#8B6A4E] hover:bg-[#FFFDF9] disabled:cursor-not-allowed disabled:opacity-60 md:text-base"
+            className="inline-flex min-h-11 items-center justify-center rounded-lg border border-[#D9CBB8] cursor-pointer bg-white px-4 py-2 text-sm font-semibold text-[#5C4033] transition-colors hover:border-[#8B6A4E] hover:bg-[#FFFDF9] disabled:cursor-not-allowed disabled:opacity-60 md:text-base"
           >
             {cancelText}
           </button>
@@ -99,7 +99,7 @@ export default function ConfirmationModal({
             type="button"
             onClick={onConfirm}
             disabled={isConfirming}
-            className={`inline-flex min-h-11 items-center justify-center rounded-lg border px-4 py-2 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 md:text-base ${confirmButtonStyles[variant]}`}
+            className={`inline-flex min-h-11 items-center justify-center rounded-lg border px-4 py-2 text-sm font-semibold cursor-pointer transition-colors disabled:cursor-not-allowed disabled:opacity-60 md:text-base ${confirmButtonStyles[variant]}`}
           >
             {isConfirming ? "Please wait..." : confirmText}
           </button>
