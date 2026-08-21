@@ -405,7 +405,7 @@ export default function VaccinationProofPanel({
               className={`rounded-lg border p-3 md:p-4 ${statusPresentation.className}`}
             >
               <p className="text-sm font-medium md:text-base">
-                {statusPresentation.description}
+                {statusDescription}
               </p>
             </div>
 
