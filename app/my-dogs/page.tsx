@@ -303,45 +303,45 @@ export default function MyDogsPage() {
                   </div>
                 </div>
 
-                <div className="mt-3 md:mt-4 space-y-1.5 md:space-y-2">
+                <div className="mt-3 space-y-1.5 md:mt-4 md:space-y-2">
                   {basicInfoComplete(dog) ? (
-                    <p className="text-sm md:text-base text-green-700 font-medium">
+                    <p className="text-sm font-medium text-green-700 md:text-base">
                       Basic Information Complete
                     </p>
                   ) : (
-                    <p className="text-sm md:text-base text-red-700 font-medium">
+                    <p className="text-sm font-medium text-red-700 md:text-base">
                       Basic Information Incomplete
                     </p>
                   )}
 
                   {careInfoComplete(dog) ? (
-                    <p className="text-sm md:text-base text-amber-700 font-medium">
-                      Care & Behaviour Started
+                    <p className="text-sm font-medium text-amber-700 md:text-base">
+                      Care &amp; Behaviour Started
                     </p>
                   ) : (
-                    <p className="text-sm md:text-base text-red-700 font-medium">
-                      Care & Behaviour Incomplete
+                    <p className="text-sm font-medium text-red-700 md:text-base">
+                      Care &amp; Behaviour Incomplete
                     </p>
                   )}
-                </div>
 
-                {(() => {
-                  const vaccinationProofPresentation =
-                    getVaccinationProofPresentation(
-                      getVaccinationProofStatus({
-                        proof: vaccinationProofByDogId.get(dog.id),
-                        dogVaccinationExpiry: dog.vaccination_expiry,
-                      }),
+                  {(() => {
+                    const vaccinationProofPresentation =
+                      getVaccinationProofPresentation(
+                        getVaccinationProofStatus({
+                          proof: vaccinationProofByDogId.get(dog.id),
+                          dogVaccinationExpiry: dog.vaccination_expiry,
+                        }),
+                      );
+
+                    return (
+                      <p
+                        className={`text-sm font-medium md:text-base ${vaccinationProofPresentation.textClassName}`}
+                      >
+                        {vaccinationProofPresentation.label}
+                      </p>
                     );
-
-                  return (
-                    <p
-                      className={`text-sm font-medium md:text-base ${vaccinationProofPresentation.className}`}
-                    >
-                      {vaccinationProofPresentation.label}
-                    </p>
-                  );
-                })()}
+                  })()}
+                </div>
 
                 <div className="mt-4 md:mt-5 flex flex-wrap gap-3 md:gap-4">
                   <Link
