@@ -266,17 +266,17 @@ export default function MyDogsPage() {
                       Basic Information Complete
                     </p>
                   ) : (
-                    <p className="text-sm md:text-base text-amber-700 font-medium">
+                    <p className="text-sm md:text-base text-red-700 font-medium">
                       Basic Information Incomplete
                     </p>
                   )}
 
                   {careInfoComplete(dog) ? (
-                    <p className="text-sm md:text-base text-green-700 font-medium">
+                    <p className="text-sm md:text-base text-amber-700 font-medium">
                       Care & Behaviour Started
                     </p>
                   ) : (
-                    <p className="text-sm md:text-base text-amber-700 font-medium">
+                    <p className="text-sm md:text-base text-red-700 font-medium">
                       Care & Behaviour Incomplete
                     </p>
                   )}
