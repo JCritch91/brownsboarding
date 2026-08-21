@@ -10,7 +10,7 @@ export type AuthenticatedApiResult<T> = {
 
 type AuthenticatedApiOptions = {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-  body?: unknown;
+  body?: unknown | FormData;
 };
 
 export async function authenticatedApiRequest<T>(
@@ -27,68 +27,64 @@ export async function authenticatedApiRequest<T>(
       ok: false,
       status: 401,
       data: null,
-      error:
-        sessionError?.message ||
-        "Your session has expired. Please sign in again.",
+      error: sessionError?.message || "You must be signed in.",
       unauthenticated: true,
     };
   }
 
-  try {
-    const response = await fetch(url, {
-      method: options.method || "POST",
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-        "Content-Type": "application/json",
-      },
-      body:
-        options.body === undefined ? undefined : JSON.stringify(options.body),
-    });
+  const isFormData =
+    typeof FormData !== "undefined" && options.body instanceof FormData;
 
-    const responseText = await response.text();
+  const headers: HeadersInit = {
+    Authorization: `Bearer ${session.access_token}`,
+  };
 
-    let data: T | null = null;
+  let requestBody: BodyInit | undefined;
 
-    if (responseText) {
-      try {
-        data = JSON.parse(responseText) as T;
-      } catch {
-        return {
-          ok: false,
-          status: response.status,
-          data: null,
-          error: responseText || "The server returned an invalid response.",
-          unauthenticated: false,
-        };
-      }
+  if (options.body !== undefined) {
+    if (isFormData) {
+      requestBody = options.body as FormData;
+    } else {
+      headers["Content-Type"] = "application/json";
+      requestBody = JSON.stringify(options.body);
     }
-
-    const responseData = data as {
-      error?: string;
-      message?: string;
-    } | null;
-
-    return {
-      ok: response.ok,
-      status: response.status,
-      data,
-      error: response.ok
-        ? null
-        : responseData?.error ||
-          responseData?.message ||
-          "The request could not be completed.",
-      unauthenticated: response.status === 401,
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      status: 0,
-      data: null,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Unable to contact the server.",
-      unauthenticated: false,
-    };
   }
+
+  const response = await fetch(url, {
+    method: options.method ?? "POST",
+    headers,
+    body: requestBody,
+  });
+
+  const responseText = await response.text();
+
+  let data: T | null = null;
+  let responseError = "";
+
+  if (responseText) {
+    try {
+      data = JSON.parse(responseText) as T;
+
+      if (
+        typeof data === "object" &&
+        data !== null &&
+        "error" in data &&
+        typeof data.error === "string"
+      ) {
+        responseError = data.error;
+      }
+    } catch {
+      responseError = "The server returned an invalid response.";
+    }
+  }
+
+  return {
+    ok: response.ok,
+    status: response.status,
+    data,
+    error:
+      responseError ||
+      (response.ok ? "" : `The request failed with status ${response.status}.`),
+    unauthenticated: response.status === 401,
+  };
 }
