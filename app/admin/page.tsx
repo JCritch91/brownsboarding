@@ -13,6 +13,7 @@ import {
   getVaccinationProofStatus,
   type VaccinationProofSummary,
 } from "@/lib/vaccination-proof";
+import { ACTIVE_BOOKING_STATUSES } from "@/types/booking";
 
 type AdminActionCounts = {
   pendingBookings: number;
@@ -68,64 +69,120 @@ export default function AdminDashboardPage() {
       .toISOString()
       .split("T")[0];
 
-    const { count: pendingBookingsCount } = await supabase
+    const { data: activeBookings, error: activeBookingsError } = await supabase
       .from("bookings")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "Pending");
+      .select("id, dog_id, status")
+      .in("status", ACTIVE_BOOKING_STATUSES);
 
-    const { count: meetAndGreetCount } = await supabase
-      .from("dogs")
-      .select("id", { count: "exact", head: true })
-      .eq("active", true)
-      .eq("meet_and_greet_completed", false);
+    if (activeBookingsError) {
+      console.error("Unable to load active bookings:", activeBookingsError);
 
-    const { count: vaccinationExpiredCount } = await supabase
-      .from("dogs")
-      .select("id", { count: "exact", head: true })
-      .eq("active", true)
-      .lt("vaccination_expiry", today);
+      setCounts({
+        pendingBookings: 0,
+        meetAndGreetRequired: 0,
+        vaccinationExpired: 0,
+        vaccinationExpiringSoon: 0,
+        vaccinationProofMissing: 0,
+        vaccinationProofExpired: 0,
+        vaccinationProofAwaitingReview: 0,
+      });
 
-    const { count: vaccinationExpiringSoonCount } = await supabase
-      .from("dogs")
-      .select("id", { count: "exact", head: true })
-      .eq("active", true)
-      .gte("vaccination_expiry", today)
-      .lte("vaccination_expiry", thirtyDaysFromNowString);
+      return;
+    }
+
+    const pendingBookingsCount = (activeBookings || []).filter(
+      (booking) => booking.status === "Pending",
+    ).length;
+
+    const activeDogIds = Array.from(
+      new Set(
+        (activeBookings || [])
+          .map((booking) => booking.dog_id)
+          .filter((dogId): dogId is string => Boolean(dogId)),
+      ),
+    );
+
+    if (activeDogIds.length === 0) {
+      setCounts({
+        pendingBookings: pendingBookingsCount,
+        meetAndGreetRequired: 0,
+        vaccinationExpired: 0,
+        vaccinationExpiringSoon: 0,
+        vaccinationProofMissing: 0,
+        vaccinationProofExpired: 0,
+        vaccinationProofAwaitingReview: 0,
+      });
+
+      return;
+    }
 
     const { data: activeDogs, error: activeDogsError } = await supabase
       .from("dogs")
-      .select("id, vaccination_expiry")
+      .select(
+        `
+      id,
+      active,
+      meet_and_greet_completed,
+      vaccination_expiry
+      `,
+      )
+      .in("id", activeDogIds)
       .eq("active", true);
 
     if (activeDogsError) {
       console.error(
-        "Unable to load active dogs for vaccination proof counts:",
+        "Unable to load dogs with active bookings:",
         activeDogsError,
       );
+
+      setCounts({
+        pendingBookings: pendingBookingsCount,
+        meetAndGreetRequired: 0,
+        vaccinationExpired: 0,
+        vaccinationExpiringSoon: 0,
+        vaccinationProofMissing: 0,
+        vaccinationProofExpired: 0,
+        vaccinationProofAwaitingReview: 0,
+      });
+
+      return;
     }
 
-    const activeDogIds = (activeDogs || []).map((dog) => dog.id);
+    const loadedDogs = activeDogs || [];
+    const loadedDogIds = loadedDogs.map((dog) => dog.id);
 
-    const activeDogById = new Map(
-      (activeDogs || []).map((dog) => [dog.id, dog]),
-    );
+    const meetAndGreetRequiredCount = loadedDogs.filter(
+      (dog) => !dog.meet_and_greet_completed,
+    ).length;
+
+    const vaccinationExpiredCount = loadedDogs.filter(
+      (dog) =>
+        Boolean(dog.vaccination_expiry) && dog.vaccination_expiry < today,
+    ).length;
+
+    const vaccinationExpiringSoonCount = loadedDogs.filter(
+      (dog) =>
+        Boolean(dog.vaccination_expiry) &&
+        dog.vaccination_expiry >= today &&
+        dog.vaccination_expiry <= thirtyDaysFromNowString,
+    ).length;
 
     let vaccinationProofs: VaccinationProofRecord[] = [];
 
-    if (!activeDogsError && activeDogIds.length > 0) {
+    if (loadedDogIds.length > 0) {
       const { data: proofData, error: proofError } = await supabase
         .from("dog_vaccination_proofs")
         .select(
           `
-      dog_id,
-      storage_path,
-      vaccination_expiry,
-      checked_at,
-      checked_by,
-      deleted_at
-      `,
+        dog_id,
+        storage_path,
+        vaccination_expiry,
+        checked_at,
+        checked_by,
+        deleted_at
+        `,
         )
-        .in("dog_id", activeDogIds);
+        .in("dog_id", loadedDogIds);
 
       if (proofError) {
         console.error("Unable to load vaccination proof counts:", proofError);
@@ -142,40 +199,36 @@ export default function AdminDashboardPage() {
     let vaccinationProofExpiredCount = 0;
     let vaccinationProofAwaitingReviewCount = 0;
 
-    if (!activeDogsError) {
-      for (const dogId of activeDogIds) {
-        const dog = activeDogById.get(dogId);
+    for (const dog of loadedDogs) {
+      const proofStatus = getVaccinationProofStatus({
+        proof: vaccinationProofByDogId.get(dog.id),
+        dogVaccinationExpiry: dog.vaccination_expiry,
+        today,
+      });
 
-        const proofStatus = getVaccinationProofStatus({
-          proof: vaccinationProofByDogId.get(dogId),
-          dogVaccinationExpiry: dog?.vaccination_expiry,
-          today,
-        });
+      switch (proofStatus) {
+        case "due":
+          vaccinationProofMissingCount += 1;
+          break;
 
-        switch (proofStatus) {
-          case "due":
-            vaccinationProofMissingCount += 1;
-            break;
+        case "expired":
+          vaccinationProofExpiredCount += 1;
+          break;
 
-          case "expired":
-            vaccinationProofExpiredCount += 1;
-            break;
+        case "awaiting-review":
+          vaccinationProofAwaitingReviewCount += 1;
+          break;
 
-          case "awaiting-review":
-            vaccinationProofAwaitingReviewCount += 1;
-            break;
-
-          default:
-            break;
-        }
+        default:
+          break;
       }
     }
 
     setCounts({
-      pendingBookings: pendingBookingsCount || 0,
-      meetAndGreetRequired: meetAndGreetCount || 0,
-      vaccinationExpired: vaccinationExpiredCount || 0,
-      vaccinationExpiringSoon: vaccinationExpiringSoonCount || 0,
+      pendingBookings: pendingBookingsCount,
+      meetAndGreetRequired: meetAndGreetRequiredCount,
+      vaccinationExpired: vaccinationExpiredCount,
+      vaccinationExpiringSoon: vaccinationExpiringSoonCount,
       vaccinationProofMissing: vaccinationProofMissingCount,
       vaccinationProofExpired: vaccinationProofExpiredCount,
       vaccinationProofAwaitingReview: vaccinationProofAwaitingReviewCount,
@@ -216,49 +269,63 @@ export default function AdminDashboardPage() {
             </MessageBox>
           </div>
         ) : (
-          <div className="mt-4 md:mt-6 grid gap-3 md:grid-cols-2 md:gap-4">
-            <div className="bg-amber-50 border border-amber-300 p-3 md:p-4 rounded-lg">
-              <p className="text-sm md:text-base text-amber-800 font-semibold">
-                Pending bookings: {counts.pendingBookings}
-              </p>
-            </div>
+          <div className="mt-4 grid gap-3 md:mt-6 md:grid-cols-2 md:gap-4">
+            {counts.pendingBookings > 0 && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 md:p-4">
+                <p className="text-sm font-semibold text-amber-800 md:text-base">
+                  Pending bookings: {counts.pendingBookings}
+                </p>
+              </div>
+            )}
 
-            <div className="bg-blue-50 border border-blue-300 p-3 md:p-4 rounded-lg">
-              <p className="text-sm md:text-base text-blue-800 font-semibold">
-                Meet and greets required: {counts.meetAndGreetRequired}
-              </p>
-            </div>
+            {counts.meetAndGreetRequired > 0 && (
+              <div className="rounded-lg border border-blue-300 bg-blue-50 p-3 md:p-4">
+                <p className="text-sm font-semibold text-blue-800 md:text-base">
+                  Meet and greets required: {counts.meetAndGreetRequired}
+                </p>
+              </div>
+            )}
 
-            <div className="bg-red-50 border border-red-300 p-3 md:p-4 rounded-lg">
-              <p className="text-sm md:text-base text-red-700 font-semibold">
-                Expired vaccinations: {counts.vaccinationExpired}
-              </p>
-            </div>
+            {counts.vaccinationExpired > 0 && (
+              <div className="rounded-lg border border-red-300 bg-red-50 p-3 md:p-4">
+                <p className="text-sm font-semibold text-red-700 md:text-base">
+                  Expired vaccinations: {counts.vaccinationExpired}
+                </p>
+              </div>
+            )}
 
-            <div className="bg-amber-50 border border-amber-300 p-3 md:p-4 rounded-lg">
-              <p className="text-sm md:text-base text-amber-800 font-semibold">
-                Vaccinations expiring soon: {counts.vaccinationExpiringSoon}
-              </p>
-            </div>
+            {counts.vaccinationExpiringSoon > 0 && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 md:p-4">
+                <p className="text-sm font-semibold text-amber-800 md:text-base">
+                  Vaccinations expiring soon: {counts.vaccinationExpiringSoon}
+                </p>
+              </div>
+            )}
 
-            <div className="rounded-lg border border-red-300 bg-red-50 p-3 md:p-4">
-              <p className="text-sm font-semibold text-red-800 md:text-base">
-                Vaccination proofs missing: {counts.vaccinationProofMissing}
-              </p>
-            </div>
+            {counts.vaccinationProofMissing > 0 && (
+              <div className="rounded-lg border border-red-300 bg-red-50 p-3 md:p-4">
+                <p className="text-sm font-semibold text-red-800 md:text-base">
+                  Vaccination proofs missing: {counts.vaccinationProofMissing}
+                </p>
+              </div>
+            )}
 
-            <div className="rounded-lg border border-red-300 bg-red-50 p-3 md:p-4">
-              <p className="text-sm font-semibold text-red-800 md:text-base">
-                Vaccination proofs expired: {counts.vaccinationProofExpired}
-              </p>
-            </div>
+            {counts.vaccinationProofExpired > 0 && (
+              <div className="rounded-lg border border-red-300 bg-red-50 p-3 md:p-4">
+                <p className="text-sm font-semibold text-red-800 md:text-base">
+                  Vaccination proofs expired: {counts.vaccinationProofExpired}
+                </p>
+              </div>
+            )}
 
-            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 md:p-4">
-              <p className="text-sm font-semibold text-amber-800 md:text-base">
-                Vaccination proofs awaiting review:{" "}
-                {counts.vaccinationProofAwaitingReview}
-              </p>
-            </div>
+            {counts.vaccinationProofAwaitingReview > 0 && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 md:p-4">
+                <p className="text-sm font-semibold text-amber-800 md:text-base">
+                  Vaccination proofs awaiting review:{" "}
+                  {counts.vaccinationProofAwaitingReview}
+                </p>
+              </div>
+            )}
           </div>
         )}
       </PageCard>
