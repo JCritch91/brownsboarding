@@ -13,13 +13,17 @@ export type VaccinationProofSummary = {
 type VaccinationProofStatusOptions = {
   proof: VaccinationProofSummary | null | undefined;
   dogVaccinationExpiry?: string | null;
-  today: string;
+  today?: string;
 };
+
+export function getCurrentDatabaseDate() {
+  return new Date().toISOString().slice(0, 10);
+}
 
 export function getVaccinationProofStatus({
   proof,
   dogVaccinationExpiry,
-  today,
+  today = getCurrentDatabaseDate(),
 }: VaccinationProofStatusOptions): VaccinationProofStatus {
   if (!proof?.storage_path || proof.deleted_at) {
     return "due";
@@ -76,4 +80,3 @@ export function getVaccinationProofPresentation(
       };
   }
 }
-``;

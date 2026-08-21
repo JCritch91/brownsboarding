@@ -11,6 +11,11 @@ import Button from "@/components/Buttons";
 import Link from "next/link";
 import { authenticatedApiRequest } from "@/lib/client/authenticated-api";
 import ConfirmationModal from "@/components/modals/ConfirmationModal";
+import {
+  getVaccinationProofPresentation,
+  getVaccinationProofStatus,
+  type VaccinationProofSummary,
+} from "@/lib/vaccination-proof";
 
 type Dog = {
   id: string;
@@ -28,6 +33,8 @@ type Dog = {
   behaviour_notes: string | null;
   meet_and_greet_completed: boolean | null;
 };
+
+type VaccinationProofRecord = VaccinationProofSummary;
 
 type DeactivateDogResponse = {
   success: boolean;
@@ -47,6 +54,9 @@ export default function MyDogsPage() {
 
   const [loading, setLoading] = useState(true);
   const [dogs, setDogs] = useState<Dog[]>([]);
+  const [vaccinationProofByDogId, setVaccinationProofByDogId] = useState<
+    Map<string, VaccinationProofRecord>
+  >(new Map());
   const [message, setMessage] = useState("");
 
   const [isError, setIsError] = useState(false);
@@ -79,15 +89,48 @@ export default function MyDogsPage() {
       .eq("active", true)
       .order("created_at", { ascending: false });
 
-    setLoading(false);
-
     if (error) {
       setIsError(true);
       setMessage(error.message);
+      setLoading(false);
       return;
     }
 
-    setDogs(data || []);
+    const loadedDogs = (data || []) as Dog[];
+    const dogIds = loadedDogs.map((dog) => dog.id);
+
+    let proofRecords: VaccinationProofRecord[] = [];
+
+    if (dogIds.length > 0) {
+      const { data: proofData, error: proofError } = await supabase
+        .from("dog_vaccination_proofs")
+        .select(
+          `
+      dog_id,
+      storage_path,
+      vaccination_expiry,
+      checked_at,
+      checked_by,
+      deleted_at
+      `,
+        )
+        .in("dog_id", dogIds);
+
+      if (proofError) {
+        setIsError(true);
+        setMessage(proofError.message);
+        setLoading(false);
+        return;
+      }
+
+      proofRecords = (proofData || []) as VaccinationProofRecord[];
+    }
+
+    setDogs(loadedDogs);
+    setVaccinationProofByDogId(
+      new Map(proofRecords.map((proof) => [proof.dog_id, proof])),
+    );
+    setLoading(false);
   }
 
   function calculateAge(dateOfBirth: string | null) {
@@ -281,6 +324,24 @@ export default function MyDogsPage() {
                     </p>
                   )}
                 </div>
+
+                {(() => {
+                  const vaccinationProofPresentation =
+                    getVaccinationProofPresentation(
+                      getVaccinationProofStatus({
+                        proof: vaccinationProofByDogId.get(dog.id),
+                        dogVaccinationExpiry: dog.vaccination_expiry,
+                      }),
+                    );
+
+                  return (
+                    <p
+                      className={`text-sm font-medium md:text-base ${vaccinationProofPresentation.className}`}
+                    >
+                      {vaccinationProofPresentation.label}
+                    </p>
+                  );
+                })()}
 
                 <div className="mt-4 md:mt-5 flex flex-wrap gap-3 md:gap-4">
                   <Link

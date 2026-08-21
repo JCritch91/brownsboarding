@@ -7,15 +7,12 @@ import CustomerPageLayout from "@/components/CustomerPageLayout";
 import PageCard from "@/components/PageCard";
 import DashboardCard from "@/components/DashboardCard";
 import Button from "@/components/Buttons";
+import {
+  getVaccinationProofStatus,
+  type VaccinationProofSummary,
+} from "@/lib/vaccination-proof";
 
-type VaccinationProofRecord = {
-  dog_id: string;
-  storage_path: string | null;
-  vaccination_expiry: string;
-  checked_at: string | null;
-  checked_by: string | null;
-  deleted_at: string | null;
-};
+type VaccinationProofRecord = VaccinationProofSummary;
 
 type ActionItem = {
   id: string;
@@ -192,13 +189,12 @@ export default function DashboardPage() {
           });
         }
 
-        const vaccinationProof = vaccinationProofByDogId.get(dog.id);
+        const vaccinationProofStatus = getVaccinationProofStatus({
+          proof: vaccinationProofByDogId.get(dog.id),
+          dogVaccinationExpiry: dog.vaccination_expiry,
+        });
 
-        const vaccinationProofMissing =
-          !vaccinationProof?.storage_path ||
-          Boolean(vaccinationProof.deleted_at);
-
-        if (vaccinationProofMissing) {
+        if (vaccinationProofStatus === "due") {
           items.push({
             id: `dog-vaccination-proof-missing-${dog.id}`,
             type: "error",
@@ -208,37 +204,26 @@ export default function DashboardPage() {
             link: `/my-dogs/edit/${dog.id}`,
             linkText: "Upload Evidence",
           });
-        } else {
-          const proofExpiry = new Date(
-            `${vaccinationProof.vaccination_expiry}T00:00:00`,
-          );
-
-          proofExpiry.setHours(0, 0, 0, 0);
-
-          if (proofExpiry < today) {
-            items.push({
-              id: `dog-vaccination-proof-expired-${dog.id}`,
-              type: "error",
-              group: dogName,
-              message:
-                "The uploaded vaccination evidence has expired. Update the vaccination details and upload current evidence.",
-              link: `/my-dogs/edit/${dog.id}`,
-              linkText: "Update Evidence",
-            });
-          } else if (
-            !vaccinationProof.checked_at ||
-            !vaccinationProof.checked_by
-          ) {
-            items.push({
-              id: `dog-vaccination-proof-review-${dog.id}`,
-              type: "warning",
-              group: dogName,
-              message:
-                "Vaccination evidence has been uploaded and is awaiting review by Browns Boarding.",
-              link: `/my-dogs/edit/${dog.id}`,
-              linkText: "View Evidence",
-            });
-          }
+        } else if (vaccinationProofStatus === "expired") {
+          items.push({
+            id: `dog-vaccination-proof-expired-${dog.id}`,
+            type: "error",
+            group: dogName,
+            message:
+              "The uploaded vaccination evidence has expired. Update the vaccination details and upload current evidence.",
+            link: `/my-dogs/edit/${dog.id}`,
+            linkText: "Update Evidence",
+          });
+        } else if (vaccinationProofStatus === "awaiting-review") {
+          items.push({
+            id: `dog-vaccination-proof-review-${dog.id}`,
+            type: "warning",
+            group: dogName,
+            message:
+              "Vaccination evidence has been uploaded and is awaiting review by Browns Boarding.",
+            link: `/my-dogs/edit/${dog.id}`,
+            linkText: "View Evidence",
+          });
         }
 
         if (!dog.vaccinated || !dog.vaccination_expiry) {

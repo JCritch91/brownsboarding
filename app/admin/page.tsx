@@ -9,6 +9,10 @@ import PageCard from "@/components/PageCard";
 import DashboardCard from "@/components/DashboardCard";
 import MessageBox from "@/components/MessageBox";
 import LoadingScreen from "@/components/LoadingScreen";
+import {
+  getVaccinationProofStatus,
+  type VaccinationProofSummary,
+} from "@/lib/vaccination-proof";
 
 type AdminActionCounts = {
   pendingBookings: number;
@@ -20,14 +24,7 @@ type AdminActionCounts = {
   vaccinationProofAwaitingReview: number;
 };
 
-type VaccinationProofRecord = {
-  dog_id: string;
-  storage_path: string | null;
-  vaccination_expiry: string;
-  checked_at: string | null;
-  checked_by: string | null;
-  deleted_at: string | null;
-};
+type VaccinationProofRecord = VaccinationProofSummary;
 
 export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
@@ -97,7 +94,7 @@ export default function AdminDashboardPage() {
 
     const { data: activeDogs, error: activeDogsError } = await supabase
       .from("dogs")
-      .select("id")
+      .select("id, vaccination_expiry")
       .eq("active", true);
 
     if (activeDogsError) {
@@ -108,6 +105,10 @@ export default function AdminDashboardPage() {
     }
 
     const activeDogIds = (activeDogs || []).map((dog) => dog.id);
+
+    const activeDogById = new Map(
+      (activeDogs || []).map((dog) => [dog.id, dog]),
+    );
 
     let vaccinationProofs: VaccinationProofRecord[] = [];
 
@@ -143,20 +144,29 @@ export default function AdminDashboardPage() {
 
     if (!activeDogsError) {
       for (const dogId of activeDogIds) {
-        const proof = vaccinationProofByDogId.get(dogId);
+        const dog = activeDogById.get(dogId);
 
-        if (!proof?.storage_path || proof.deleted_at) {
-          vaccinationProofMissingCount += 1;
-          continue;
-        }
+        const proofStatus = getVaccinationProofStatus({
+          proof: vaccinationProofByDogId.get(dogId),
+          dogVaccinationExpiry: dog?.vaccination_expiry,
+          today,
+        });
 
-        if (proof.vaccination_expiry < today) {
-          vaccinationProofExpiredCount += 1;
-          continue;
-        }
+        switch (proofStatus) {
+          case "due":
+            vaccinationProofMissingCount += 1;
+            break;
 
-        if (!proof.checked_at || !proof.checked_by) {
-          vaccinationProofAwaitingReviewCount += 1;
+          case "expired":
+            vaccinationProofExpiredCount += 1;
+            break;
+
+          case "awaiting-review":
+            vaccinationProofAwaitingReviewCount += 1;
+            break;
+
+          default:
+            break;
         }
       }
     }

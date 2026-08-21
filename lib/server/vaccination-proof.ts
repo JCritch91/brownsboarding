@@ -1,5 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 
+import {
+  getVaccinationProofStatus as calculateVaccinationProofStatus,
+  type VaccinationProofSummary,
+} from "@/lib/vaccination-proof";
+
 export const VACCINATION_PROOF_BUCKET = "dog-vaccination-proofs";
 export const VACCINATION_PROOF_MAX_FILE_SIZE = 5 * 1024 * 1024;
 export const VACCINATION_PROOF_SIGNED_URL_EXPIRY_SECONDS = 60;
@@ -14,18 +19,12 @@ export const VACCINATION_PROOF_ALLOWED_MIME_TYPES = [
 export type VaccinationProofMimeType =
   (typeof VACCINATION_PROOF_ALLOWED_MIME_TYPES)[number];
 
-export type VaccinationProofRecord = {
+export type VaccinationProofRecord = VaccinationProofSummary & {
   id: string;
-  dog_id: string;
-  storage_path: string | null;
   original_file_name: string | null;
   mime_type: string | null;
   file_size_bytes: number | null;
-  vaccination_expiry: string;
   uploaded_at: string | null;
-  checked_at: string | null;
-  checked_by: string | null;
-  deleted_at: string | null;
   deletion_reason: string | null;
   created_at: string;
   updated_at: string;
@@ -125,20 +124,13 @@ export function buildVaccinationProofStoragePath({
 
 export function getVaccinationProofStatus(
   proof: VaccinationProofRecord | null,
+  dogVaccinationExpiry?: string | null,
 ) {
-  if (!proof?.storage_path || proof.deleted_at) {
-    return "due" as const;
-  }
-
-  if (proof.vaccination_expiry < getCurrentDatabaseDate()) {
-    return "expired" as const;
-  }
-
-  if (!proof.checked_at || !proof.checked_by) {
-    return "awaiting-review" as const;
-  }
-
-  return "checked" as const;
+  return calculateVaccinationProofStatus({
+    proof,
+    dogVaccinationExpiry,
+    today: getCurrentDatabaseDate(),
+  });
 }
 
 export async function authenticateVaccinationProofRequest(request: Request) {

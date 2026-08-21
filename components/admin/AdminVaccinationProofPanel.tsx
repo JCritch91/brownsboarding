@@ -6,8 +6,10 @@ import Button from "@/components/Buttons";
 import ConfirmationModal from "@/components/modals/ConfirmationModal";
 import { authenticatedApiRequest } from "@/lib/client/authenticated-api";
 import { formatDisplayDate } from "@/lib/helpers";
-
-type VaccinationProofStatus = "due" | "expired" | "awaiting-review" | "checked";
+import {
+  getVaccinationProofPresentation,
+  type VaccinationProofStatus,
+} from "@/lib/vaccination-proof";
 
 type VaccinationProof = {
   id: string;
@@ -66,39 +68,19 @@ function formatTimestamp(value: string | null) {
   });
 }
 
-function getStatusPresentation(status: VaccinationProofStatus) {
+function getAdminStatusDescription(status: VaccinationProofStatus) {
   switch (status) {
     case "checked":
-      return {
-        label: "Vaccination Proof Checked",
-        className: "border-green-300 bg-green-50 text-green-800",
-        description:
-          "This vaccination evidence has been checked by an administrator.",
-      };
+      return "This vaccination evidence has been checked by an administrator.";
 
     case "awaiting-review":
-      return {
-        label: "Awaiting Admin Review",
-        className: "border-amber-300 bg-amber-50 text-amber-800",
-        description:
-          "The customer has uploaded vaccination evidence that requires review.",
-      };
+      return "The customer has uploaded vaccination evidence that requires review.";
 
     case "expired":
-      return {
-        label: "Vaccination Proof Expired",
-        className: "border-red-300 bg-red-50 text-red-800",
-        description:
-          "The uploaded vaccination evidence has expired and cannot be approved.",
-      };
+      return "The uploaded vaccination evidence has expired and cannot be approved.";
 
     default:
-      return {
-        label: "Vaccination Proof Due",
-        className: "border-red-300 bg-red-50 text-red-800",
-        description:
-          "The customer has not uploaded current vaccination evidence.",
-      };
+      return "The customer has not uploaded current vaccination evidence.";
   }
 }
 
@@ -305,7 +287,8 @@ export default function AdminVaccinationProofPanel({
     );
   }
 
-  const statusPresentation = getStatusPresentation(status);
+  const statusPresentation = getVaccinationProofPresentation(status);
+  const statusDescription = getAdminStatusDescription(status);
 
   const confirmationContent = {
     check: {
@@ -368,7 +351,7 @@ export default function AdminVaccinationProofPanel({
               className={`rounded-lg border p-3 md:p-4 ${statusPresentation.className}`}
             >
               <p className="text-sm font-medium md:text-base">
-                {statusPresentation.description}
+                {statusDescription}
               </p>
             </div>
 

@@ -6,8 +6,10 @@ import Button from "@/components/Buttons";
 import ConfirmationModal from "@/components/modals/ConfirmationModal";
 import { authenticatedApiRequest } from "@/lib/client/authenticated-api";
 import { formatDisplayDate } from "@/lib/helpers";
-
-type VaccinationProofStatus = "due" | "expired" | "awaiting-review" | "checked";
+import {
+  getVaccinationProofPresentation,
+  type VaccinationProofStatus,
+} from "@/lib/vaccination-proof";
 
 type VaccinationProof = {
   id: string;
@@ -75,38 +77,19 @@ function formatUploadedDate(uploadedAt: string | null) {
   });
 }
 
-function getStatusPresentation(status: VaccinationProofStatus) {
+function getCustomerStatusDescription(status: VaccinationProofStatus) {
   switch (status) {
     case "checked":
-      return {
-        label: "Vaccination Proof Checked",
-        className: "border-green-300 bg-green-50 text-green-800",
-        description: "Browns Boarding has checked this vaccination evidence.",
-      };
+      return "Browns Boarding has checked this vaccination evidence.";
 
     case "awaiting-review":
-      return {
-        label: "Awaiting Admin Review",
-        className: "border-amber-300 bg-amber-50 text-amber-800",
-        description:
-          "Your vaccination evidence has been uploaded and is waiting to be checked by Browns Boarding.",
-      };
+      return "Your vaccination evidence has been uploaded and is waiting to be checked by Browns Boarding.";
 
     case "expired":
-      return {
-        label: "Vaccination Proof Expired",
-        className: "border-red-300 bg-red-50 text-red-800",
-        description:
-          "This vaccination evidence has expired. Please update the vaccination details and upload current evidence.",
-      };
+      return "This vaccination evidence has expired. Please update the vaccination details and upload current evidence.";
 
     default:
-      return {
-        label: "Vaccination Proof Due",
-        className: "border-red-300 bg-red-50 text-red-800",
-        description:
-          "Upload current vaccination evidence so Browns Boarding can review it.",
-      };
+      return "Upload current vaccination evidence so Browns Boarding can review it.";
   }
 }
 
@@ -386,7 +369,8 @@ export default function VaccinationProofPanel({
     );
   }
 
-  const statusPresentation = getStatusPresentation(status);
+  const statusPresentation = getVaccinationProofPresentation(status);
+  const statusDescription = getCustomerStatusDescription(status);
 
   return (
     <>
