@@ -17,6 +17,9 @@ export type DogFormValues = {
   vaccinated: string;
   vaccination_expiry: string;
   microchip_number: string;
+  vet_name: string;
+  vet_phone: string;
+  vet_address: string;
   medical_notes: string;
   medication_notes: string;
   feeding_notes: string;
@@ -235,6 +238,46 @@ export default function DogForm({
               />
             </div>
           )}
+        </div>
+      </section>
+
+      <section>
+        <h2 className="mb-4 text-xl font-semibold text-[#5C4033] md:mb-6 md:text-2xl">
+          Veterinary Practice
+        </h2>
+
+        <p className="mb-4 text-sm text-[#8B6A4E] md:mb-6 md:text-base">
+          Add the veterinary practice details that apply specifically to this
+          dog.
+        </p>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <FormInput
+            id="vetName"
+            label="Practice Name"
+            value={form.vet_name}
+            onChange={(event) => onChange("vet_name", event.target.value)}
+            autoComplete="organization"
+          />
+
+          <FormInput
+            id="vetPhone"
+            label="Practice Phone"
+            type="tel"
+            value={form.vet_phone}
+            onChange={(event) => onChange("vet_phone", event.target.value)}
+            autoComplete="tel"
+          />
+
+          <div className="md:col-span-2">
+            <FormTextarea
+              id="vetAddress"
+              label="Practice Address"
+              value={form.vet_address}
+              onChange={(event) => onChange("vet_address", event.target.value)}
+              rows={3}
+            />
+          </div>
         </div>
       </section>
 

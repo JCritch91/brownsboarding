@@ -18,6 +18,9 @@ type CreateDogRequest = {
   vaccinated?: unknown;
   vaccination_expiry?: unknown;
   microchip_number?: unknown;
+  vet_name?: unknown;
+  vet_phone?: unknown;
+  vet_address?: unknown;
   medical_notes?: unknown;
   medication_notes?: unknown;
   feeding_notes?: unknown;
@@ -32,7 +35,9 @@ export async function POST(request: Request) {
   try {
     const authorizationHeader = request.headers.get("authorization");
 
-    const accessToken = authorizationHeader?.replace("Bearer ", "");
+    const accessToken = authorizationHeader?.startsWith("Bearer ")
+      ? authorizationHeader.slice(7).trim()
+      : "";
 
     if (!accessToken) {
       return NextResponse.json(
@@ -105,7 +110,20 @@ export async function POST(request: Request) {
       );
     }
 
-    const body = (await request.json()) as CreateDogRequest;
+    let body: CreateDogRequest;
+
+    try {
+      body = (await request.json()) as CreateDogRequest;
+    } catch {
+      return NextResponse.json(
+        {
+          error: "The dog request body is invalid.",
+        },
+        {
+          status: 400,
+        },
+      );
+    }
 
     const form = {
       name: optionalString(body.name),
@@ -117,6 +135,9 @@ export async function POST(request: Request) {
       vaccinated: optionalString(body.vaccinated),
       vaccination_expiry: optionalString(body.vaccination_expiry),
       microchip_number: optionalString(body.microchip_number),
+      vet_name: optionalString(body.vet_name),
+      vet_phone: optionalString(body.vet_phone),
+      vet_address: optionalString(body.vet_address),
       medical_notes: optionalString(body.medical_notes),
       medication_notes: optionalString(body.medication_notes),
       feeding_notes: optionalString(body.feeding_notes),
@@ -149,6 +170,8 @@ export async function POST(request: Request) {
       );
     }
 
+    const updatedAt = new Date().toISOString();
+
     const { data: dog, error: createError } = await supabaseAdmin
       .from("dogs")
       .insert({
@@ -163,13 +186,16 @@ export async function POST(request: Request) {
         vaccination_expiry:
           form.vaccinated === "yes" ? form.vaccination_expiry || null : null,
         microchip_number: form.microchip_number || null,
+        vet_name: form.vet_name || null,
+        vet_phone: form.vet_phone || null,
+        vet_address: form.vet_address || null,
         medical_notes: form.medical_notes || null,
         medication_notes: form.medication_notes || null,
         feeding_notes: form.feeding_notes || null,
         behaviour_notes: form.behaviour_notes || null,
         meet_and_greet_completed: false,
         active: true,
-        updated_at: new Date().toISOString(),
+        updated_at: updatedAt,
       })
       .select(
         `

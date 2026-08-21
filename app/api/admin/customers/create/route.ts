@@ -20,9 +20,6 @@ type CreateCustomerRequest = {
   postcode: string;
   emergency_contact_name: string;
   emergency_contact_phone: string;
-  vet_name: string;
-  vet_phone: string;
-  vet_address: string;
 };
 
 export async function POST(request: Request) {
@@ -169,9 +166,6 @@ export async function POST(request: Request) {
         postcode: body.postcode?.trim() || null,
         emergency_contact_name: body.emergency_contact_name?.trim() || null,
         emergency_contact_phone: body.emergency_contact_phone?.trim() || null,
-        vet_name: body.vet_name?.trim() || null,
-        vet_phone: body.vet_phone?.trim() || null,
-        vet_address: body.vet_address?.trim() || null,
         is_admin: false,
         active: false,
         was_activated: false,

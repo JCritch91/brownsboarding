@@ -24,9 +24,6 @@ type CustomerProfile = {
   postcode: string | null;
   emergency_contact_name: string | null;
   emergency_contact_phone: string | null;
-  vet_name: string | null;
-  vet_phone: string | null;
-  vet_address: string | null;
   active: boolean;
   was_activated: boolean;
   activated_at: string | null;
@@ -89,9 +86,6 @@ export default function AdminCustomersPage() {
         postcode,
         emergency_contact_name,
         emergency_contact_phone,
-        vet_name,
-        vet_phone,
-        vet_address,
         active,
         was_activated,
         activated_at,

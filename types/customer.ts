@@ -13,10 +13,6 @@ export type CustomerProfile = {
   emergency_contact_name: string | null;
   emergency_contact_phone: string | null;
 
-  vet_name: string | null;
-  vet_phone: string | null;
-  vet_address: string | null;
-
   active: boolean;
   was_activated: boolean;
   activation_token: string | null;

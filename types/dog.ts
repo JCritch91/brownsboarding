@@ -9,7 +9,9 @@ export type Dog = {
   neutered: boolean | null;
   vaccinated: boolean | null;
   vaccination_expiry: string | null;
-  microchip_number: string | null;
+  vet_name: string | null;
+  vet_phone: string | null;
+  vet_address: string | null;
   medical_notes: string | null;
   medication_notes: string | null;
   feeding_notes: string | null;

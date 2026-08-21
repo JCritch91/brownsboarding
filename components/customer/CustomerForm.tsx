@@ -17,9 +17,6 @@ export type CustomerFormValues = {
   postcode: string;
   emergency_contact_name: string;
   emergency_contact_phone: string;
-  vet_name: string;
-  vet_phone: string;
-  vet_address: string;
 };
 
 type CustomerFormProps = {
@@ -33,7 +30,6 @@ type CustomerFormProps = {
   savingLabel?: string;
   cancelHref: string;
   emailDisabled?: boolean;
-  showVetDetails?: boolean;
   additionalActions?: React.ReactNode;
 };
 
@@ -48,7 +44,6 @@ export default function CustomerForm({
   savingLabel = "Saving...",
   cancelHref,
   emailDisabled = true,
-  showVetDetails = true,
   additionalActions,
 }: CustomerFormProps) {
   return (
@@ -174,42 +169,6 @@ export default function CustomerForm({
       </section>
 
       {/* Veterinary Details */}
-      {showVetDetails && (
-        <section>
-          <h2 className="mb-4 text-xl font-semibold text-[#5C4033] md:mb-6 md:text-2xl">
-            Veterinary Practice
-          </h2>
-
-          <div className="space-y-3 md:space-y-4">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:gap-4">
-              <FormInput
-                id="vetName"
-                label="Practice Name"
-                type="text"
-                value={form.vet_name}
-                onChange={(event) => onChange("vet_name", event.target.value)}
-              />
-
-              <FormInput
-                id="vetPhone"
-                label="Practice Phone"
-                type="tel"
-                value={form.vet_phone}
-                onChange={(event) => onChange("vet_phone", event.target.value)}
-                placeholder="023 8000 0000"
-              />
-            </div>
-
-            <FormInput
-              id="vetAddress"
-              label="Practice Address"
-              type="text"
-              value={form.vet_address}
-              onChange={(event) => onChange("vet_address", event.target.value)}
-            />
-          </div>
-        </section>
-      )}
 
       {message && (
         <MessageBox type={isError ? "error" : "success"}>{message}</MessageBox>

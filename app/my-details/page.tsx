@@ -46,9 +46,6 @@ type UpdateProfileResponse = {
     postcode: string | null;
     emergency_contact_name: string | null;
     emergency_contact_phone: string | null;
-    vet_name: string | null;
-    vet_phone: string | null;
-    vet_address: string | null;
     active: boolean;
   };
   message?: string;
@@ -75,9 +72,6 @@ export default function MyDetailsPage() {
     postcode: "",
     emergency_contact_name: "",
     emergency_contact_phone: "",
-    vet_name: "",
-    vet_phone: "",
-    vet_address: "",
   });
 
   useEffect(() => {
@@ -111,10 +105,7 @@ export default function MyDetailsPage() {
         town,
         postcode,
         emergency_contact_name,
-        emergency_contact_phone,
-        vet_name,
-        vet_phone,
-        vet_address
+        emergency_contact_phone
         `,
       )
       .eq("id", user.id)
@@ -140,9 +131,6 @@ export default function MyDetailsPage() {
       emergency_contact_phone: formatUkPhone(
         data?.emergency_contact_phone || "",
       ),
-      vet_name: formatName(data?.vet_name || ""),
-      vet_phone: formatUkPhone(data?.vet_phone || ""),
-      vet_address: formatAddressLine(data?.vet_address || ""),
     });
 
     setLoading(false);
@@ -230,9 +218,6 @@ export default function MyDetailsPage() {
           result.data.profile.emergency_contact_name || "",
         emergency_contact_phone:
           result.data.profile.emergency_contact_phone || "",
-        vet_name: result.data.profile.vet_name || "",
-        vet_phone: result.data.profile.vet_phone || "",
-        vet_address: result.data.profile.vet_address || "",
       });
     }
   }
@@ -322,7 +307,6 @@ export default function MyDetailsPage() {
           savingLabel="Saving..."
           cancelHref="/dashboard"
           emailDisabled
-          showVetDetails
           additionalActions={
             <button
               type="button"

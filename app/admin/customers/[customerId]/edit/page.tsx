@@ -33,9 +33,6 @@ const emptyForm: CustomerFormValues = {
   postcode: "",
   emergency_contact_name: "",
   emergency_contact_phone: "",
-  vet_name: "",
-  vet_phone: "",
-  vet_address: "",
 };
 
 type UpdateCustomerResponse = {
@@ -53,9 +50,6 @@ type UpdateCustomerResponse = {
     postcode: string | null;
     emergency_contact_name: string | null;
     emergency_contact_phone: string | null;
-    vet_name: string | null;
-    vet_phone: string | null;
-    vet_address: string | null;
     active: boolean;
     is_admin: boolean | null;
   };
@@ -109,10 +103,7 @@ export default function EditAdminCustomerPage() {
         town,
         postcode,
         emergency_contact_name,
-        emergency_contact_phone,
-        vet_name,
-        vet_phone,
-        vet_address
+        emergency_contact_phone
         `,
       )
       .eq("id", customerId)
@@ -146,9 +137,6 @@ export default function EditAdminCustomerPage() {
       emergency_contact_phone: formatUkPhone(
         data.emergency_contact_phone || "",
       ),
-      vet_name: formatName(data.vet_name || ""),
-      vet_phone: formatUkPhone(data.vet_phone || ""),
-      vet_address: formatAddressLine(data.vet_address || ""),
     });
 
     setLoading(false);
@@ -230,7 +218,7 @@ export default function EditAdminCustomerPage() {
     <AdminPageLayout>
       <PageCard
         title="Edit Customer"
-        subtitle="Update the customer's contact, emergency and veterinary details."
+        subtitle="Update the customer's contact, address and emergency details."
         actions={
           <Button href={`/admin/customers/${customerId}`}>
             Back to Customer
@@ -248,7 +236,6 @@ export default function EditAdminCustomerPage() {
           savingLabel="Saving Customer..."
           cancelHref={`/admin/customers/${customerId}`}
           emailDisabled={true}
-          showVetDetails={true}
         />
       </PageCard>
     </AdminPageLayout>

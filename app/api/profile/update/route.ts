@@ -25,9 +25,6 @@ type UpdateProfileRequest = {
   postcode?: unknown;
   emergency_contact_name?: unknown;
   emergency_contact_phone?: unknown;
-  vet_name?: unknown;
-  vet_phone?: unknown;
-  vet_address?: unknown;
 };
 
 function optionalString(value: unknown): string {
@@ -170,12 +167,6 @@ export async function PATCH(request: Request) {
       optionalString(body.emergency_contact_phone),
     );
 
-    const vetName = formatName(optionalString(body.vet_name));
-
-    const vetPhone = formatUkPhone(optionalString(body.vet_phone));
-
-    const vetAddress = formatAddressLine(optionalString(body.vet_address));
-
     const { data: updatedProfile, error: updateError } = await supabaseAdmin
       .from("profiles")
       .update({
@@ -188,9 +179,6 @@ export async function PATCH(request: Request) {
         postcode: postcode || null,
         emergency_contact_name: emergencyContactName || null,
         emergency_contact_phone: emergencyContactPhone || null,
-        vet_name: vetName || null,
-        vet_phone: vetPhone || null,
-        vet_address: vetAddress || null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", user.id)
@@ -207,10 +195,7 @@ export async function PATCH(request: Request) {
         town,
         postcode,
         emergency_contact_name,
-        emergency_contact_phone,
-        vet_name,
-        vet_phone,
-        vet_address,
+        emergency_contact_phone
         active
         `,
       )

@@ -31,9 +31,6 @@ const emptyForm: CustomerFormValues = {
   postcode: "",
   emergency_contact_name: "",
   emergency_contact_phone: "",
-  vet_name: "",
-  vet_phone: "",
-  vet_address: "",
 };
 
 export default function AdminAddCustomerPage() {
@@ -130,9 +127,6 @@ export default function AdminAddCustomerPage() {
         postcode: formatPostcode(form.postcode),
         emergency_contact_name: formatName(form.emergency_contact_name),
         emergency_contact_phone: formatUkPhone(form.emergency_contact_phone),
-        vet_name: formatName(form.vet_name),
-        vet_phone: formatUkPhone(form.vet_phone),
-        vet_address: formatAddressLine(form.vet_address),
       }),
     });
 
@@ -177,7 +171,6 @@ export default function AdminAddCustomerPage() {
           savingLabel="Creating Customer..."
           cancelHref="/admin/customers"
           emailDisabled={false}
-          showVetDetails={true}
         />
       </PageCard>
     </AdminPageLayout>

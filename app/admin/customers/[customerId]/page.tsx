@@ -61,9 +61,6 @@ type CustomerProfile = {
   postcode: string | null;
   emergency_contact_name: string | null;
   emergency_contact_phone: string | null;
-  vet_name: string | null;
-  vet_phone: string | null;
-  vet_address: string | null;
   active: boolean;
   was_activated: boolean;
   activated_at: string | null;
@@ -82,6 +79,9 @@ type Dog = {
   vaccinated: boolean | null;
   vaccination_expiry: string | null;
   microchip_number: string | null;
+  vet_name: string | null;
+  vet_phone: string | null;
+  vet_address: string | null;
   meet_and_greet_completed: boolean | null;
   active: boolean;
 };
@@ -259,9 +259,6 @@ export default function AdminCustomerDetailsPage() {
           postcode,
           emergency_contact_name,
           emergency_contact_phone,
-          vet_name,
-          vet_phone,
-          vet_address,
           active,
           was_activated,
           activated_at,
@@ -286,9 +283,12 @@ export default function AdminCustomerDetailsPage() {
           neutered,
           vaccinated,
           vaccination_expiry,
-          microchip_number,
-          meet_and_greet_completed,
-          active
+microchip_number,
+vet_name,
+vet_phone,
+vet_address,
+meet_and_greet_completed,
+active
           `,
         )
         .eq("owner_id", customerId)
@@ -878,7 +878,7 @@ export default function AdminCustomerDetailsPage() {
               {/* Emergency Contact and Vet */}
               <section>
                 <h2 className="mb-4 text-xl font-semibold text-[#5C4033] md:mb-6 md:text-2xl">
-                  Emergency Contact & Vet
+                  Emergency Contact
                 </h2>
 
                 <div className="grid gap-4 md:grid-cols-2 md:gap-6">
@@ -907,46 +907,6 @@ export default function AdminCustomerDetailsPage() {
 
                         <p className="mt-1 text-sm text-[#5C4033] md:text-base">
                           {customer.emergency_contact_phone || "Not provided"}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border border-[#D9CBB8] bg-white p-4 shadow-sm md:p-6">
-                    <h3 className="text-lg font-semibold text-[#5C4033] md:text-xl">
-                      Veterinary Practice
-                    </h3>
-
-                    <div className="mt-4 space-y-3">
-                      <div>
-                        <p className="text-xs font-semibold text-[#8B6A4E] md:text-sm">
-                          Practice Name
-                        </p>
-
-                        <p className="mt-1 text-sm text-[#5C4033] md:text-base">
-                          {customer.vet_name
-                            ? formatName(customer.vet_name)
-                            : "Not provided"}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="text-xs font-semibold text-[#8B6A4E] md:text-sm">
-                          Phone
-                        </p>
-
-                        <p className="mt-1 text-sm text-[#5C4033] md:text-base">
-                          {customer.vet_phone || "Not provided"}
-                        </p>
-                      </div>
-
-                      <div>
-                        <p className="text-xs font-semibold text-[#8B6A4E] md:text-sm">
-                          Address
-                        </p>
-
-                        <p className="mt-1 text-sm text-[#5C4033] md:text-base">
-                          {customer.vet_address || "Not provided"}
                         </p>
                       </div>
                     </div>
