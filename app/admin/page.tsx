@@ -15,6 +15,18 @@ type AdminActionCounts = {
   meetAndGreetRequired: number;
   vaccinationExpired: number;
   vaccinationExpiringSoon: number;
+  vaccinationProofMissing: number;
+  vaccinationProofExpired: number;
+  vaccinationProofAwaitingReview: number;
+};
+
+type VaccinationProofRecord = {
+  dog_id: string;
+  storage_path: string | null;
+  vaccination_expiry: string;
+  checked_at: string | null;
+  checked_by: string | null;
+  deleted_at: string | null;
 };
 
 export default function AdminDashboardPage() {
@@ -25,6 +37,9 @@ export default function AdminDashboardPage() {
     meetAndGreetRequired: 0,
     vaccinationExpired: 0,
     vaccinationExpiringSoon: 0,
+    vaccinationProofMissing: 0,
+    vaccinationProofExpired: 0,
+    vaccinationProofAwaitingReview: 0,
   });
 
   useEffect(() => {
@@ -80,11 +95,80 @@ export default function AdminDashboardPage() {
       .gte("vaccination_expiry", today)
       .lte("vaccination_expiry", thirtyDaysFromNowString);
 
+    const { data: activeDogs, error: activeDogsError } = await supabase
+      .from("dogs")
+      .select("id")
+      .eq("active", true);
+
+    if (activeDogsError) {
+      console.error(
+        "Unable to load active dogs for vaccination proof counts:",
+        activeDogsError,
+      );
+    }
+
+    const activeDogIds = (activeDogs || []).map((dog) => dog.id);
+
+    let vaccinationProofs: VaccinationProofRecord[] = [];
+
+    if (!activeDogsError && activeDogIds.length > 0) {
+      const { data: proofData, error: proofError } = await supabase
+        .from("dog_vaccination_proofs")
+        .select(
+          `
+      dog_id,
+      storage_path,
+      vaccination_expiry,
+      checked_at,
+      checked_by,
+      deleted_at
+      `,
+        )
+        .in("dog_id", activeDogIds);
+
+      if (proofError) {
+        console.error("Unable to load vaccination proof counts:", proofError);
+      } else {
+        vaccinationProofs = proofData || [];
+      }
+    }
+
+    const vaccinationProofByDogId = new Map(
+      vaccinationProofs.map((proof) => [proof.dog_id, proof]),
+    );
+
+    let vaccinationProofMissingCount = 0;
+    let vaccinationProofExpiredCount = 0;
+    let vaccinationProofAwaitingReviewCount = 0;
+
+    if (!activeDogsError) {
+      for (const dogId of activeDogIds) {
+        const proof = vaccinationProofByDogId.get(dogId);
+
+        if (!proof?.storage_path || proof.deleted_at) {
+          vaccinationProofMissingCount += 1;
+          continue;
+        }
+
+        if (proof.vaccination_expiry < today) {
+          vaccinationProofExpiredCount += 1;
+          continue;
+        }
+
+        if (!proof.checked_at || !proof.checked_by) {
+          vaccinationProofAwaitingReviewCount += 1;
+        }
+      }
+    }
+
     setCounts({
       pendingBookings: pendingBookingsCount || 0,
       meetAndGreetRequired: meetAndGreetCount || 0,
       vaccinationExpired: vaccinationExpiredCount || 0,
       vaccinationExpiringSoon: vaccinationExpiringSoonCount || 0,
+      vaccinationProofMissing: vaccinationProofMissingCount,
+      vaccinationProofExpired: vaccinationProofExpiredCount,
+      vaccinationProofAwaitingReview: vaccinationProofAwaitingReviewCount,
     });
   }
 
@@ -93,7 +177,10 @@ export default function AdminDashboardPage() {
       counts.pendingBookings +
       counts.meetAndGreetRequired +
       counts.vaccinationExpired +
-      counts.vaccinationExpiringSoon
+      counts.vaccinationExpiringSoon +
+      counts.vaccinationProofMissing +
+      counts.vaccinationProofExpired +
+      counts.vaccinationProofAwaitingReview
     );
   }
 
@@ -141,6 +228,25 @@ export default function AdminDashboardPage() {
             <div className="bg-amber-50 border border-amber-300 p-3 md:p-4 rounded-lg">
               <p className="text-sm md:text-base text-amber-800 font-semibold">
                 Vaccinations expiring soon: {counts.vaccinationExpiringSoon}
+              </p>
+            </div>
+
+            <div className="rounded-lg border border-red-300 bg-red-50 p-3 md:p-4">
+              <p className="text-sm font-semibold text-red-800 md:text-base">
+                Vaccination proofs missing: {counts.vaccinationProofMissing}
+              </p>
+            </div>
+
+            <div className="rounded-lg border border-red-300 bg-red-50 p-3 md:p-4">
+              <p className="text-sm font-semibold text-red-800 md:text-base">
+                Vaccination proofs expired: {counts.vaccinationProofExpired}
+              </p>
+            </div>
+
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 md:p-4">
+              <p className="text-sm font-semibold text-amber-800 md:text-base">
+                Vaccination proofs awaiting review:{" "}
+                {counts.vaccinationProofAwaitingReview}
               </p>
             </div>
           </div>
