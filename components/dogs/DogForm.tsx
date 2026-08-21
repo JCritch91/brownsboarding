@@ -36,6 +36,7 @@ type DogFormProps = {
   meetAndGreetCompleted?: boolean;
   allowMeetAndGreetManagement?: boolean;
   onMeetAndGreetChange?: (completed: boolean) => void;
+  vaccinationProofContent?: ReactNode;
   additionalActions?: ReactNode;
 };
 
@@ -52,6 +53,7 @@ export default function DogForm({
   meetAndGreetCompleted = false,
   allowMeetAndGreetManagement = false,
   onMeetAndGreetChange,
+  vaccinationProofContent,
   additionalActions,
 }: DogFormProps) {
   const savedBreedIsListed = DOG_BREEDS.some((breed) => breed === form.breed);
@@ -235,6 +237,10 @@ export default function DogForm({
           )}
         </div>
       </section>
+
+      {vaccinationProofContent && (
+        <div className="mt-5 md:mt-6">{vaccinationProofContent}</div>
+      )}
 
       {/* Care, Health and Behaviour */}
       <section>

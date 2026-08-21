@@ -238,25 +238,25 @@ export default function EditDogPage() {
             </div>
           </div>
         ) : (
-          <div className="space-y-6 md:space-y-8">
-            <DogForm
-              form={form}
-              onChange={updateField}
-              onSubmit={handleSave}
-              saving={saving}
-              message={message}
-              isError={isError}
-              submitLabel="Save"
-              savingLabel="Saving..."
-              cancelHref="/my-dogs"
-            />
-            <VaccinationProofPanel
-              dogId={dogId}
-              dogName={dogName}
-              vaccinated={savedVaccinated}
-              vaccinationExpiry={savedVaccinationExpiry}
-            />
-          </div>
+          <DogForm
+            form={form}
+            onChange={updateField}
+            onSubmit={handleSave}
+            saving={saving}
+            message={message}
+            isError={isError}
+            submitLabel="Save"
+            savingLabel="Saving..."
+            cancelHref="/my-dogs"
+            vaccinationProofContent={
+              <VaccinationProofPanel
+                dogId={dogId}
+                dogName={dogName}
+                vaccinated={savedVaccinated}
+                vaccinationExpiry={savedVaccinationExpiry}
+              />
+            }
+          />
         )}
       </PageCard>
     </CustomerPageLayout>
