@@ -8,6 +8,15 @@ import PageCard from "@/components/PageCard";
 import DashboardCard from "@/components/DashboardCard";
 import Button from "@/components/Buttons";
 
+type VaccinationProofRecord = {
+  dog_id: string;
+  storage_path: string | null;
+  vaccination_expiry: string;
+  checked_at: string | null;
+  checked_by: string | null;
+  deleted_at: string | null;
+};
+
 type ActionItem = {
   id: string;
   type: "error" | "warning" | "info";
@@ -85,13 +94,56 @@ export default function DashboardPage() {
       }
     }
 
-    const { data: dogs } = await supabase
+    const { data: dogs, error: dogsError } = await supabase
       .from("dogs")
       .select(
         "id, name, breed, date_of_birth, gender, microchip_number, vaccinated, vaccination_expiry, meet_and_greet_completed",
       )
       .eq("owner_id", user.id)
       .eq("active", true);
+
+    if (dogsError) {
+      console.error("Unable to load dashboard dogs:", dogsError);
+      setActionItems([]);
+      setLoadingActions(false);
+      return;
+    }
+
+    const dogIds = (dogs || []).map((dog) => dog.id);
+
+    let vaccinationProofs: VaccinationProofRecord[] = [];
+
+    if (dogIds.length > 0) {
+      const { data: proofData, error: proofError } = await supabase
+        .from("dog_vaccination_proofs")
+        .select(
+          `
+      dog_id,
+      storage_path,
+      vaccination_expiry,
+      checked_at,
+      checked_by,
+      deleted_at
+      `,
+        )
+        .in("dog_id", dogIds);
+
+      if (proofError) {
+        console.error(
+          "Unable to load dashboard vaccination proofs:",
+          proofError,
+        );
+        setActionItems([]);
+        setLoadingActions(false);
+        return;
+      }
+
+      vaccinationProofs = proofData || [];
+    }
+
+    const vaccinationProofByDogId = new Map(
+      vaccinationProofs.map((proof) => [proof.dog_id, proof]),
+    );
 
     if (dogs) {
       const dogsNeedingMeetAndGreet = dogs.some(
@@ -138,6 +190,55 @@ export default function DashboardPage() {
             link: "/meet-and-greet",
             linkText: "Arrange Meet & Greet",
           });
+        }
+
+        const vaccinationProof = vaccinationProofByDogId.get(dog.id);
+
+        const vaccinationProofMissing =
+          !vaccinationProof?.storage_path ||
+          Boolean(vaccinationProof.deleted_at);
+
+        if (vaccinationProofMissing) {
+          items.push({
+            id: `dog-vaccination-proof-missing-${dog.id}`,
+            type: "error",
+            group: dogName,
+            message:
+              "Vaccination evidence is required. Upload a current vaccination certificate or record for administrator review.",
+            link: `/my-dogs/edit/${dog.id}`,
+            linkText: "Upload Evidence",
+          });
+        } else {
+          const proofExpiry = new Date(
+            `${vaccinationProof.vaccination_expiry}T00:00:00`,
+          );
+
+          proofExpiry.setHours(0, 0, 0, 0);
+
+          if (proofExpiry < today) {
+            items.push({
+              id: `dog-vaccination-proof-expired-${dog.id}`,
+              type: "error",
+              group: dogName,
+              message:
+                "The uploaded vaccination evidence has expired. Update the vaccination details and upload current evidence.",
+              link: `/my-dogs/edit/${dog.id}`,
+              linkText: "Update Evidence",
+            });
+          } else if (
+            !vaccinationProof.checked_at ||
+            !vaccinationProof.checked_by
+          ) {
+            items.push({
+              id: `dog-vaccination-proof-review-${dog.id}`,
+              type: "warning",
+              group: dogName,
+              message:
+                "Vaccination evidence has been uploaded and is awaiting review by Browns Boarding.",
+              link: `/my-dogs/edit/${dog.id}`,
+              linkText: "View Evidence",
+            });
+          }
         }
 
         if (!dog.vaccinated || !dog.vaccination_expiry) {
