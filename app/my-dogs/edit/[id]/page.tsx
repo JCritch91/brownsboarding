@@ -13,6 +13,7 @@ import Button from "@/components/Buttons";
 import LoadingScreen from "@/components/LoadingScreen";
 import DogForm, { type DogFormValues } from "@/components/dogs/DogForm";
 import { authenticatedApiRequest } from "@/lib/client/authenticated-api";
+import VaccinationProofPanel from "@/components/dogs/VaccinationProofPanel";
 
 const emptyForm: DogFormValues = {
   name: "",
@@ -60,6 +61,9 @@ export default function EditDogPage() {
   const [isError, setIsError] = useState(false);
 
   const [meetAndGreetCompleted, setMeetAndGreetCompleted] = useState(false);
+  const [savedVaccinated, setSavedVaccinated] = useState(false);
+  const [savedVaccinationExpiry, setSavedVaccinationExpiry] = useState("");
+  const [dogName, setDogName] = useState("");
 
   const [form, setForm] = useState<DogFormValues>(emptyForm);
 
@@ -124,6 +128,10 @@ export default function EditDogPage() {
     }
 
     setMeetAndGreetCompleted(Boolean(data.meet_and_greet_completed));
+
+    setDogName(data.name || "Dog");
+    setSavedVaccinated(Boolean(data.vaccinated));
+    setSavedVaccinationExpiry(data.vaccination_expiry || "");
 
     setForm({
       name: data.name || "",
@@ -230,19 +238,25 @@ export default function EditDogPage() {
             </div>
           </div>
         ) : (
-          <DogForm
-            form={form}
-            onChange={updateField}
-            onSubmit={handleSave}
-            saving={saving}
-            message={message}
-            isError={isError}
-            submitLabel="Save"
-            savingLabel="Saving..."
-            cancelHref="/my-dogs"
-            meetAndGreetCompleted={false}
-            allowMeetAndGreetManagement={false}
-          />
+          <div className="space-y-6 md:space-y-8">
+            <DogForm
+              form={form}
+              onChange={updateField}
+              onSubmit={handleSave}
+              saving={saving}
+              message={message}
+              isError={isError}
+              submitLabel="Save"
+              savingLabel="Saving..."
+              cancelHref="/my-dogs"
+            />
+            <VaccinationProofPanel
+              dogId={dogId}
+              dogName={dogName}
+              vaccinated={savedVaccinated}
+              vaccinationExpiry={savedVaccinationExpiry}
+            />
+          </div>
         )}
       </PageCard>
     </CustomerPageLayout>
