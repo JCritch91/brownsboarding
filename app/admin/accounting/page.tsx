@@ -31,8 +31,18 @@ type Payment = {
     breed: string | null;
   } | null;
   bookings?: {
+    booking_type: "boarding" | "daycare";
+    daycare_session: "full_day" | "half_day" | null;
     start_date: string;
     end_date: string;
+    booking_dogs: Array<{
+      sort_order: number;
+      dogs: {
+        id: string;
+        name: string;
+        breed: string | null;
+      } | null;
+    }>;
   } | null;
   customer?: {
     id: string;
@@ -93,14 +103,24 @@ export default function AdminAccountingPage() {
         payment_date,
         notes,
         created_at,
-        bookings (
-          start_date,
-          end_date
-        ),
-        dogs (
-          name,
-          breed
-        )
+bookings (
+  booking_type,
+  daycare_session,
+  start_date,
+  end_date,
+  booking_dogs (
+    sort_order,
+    dogs (
+      id,
+      name,
+      breed
+    )
+  )
+),
+dogs (
+  name,
+  breed
+)
         `,
       )
       .order("payment_date", { ascending: false });
@@ -153,6 +173,54 @@ export default function AdminAccountingPage() {
     const fullName = `${firstName} ${lastName}`.trim();
 
     return fullName || payment.customer?.email || "Customer";
+  }
+
+  function getPaymentDogNames(payment: Payment) {
+    const linkedDogNames = (payment.bookings?.booking_dogs || [])
+      .slice()
+      .sort((firstDog, secondDog) => firstDog.sort_order - secondDog.sort_order)
+      .map((bookingDog) =>
+        bookingDog.dogs?.name ? formatName(bookingDog.dogs.name) : "",
+      )
+      .filter(Boolean);
+
+    if (linkedDogNames.length === 1) {
+      return linkedDogNames[0];
+    }
+
+    if (linkedDogNames.length >= 2) {
+      return `${linkedDogNames[0]} and ${linkedDogNames[1]}`;
+    }
+
+    return formatName(payment.dogs?.name || "") || "Dog";
+  }
+
+  function getPaymentService(payment: Payment) {
+    if (!payment.bookings) {
+      return "Booking";
+    }
+
+    if (payment.bookings.booking_type === "daycare") {
+      return payment.bookings.daycare_session === "half_day"
+        ? "Daycare, Half Day"
+        : "Daycare, Full Day";
+    }
+
+    return "Boarding";
+  }
+
+  function getPaymentBookingDates(payment: Payment) {
+    if (!payment.bookings) {
+      return "-";
+    }
+
+    if (payment.bookings.booking_type === "daycare") {
+      return formatDisplayDate(payment.bookings.start_date);
+    }
+
+    return `${formatDisplayDate(
+      payment.bookings.start_date,
+    )} to ${formatDisplayDate(payment.bookings.end_date)}`;
   }
 
   const totalReceived = payments.reduce(
@@ -230,26 +298,22 @@ export default function AdminAccountingPage() {
         [
           "Invoice",
           "Date Paid",
-          "Booking Dates",
+          "Service",
+          "Booking Date(s)",
           "Customer",
-          "Dog",
-          "Type",
-          "Notes",
+          "Dog(s)",
+          "Payment Type",
           "Amount",
         ],
       ],
       body: filteredPayments.map((payment) => [
         payment.invoice_number,
         formatDisplayDate(payment.payment_date),
-        payment.bookings
-          ? `${formatDisplayDate(payment.bookings.start_date)} to ${formatDisplayDate(
-              payment.bookings.end_date,
-            )}`
-          : "-",
+        getPaymentService(payment),
+        getPaymentBookingDates(payment),
         getCustomerName(payment),
-        formatName(payment.dogs?.name || "") || "Dog",
+        getPaymentDogNames(payment),
         payment.payment_type,
-        payment.notes || "-",
         formatMoney(payment.amount),
       ]),
       foot: [["", "", "", "", "", "", "Total", formatMoney(total)]],
@@ -428,19 +492,11 @@ export default function AdminAccountingPage() {
                       </td>
 
                       <td className="p-3 md:p-4 border-b border-[#D9CBB8]">
-                        {payment.bookings ? (
-                          <>
-                            <p>
-                              {formatDisplayDate(payment.bookings.start_date)}
-                            </p>
+                        <p>{getPaymentBookingDates(payment)}</p>
 
-                            <p className="text-sm text-[#8B6A4E]">
-                              to {formatDisplayDate(payment.bookings.end_date)}
-                            </p>
-                          </>
-                        ) : (
-                          "-"
-                        )}
+                        <p className="mt-1 text-sm text-[#8B6A4E]">
+                          {getPaymentService(payment)}
+                        </p>
                       </td>
 
                       <td className="p-3 md:p-4 border-b border-[#D9CBB8]">
@@ -454,7 +510,7 @@ export default function AdminAccountingPage() {
                       </td>
 
                       <td className="p-3 md:p-4 border-b border-[#D9CBB8]">
-                        {formatName(payment.dogs?.name || "") || "Dog"}
+                        {getPaymentDogNames(payment)}
                       </td>
 
                       <td className="p-3 md:p-4 border-b border-[#D9CBB8]">
