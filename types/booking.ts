@@ -12,6 +12,9 @@ export type BookingType = "boarding" | "daycare";
 
 export type DaycareSessionType = "full_day" | "half_day";
 
+export type BookingPriceUnit =
+  "boarding_night" | "daycare_full_day" | "daycare_half_day";
+
 export type BookingDogSummary = {
   id?: string;
   name: string;
@@ -61,8 +64,19 @@ export type Booking = {
   space_units: number;
 
   pricing_setting_id: string | null;
+
+  price_unit: BookingPriceUnit | null;
+  unit_rate: number | null;
+  quantity: number | null;
+  deposit_percentage_applied: number | null;
+
+  /**
+   * Legacy Boarding fields retained while existing displays,
+   * emails and calendar integrations move to generic V2 pricing.
+   */
   nightly_rate: number | null;
   number_of_nights: number | null;
+
   total_cost: number | null;
   deposit_amount: number | null;
   balance_amount: number | null;

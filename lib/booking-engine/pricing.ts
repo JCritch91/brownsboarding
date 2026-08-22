@@ -1,11 +1,9 @@
 import type {
+  BookingPriceUnit,
   BookingStatus,
   BookingType,
   DaycareSessionType,
 } from "@/types/booking";
-
-export type BookingPriceUnit =
-  "boarding_night" | "daycare_full_day" | "daycare_half_day";
 
 export type BookingEnginePricingSettings = {
   id: string;
