@@ -90,10 +90,15 @@ type Booking = {
   id: string;
   booking_reference: string;
   dog_id: string;
+  booking_type: "boarding" | "daycare";
+  daycare_session: "full_day" | "half_day" | null;
   start_date: string;
   end_date: string;
   status: string;
   notes: string | null;
+  availability_confirmation_required: boolean;
+  availability_confirmed_at: string | null;
+  space_units: number;
   total_cost: number | null;
   deposit_amount: number | null;
   balance_amount: number | null;
@@ -101,10 +106,60 @@ type Booking = {
   balance_paid_at: string | null;
 
   dogs: {
+    id: string;
     name: string;
     breed: string | null;
   } | null;
+
+  booking_dogs: Array<{
+    dog_id: string;
+    sort_order: number;
+    dogs: {
+      id: string;
+      name: string;
+      breed: string | null;
+    } | null;
+  }>;
 };
+
+function getBookingDogs(booking: Booking) {
+  const linkedDogs = (booking.booking_dogs || [])
+    .slice()
+    .sort(
+      (firstLink, secondLink) => firstLink.sort_order - secondLink.sort_order,
+    )
+    .map((bookingDog) => bookingDog.dogs)
+    .filter((dog): dog is NonNullable<typeof dog> => dog !== null);
+
+  if (linkedDogs.length > 0) {
+    return linkedDogs;
+  }
+
+  return booking.dogs ? [booking.dogs] : [];
+}
+
+function getBookingDogNames(booking: Booking) {
+  const dogNames = getBookingDogs(booking)
+    .map((dog) => formatName(dog.name))
+    .filter(Boolean);
+
+  if (dogNames.length === 0) {
+    return "Dog";
+  }
+
+  if (dogNames.length === 1) {
+    return dogNames[0];
+  }
+
+  return `${dogNames[0]} and ${dogNames[1]}`;
+}
+
+function getBookingDogBreeds(booking: Booking) {
+  return getBookingDogs(booking)
+    .map((dog) => (dog.breed ? formatName(dog.breed) : ""))
+    .filter(Boolean)
+    .join(", ");
+}
 
 export default function AdminCustomerDetailsPage() {
   const params = useParams<{ customerId: string }>();
@@ -300,20 +355,35 @@ active
           `
           id,
           booking_reference,
-          dog_id,
-          start_date,
-          end_date,
-          status,
-          notes,
-          total_cost,
-          deposit_amount,
-          balance_amount,
-          deposit_paid_at,
-          balance_paid_at,
-          dogs (
-            name,
-            breed
-          )
+dog_id,
+booking_type,
+daycare_session,
+start_date,
+end_date,
+status,
+notes,
+availability_confirmation_required,
+availability_confirmed_at,
+space_units,
+total_cost,
+deposit_amount,
+balance_amount,
+deposit_paid_at,
+balance_paid_at,
+dogs (
+  id,
+  name,
+  breed
+),
+booking_dogs (
+  dog_id,
+  sort_order,
+  dogs (
+    id,
+    name,
+    breed
+  )
+)
           `,
         )
         .eq("owner_id", customerId)
@@ -1060,12 +1130,12 @@ active
                         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                           <div>
                             <h3 className="text-xl font-semibold text-[#5C4033]">
-                              {formatName(booking.dogs?.name || "Dog")}
+                              {getBookingDogNames(booking)}
                             </h3>
 
-                            {booking.dogs?.breed && (
+                            {getBookingDogBreeds(booking) && (
                               <p className="mt-1 text-sm text-[#8B6A4E] md:text-base">
-                                {formatName(booking.dogs.breed)}
+                                {getBookingDogBreeds(booking)}
                               </p>
                             )}
 
@@ -1074,9 +1144,36 @@ active
                             </p>
 
                             <p className="mt-3 text-sm font-medium text-[#5C4033] md:text-base">
-                              {formatDisplayDate(booking.start_date)} to{" "}
-                              {formatDisplayDate(booking.end_date)}
+                              {booking.booking_type === "daycare" ? (
+                                <>
+                                  Doggy Day Care
+                                  {booking.daycare_session === "half_day"
+                                    ? ", Half Day"
+                                    : ", Full Day"}
+                                  : {formatDisplayDate(booking.start_date)}
+                                </>
+                              ) : (
+                                <>
+                                  Home Boarding:{" "}
+                                  {formatDisplayDate(booking.start_date)} to{" "}
+                                  {formatDisplayDate(booking.end_date)}
+                                </>
+                              )}
                             </p>
+
+                            <p className="mt-1 text-sm text-[#8B6A4E] md:text-base">
+                              Household space allocation: {booking.space_units}{" "}
+                              space
+                              {booking.space_units === 1 ? "" : "s"}
+                            </p>
+
+                            {booking.availability_confirmation_required &&
+                              !booking.availability_confirmed_at && (
+                                <p className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm font-medium text-amber-800">
+                                  Availability review required before this
+                                  booking can be confirmed.
+                                </p>
+                              )}
 
                             {booking.total_cost !== null && (
                               <div className="mt-3 rounded-lg border border-[#D9CBB8] bg-[#F5EFE6] p-3">
@@ -1143,12 +1240,12 @@ active
                         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                           <div>
                             <h3 className="text-lg font-semibold text-[#5C4033] md:text-xl">
-                              {formatName(booking.dogs?.name || "Dog")}
+                              {getBookingDogNames(booking)}
                             </h3>
 
-                            {booking.dogs?.breed && (
+                            {getBookingDogBreeds(booking) && (
                               <p className="mt-1 text-sm text-[#8B6A4E] md:text-base">
-                                {formatName(booking.dogs.breed)}
+                                {getBookingDogBreeds(booking)}
                               </p>
                             )}
 
@@ -1157,8 +1254,21 @@ active
                             </p>
 
                             <p className="mt-3 text-sm font-medium text-[#5C4033] md:text-base">
-                              {formatDisplayDate(booking.start_date)} to{" "}
-                              {formatDisplayDate(booking.end_date)}
+                              {booking.booking_type === "daycare" ? (
+                                <>
+                                  Doggy Day Care
+                                  {booking.daycare_session === "half_day"
+                                    ? ", Half Day"
+                                    : ", Full Day"}
+                                  : {formatDisplayDate(booking.start_date)}
+                                </>
+                              ) : (
+                                <>
+                                  Home Boarding:{" "}
+                                  {formatDisplayDate(booking.start_date)} to{" "}
+                                  {formatDisplayDate(booking.end_date)}
+                                </>
+                              )}
                             </p>
 
                             {booking.total_cost !== null && (
