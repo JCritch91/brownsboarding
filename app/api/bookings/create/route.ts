@@ -16,6 +16,9 @@ const supabaseAdmin = createClient(
 
 type CreateCustomerBookingRequest = {
   dogId?: unknown;
+  dogIds?: unknown;
+  bookingType?: unknown;
+  daycareSession?: unknown;
   startDate?: unknown;
   endDate?: unknown;
   notes?: unknown;
@@ -23,6 +26,27 @@ type CreateCustomerBookingRequest = {
 
 function optionalString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function normaliseDogIds({
+  dogId,
+  dogIds,
+}: {
+  dogId: unknown;
+  dogIds: unknown;
+}) {
+  const requestedDogIds = Array.isArray(dogIds) ? dogIds : [dogId];
+
+  return Array.from(
+    new Set(
+      requestedDogIds
+        .filter(
+          (value): value is string =>
+            typeof value === "string" && value.trim().length > 0,
+        )
+        .map((value) => value.trim()),
+    ),
+  );
 }
 
 function getBookingCreationStatus(error: unknown) {
@@ -164,15 +188,64 @@ export async function POST(request: Request) {
       );
     }
 
-    const dogId = optionalString(body.dogId);
+    const dogIds = normaliseDogIds({
+      dogId: body.dogId,
+      dogIds: body.dogIds,
+    });
+
+    const bookingType =
+      body.bookingType === "daycare"
+        ? "daycare"
+        : body.bookingType === "boarding" || body.bookingType === undefined
+          ? "boarding"
+          : null;
+
+    const daycareSession =
+      body.daycareSession === "full_day" || body.daycareSession === "half_day"
+        ? body.daycareSession
+        : null;
+
     const startDate = optionalString(body.startDate);
     const endDate = optionalString(body.endDate);
     const notes = optionalString(body.notes);
 
-    if (!dogId) {
+    if (dogIds.length === 0) {
       return NextResponse.json(
         {
-          error: "Please select a dog.",
+          error: "Please select at least one dog.",
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    if (dogIds.length > 2) {
+      return NextResponse.json(
+        {
+          error: "A booking can include no more than two dogs.",
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    if (!bookingType) {
+      return NextResponse.json(
+        {
+          error: "Please select a valid booking type.",
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    if (bookingType === "daycare" && !daycareSession) {
+      return NextResponse.json(
+        {
+          error: "Please select a full-day or half-day daycare session.",
         },
         {
           status: 400,
@@ -191,7 +264,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { data: dog, error: dogError } = await supabaseAdmin
+    const { data: dogs, error: dogsError } = await supabaseAdmin
       .from("dogs")
       .select(
         `
@@ -204,14 +277,13 @@ export async function POST(request: Request) {
           can_share_with_other_dogs
           `,
       )
-      .eq("id", dogId)
       .eq("owner_id", user.id)
-      .maybeSingle();
+      .in("id", dogIds);
 
-    if (dogError) {
+    if (dogsError) {
       return NextResponse.json(
         {
-          error: dogError.message,
+          error: dogsError.message,
         },
         {
           status: 500,
@@ -219,10 +291,11 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!dog) {
+    if (!dogs || dogs.length !== dogIds.length) {
       return NextResponse.json(
         {
-          error: "The selected dog could not be found on your account.",
+          error:
+            "One or more selected dogs could not be found on your account.",
         },
         {
           status: 404,
@@ -230,49 +303,61 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!dog.active) {
-      return NextResponse.json(
-        {
-          error: "An inactive dog cannot be included in a booking request.",
-        },
-        {
-          status: 400,
-        },
-      );
-    }
+    const dogById = new Map(dogs.map((dog) => [String(dog.id), dog]));
 
-    if (!dog.vaccinated) {
-      return NextResponse.json(
-        {
-          error: "The selected dog's vaccination information is incomplete.",
-        },
-        {
-          status: 400,
-        },
-      );
-    }
+    const orderedDogs = dogIds
+      .map((dogId) => dogById.get(dogId))
+      .filter((dog): dog is NonNullable<typeof dog> => Boolean(dog));
 
-    if (!dog.vaccination_expiry) {
-      return NextResponse.json(
-        {
-          error: "The selected dog's vaccination expiry date is missing.",
-        },
-        {
-          status: 400,
-        },
-      );
-    }
+    for (const dog of orderedDogs) {
+      const dogName =
+        typeof dog.name === "string" && dog.name.trim()
+          ? dog.name.trim()
+          : "A selected dog";
 
-    if (startDate && dog.vaccination_expiry < startDate) {
-      return NextResponse.json(
-        {
-          error:
-            "The selected dog's vaccination will have expired before the booking begins.",
-        },
-        {
-          status: 400,
-        },
-      );
+      if (!dog.active) {
+        return NextResponse.json(
+          {
+            error: `${dogName} is inactive and cannot be included in a booking request.`,
+          },
+          {
+            status: 400,
+          },
+        );
+      }
+
+      if (!dog.vaccinated) {
+        return NextResponse.json(
+          {
+            error: `${dogName}'s vaccination information is incomplete.`,
+          },
+          {
+            status: 400,
+          },
+        );
+      }
+
+      if (!dog.vaccination_expiry) {
+        return NextResponse.json(
+          {
+            error: `${dogName}'s vaccination expiry date is missing.`,
+          },
+          {
+            status: 400,
+          },
+        );
+      }
+
+      if (startDate && dog.vaccination_expiry < startDate) {
+        return NextResponse.json(
+          {
+            error: `${dogName}'s vaccination will have expired before the booking begins.`,
+          },
+          {
+            status: 400,
+          },
+        );
+      }
     }
 
     let creationResult;
@@ -282,9 +367,9 @@ export async function POST(request: Request) {
         supabase: supabaseAdmin,
         input: {
           ownerId: user.id,
-          dogIds: [dog.id],
-          bookingType: "boarding",
-          daycareSession: null,
+          dogIds,
+          bookingType,
+          daycareSession: bookingType === "daycare" ? daycareSession : null,
           startDate,
           endDate,
           notes,
@@ -317,7 +402,7 @@ export async function POST(request: Request) {
           bookingReference: booking.booking_reference,
           ownerId: booking.owner_id,
           dogId: booking.dog_id,
-          dogIds: [booking.dog_id],
+          dogIds,
           bookingType: booking.booking_type,
           daycareSession: booking.daycare_session,
           startDate: booking.start_date,
