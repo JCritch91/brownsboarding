@@ -1,11 +1,15 @@
 import { createEmailTemplate } from "@/lib/email-template";
 import { sendGmailEmail } from "@/lib/gmail";
 
+import type { BookingType, DaycareSessionType } from "@/types/booking";
+
 export type SendBookingCancellationEmailInput = {
   bookingReference: string;
   customerEmail: string;
   customerName: string;
   dogName: string;
+  bookingType: BookingType;
+  daycareSession: DaycareSessionType | null;
   startDate: string;
   endDate: string;
 };
@@ -64,6 +68,22 @@ function validateInput(input: SendBookingCancellationEmailInput) {
 
   validateRequiredText(input.dogName, "Dog name");
 
+  if (input.bookingType !== "boarding" && input.bookingType !== "daycare") {
+    throw new Error("The booking type is invalid.");
+  }
+
+  if (input.bookingType === "boarding" && input.daycareSession !== null) {
+    throw new Error("A Boarding booking cannot contain a Daycare session.");
+  }
+
+  if (
+    input.bookingType === "daycare" &&
+    input.daycareSession !== "full_day" &&
+    input.daycareSession !== "half_day"
+  ) {
+    throw new Error("The Doggy Day Care session is invalid.");
+  }
+
   if (
     typeof input.startDate !== "string" ||
     !isValidDisplayDate(input.startDate)
@@ -74,6 +94,44 @@ function validateInput(input: SendBookingCancellationEmailInput) {
   if (typeof input.endDate !== "string" || !isValidDisplayDate(input.endDate)) {
     throw new Error("The booking end date is invalid.");
   }
+
+  if (input.bookingType === "daycare" && input.startDate !== input.endDate) {
+    throw new Error(
+      "A Doggy Day Care booking must start and end on the same date.",
+    );
+  }
+}
+
+function getServiceName({
+  bookingType,
+  daycareSession,
+}: {
+  bookingType: BookingType;
+  daycareSession: DaycareSessionType | null;
+}) {
+  if (bookingType === "boarding") {
+    return "Home Boarding";
+  }
+
+  return daycareSession === "half_day"
+    ? "Doggy Day Care, Half Day"
+    : "Doggy Day Care, Full Day";
+}
+
+function getDateLabel(bookingType: BookingType) {
+  return bookingType === "daycare" ? "Attendance date" : "Booking dates";
+}
+
+function getFormattedDates({
+  bookingType,
+  startDate,
+  endDate,
+}: {
+  bookingType: BookingType;
+  startDate: string;
+  endDate: string;
+}) {
+  return bookingType === "daycare" ? startDate : `${startDate} to ${endDate}`;
 }
 
 export async function sendBookingCancellationEmail(
@@ -89,15 +147,28 @@ export async function sendBookingCancellationEmail(
 
   const dogName = escapeHtml(input.dogName.trim());
 
-  const startDate = escapeHtml(input.startDate);
+  const serviceName = escapeHtml(
+    getServiceName({
+      bookingType: input.bookingType,
+      daycareSession: input.daycareSession,
+    }),
+  );
 
-  const endDate = escapeHtml(input.endDate);
+  const dateLabel = escapeHtml(getDateLabel(input.bookingType));
+
+  const formattedDates = escapeHtml(
+    getFormattedDates({
+      bookingType: input.bookingType,
+      startDate: input.startDate,
+      endDate: input.endDate,
+    }),
+  );
 
   const bodyContent = `
     <p>Hi ${customerName},</p>
 
     <p>
-      We can confirm that your booking has been cancelled.
+      We can confirm that the booking for ${dogName} has been cancelled.
     </p>
 
     <p>
@@ -106,17 +177,17 @@ export async function sendBookingCancellationEmail(
     </p>
 
     <p>
-      <strong>Dog:</strong><br />
-      ${dogName}
+      <strong>Service:</strong><br />
+      ${serviceName}
     </p>
 
     <p>
-      <strong>Booking dates:</strong><br />
-      ${startDate} to ${endDate}
+      <strong>${dateLabel}:</strong><br />
+      ${formattedDates}
     </p>
 
     <p>
-      If you cancelled within the deposit forfeiture period,
+      If the booking was cancelled within 14 days of the start date,
       the Browns Boarding cancellation policy will apply.
     </p>
 
