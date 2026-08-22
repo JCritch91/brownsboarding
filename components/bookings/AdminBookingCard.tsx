@@ -19,6 +19,45 @@ type AdminBookingCardProps = {
   onMarkBalancePaid: (booking: BookingWithCustomer) => void | Promise<void>;
 };
 
+function getBookingDogs(booking: BookingWithCustomer) {
+  const linkedDogs = (booking.booking_dogs || [])
+    .slice()
+    .sort(
+      (firstLink, secondLink) => firstLink.sort_order - secondLink.sort_order,
+    )
+    .map((bookingDog) => bookingDog.dogs)
+    .filter((dog): dog is NonNullable<typeof dog> => dog !== null);
+
+  if (linkedDogs.length > 0) {
+    return linkedDogs;
+  }
+
+  return booking.dogs ? [booking.dogs] : [];
+}
+
+function getDogNames(booking: BookingWithCustomer) {
+  const dogNames = getBookingDogs(booking)
+    .map((dog) => formatName(dog.name))
+    .filter(Boolean);
+
+  if (dogNames.length === 0) {
+    return "Dog";
+  }
+
+  if (dogNames.length === 1) {
+    return dogNames[0];
+  }
+
+  return `${dogNames[0]} and ${dogNames[1]}`;
+}
+
+function getDogBreeds(booking: BookingWithCustomer) {
+  return getBookingDogs(booking)
+    .map((dog) => (dog.breed ? formatName(dog.breed) : ""))
+    .filter(Boolean)
+    .join(", ");
+}
+
 function getCustomerName(booking: BookingWithCustomer) {
   const firstName = booking.customer?.first_name || "";
 
@@ -37,27 +76,46 @@ export default function AdminBookingCard({
   onMarkDepositPaid,
   onMarkBalancePaid,
 }: AdminBookingCardProps) {
+  const dogNames = getDogNames(booking);
+  const dogBreeds = getDogBreeds(booking);
   return (
     <div className="rounded-xl border border-[#D9CBB8] bg-white p-4 shadow md:p-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between md:gap-4">
         <div>
           <h3 className="text-xl font-semibold text-[#5C4033] md:text-2xl">
-            {formatName(booking.dogs?.name || "") || "Dog"}
+            {dogNames}
           </h3>
 
           <p className="mt-1 text-xs font-semibold text-[#8B6A4E] md:text-sm">
             Booking reference: {booking.booking_reference}
           </p>
 
-          {booking.dogs?.breed && (
+          {dogBreeds && (
             <p className="mt-1 text-sm text-[#8B6A4E] md:text-base">
-              {formatName(booking.dogs.breed)}
+              {dogBreeds}
             </p>
           )}
 
           <p className="mt-2 text-sm font-medium text-[#5C4033] md:mt-3 md:text-base">
-            Stay dates: {formatDisplayDate(booking.start_date)} →{" "}
-            {formatDisplayDate(booking.end_date)}
+            {booking.booking_type === "daycare" ? (
+              <>
+                Doggy Day Care
+                {booking.daycare_session === "half_day"
+                  ? ", Half Day"
+                  : ", Full Day"}
+                : {formatDisplayDate(booking.start_date)}
+              </>
+            ) : (
+              <>
+                Home Boarding: {formatDisplayDate(booking.start_date)} to{" "}
+                {formatDisplayDate(booking.end_date)}
+              </>
+            )}
+          </p>
+
+          <p className="mt-1 text-sm text-[#8B6A4E] md:text-base">
+            Household space allocation: {booking.space_units} space
+            {booking.space_units === 1 ? "" : "s"}
           </p>
 
           <p className="mt-2 text-sm text-[#8B6A4E] md:mt-3 md:text-base">
