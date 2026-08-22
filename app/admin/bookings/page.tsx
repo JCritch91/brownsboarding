@@ -76,6 +76,28 @@ type PaymentAction = {
   paymentType: "Deposit" | "Balance";
 };
 
+function getBookingDogNames(booking: BookingWithCustomer) {
+  const linkedDogNames = (booking.booking_dogs || [])
+    .slice()
+    .sort(
+      (firstLink, secondLink) => firstLink.sort_order - secondLink.sort_order,
+    )
+    .map((bookingDog) =>
+      bookingDog.dogs?.name ? formatName(bookingDog.dogs.name) : "",
+    )
+    .filter(Boolean);
+
+  if (linkedDogNames.length === 1) {
+    return linkedDogNames[0];
+  }
+
+  if (linkedDogNames.length >= 2) {
+    return `${linkedDogNames[0]} and ${linkedDogNames[1]}`;
+  }
+
+  return formatName(booking.dogs?.name || "") || "Dog";
+}
+
 export default function AdminBookingsPage() {
   const [loading, setLoading] = useState(true);
 
@@ -1036,9 +1058,24 @@ booking_dogs (
               </div>
 
               <div>
-                <dt className="text-xs font-semibold text-[#8B6A4E]">Dog</dt>
+                <dt className="text-xs font-semibold text-[#8B6A4E]">Dog(s)</dt>
+
                 <dd className="mt-1 font-semibold text-[#5C4033]">
-                  {formatName(paymentAction.booking.dogs?.name || "Dog")}
+                  {getBookingDogNames(paymentAction.booking)}
+                </dd>
+              </div>
+
+              <div>
+                <dt className="text-xs font-semibold text-[#8B6A4E]">
+                  Service
+                </dt>
+
+                <dd className="mt-1 text-[#5C4033]">
+                  {paymentAction.booking.booking_type === "daycare"
+                    ? paymentAction.booking.daycare_session === "half_day"
+                      ? "Doggy Day Care, Half Day"
+                      : "Doggy Day Care, Full Day"
+                    : "Home Boarding"}
                 </dd>
               </div>
 
