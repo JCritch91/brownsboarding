@@ -22,6 +22,9 @@ type RouteContext = {
 
 type CreateAdminBookingRequest = {
   dogId?: unknown;
+  dogIds?: unknown;
+  bookingType?: unknown;
+  daycareSession?: unknown;
   startDate?: unknown;
   endDate?: unknown;
   notes?: unknown;
@@ -29,6 +32,27 @@ type CreateAdminBookingRequest = {
 
 function optionalString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function normaliseDogIds({
+  dogId,
+  dogIds,
+}: {
+  dogId: unknown;
+  dogIds: unknown;
+}) {
+  const requestedDogIds = Array.isArray(dogIds) ? dogIds : [dogId];
+
+  return Array.from(
+    new Set(
+      requestedDogIds
+        .filter(
+          (value): value is string =>
+            typeof value === "string" && value.trim().length > 0,
+        )
+        .map((value) => value.trim()),
+    ),
+  );
 }
 
 function getBookingCreationStatus(error: unknown) {
@@ -215,15 +239,64 @@ export async function POST(request: Request, context: RouteContext) {
       );
     }
 
-    const dogId = optionalString(body.dogId);
+    const dogIds = normaliseDogIds({
+      dogId: body.dogId,
+      dogIds: body.dogIds,
+    });
+
+    const bookingType =
+      body.bookingType === "daycare"
+        ? "daycare"
+        : body.bookingType === "boarding" || body.bookingType === undefined
+          ? "boarding"
+          : null;
+
+    const daycareSession =
+      body.daycareSession === "full_day" || body.daycareSession === "half_day"
+        ? body.daycareSession
+        : null;
+
     const startDate = optionalString(body.startDate);
     const endDate = optionalString(body.endDate);
     const notes = optionalString(body.notes);
 
-    if (!dogId) {
+    if (dogIds.length === 0) {
       return NextResponse.json(
         {
-          error: "Please select a dog.",
+          error: "Please select at least one dog.",
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    if (dogIds.length > 2) {
+      return NextResponse.json(
+        {
+          error: "A booking can include no more than two dogs.",
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    if (!bookingType) {
+      return NextResponse.json(
+        {
+          error: "Please select a valid booking type.",
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    if (bookingType === "daycare" && !daycareSession) {
+      return NextResponse.json(
+        {
+          error: "Please select a full-day or half-day daycare session.",
         },
         {
           status: 400,
@@ -242,24 +315,24 @@ export async function POST(request: Request, context: RouteContext) {
       );
     }
 
-    const { data: dog, error: dogLoadError } = await supabaseAdmin
+    const { data: dogs, error: dogsLoadError } = await supabaseAdmin
       .from("dogs")
       .select(
         `
           id,
           owner_id,
+          name,
           active,
           can_share_with_other_dogs
           `,
       )
-      .eq("id", dogId)
       .eq("owner_id", customer.id)
-      .maybeSingle();
+      .in("id", dogIds);
 
-    if (dogLoadError) {
+    if (dogsLoadError) {
       return NextResponse.json(
         {
-          error: dogLoadError.message,
+          error: dogsLoadError.message,
         },
         {
           status: 500,
@@ -267,10 +340,11 @@ export async function POST(request: Request, context: RouteContext) {
       );
     }
 
-    if (!dog) {
+    if (!dogs || dogs.length !== dogIds.length) {
       return NextResponse.json(
         {
-          error: "The selected dog could not be found for this customer.",
+          error:
+            "One or more selected dogs could not be found for this customer.",
         },
         {
           status: 404,
@@ -278,15 +352,38 @@ export async function POST(request: Request, context: RouteContext) {
       );
     }
 
-    if (!dog.active) {
-      return NextResponse.json(
-        {
-          error: "A booking cannot be created for an inactive dog.",
-        },
-        {
-          status: 409,
-        },
-      );
+    const dogById = new Map(dogs.map((dog) => [String(dog.id), dog]));
+
+    for (const dogId of dogIds) {
+      const dog = dogById.get(dogId);
+
+      if (!dog) {
+        return NextResponse.json(
+          {
+            error:
+              "One or more selected dogs could not be found for this customer.",
+          },
+          {
+            status: 404,
+          },
+        );
+      }
+
+      if (!dog.active) {
+        const dogName =
+          typeof dog.name === "string" && dog.name.trim()
+            ? dog.name.trim()
+            : "A selected dog";
+
+        return NextResponse.json(
+          {
+            error: `${dogName} is inactive and cannot be included in a booking.`,
+          },
+          {
+            status: 409,
+          },
+        );
+      }
     }
 
     let creationResult;
@@ -296,9 +393,9 @@ export async function POST(request: Request, context: RouteContext) {
         supabase: supabaseAdmin,
         input: {
           ownerId: customer.id,
-          dogIds: [dog.id],
-          bookingType: "boarding",
-          daycareSession: null,
+          dogIds,
+          bookingType,
+          daycareSession: bookingType === "daycare" ? daycareSession : null,
           startDate,
           endDate,
           notes,
@@ -331,7 +428,7 @@ export async function POST(request: Request, context: RouteContext) {
           bookingReference: booking.booking_reference,
           ownerId: booking.owner_id,
           dogId: booking.dog_id,
-          dogIds: [booking.dog_id],
+          dogIds,
           bookingType: booking.booking_type,
           daycareSession: booking.daycare_session,
           startDate: booking.start_date,
