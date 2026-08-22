@@ -20,6 +20,7 @@ export type DogFormValues = {
   vet_name: string;
   vet_phone: string;
   vet_address: string;
+  can_share_with_other_dogs: string;
   medical_notes: string;
   medication_notes: string;
   feeding_notes: string;
@@ -240,6 +241,27 @@ export default function DogForm({
           )}
         </div>
       </section>
+
+      <FormSelect
+        id="canShareWithOtherDogs"
+        label="Can share with dogs from other households?"
+        value={form.can_share_with_other_dogs}
+        onChange={(event) =>
+          onChange("can_share_with_other_dogs", event.target.value)
+        }
+        required
+      >
+        <option value="">Select an option</option>
+        <option value="yes">Yes</option>
+        <option value="no">No</option>
+      </FormSelect>
+      <div className="mt-4 rounded-lg border border-blue-300 bg-blue-50 p-3 text-sm text-blue-800 md:text-base">
+        <p>
+          Select <strong>No</strong> if this dog must not attend while dogs from
+          another household are present. This will override normal shared
+          availability rules.
+        </p>
+      </div>
 
       <section>
         <h2 className="mb-4 text-xl font-semibold text-[#5C4033] md:mb-6 md:text-2xl">

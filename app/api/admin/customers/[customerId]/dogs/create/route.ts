@@ -24,6 +24,8 @@ type CreateAdminDogRequest = {
   vaccinated?: unknown;
   vaccination_expiry?: unknown;
   microchip_number?: unknown;
+  vet_address?: unknown;
+  can_share_with_other_dogs?: unknown;
   medical_notes?: unknown;
   medication_notes?: unknown;
   feeding_notes?: unknown;
@@ -184,6 +186,8 @@ export async function POST(request: Request, context: RouteContext) {
       vaccinated: optionalString(body.vaccinated),
       vaccination_expiry: optionalString(body.vaccination_expiry),
       microchip_number: optionalString(body.microchip_number),
+      vet_address: optionalString(body.vet_address),
+      can_share_with_other_dogs: optionalString(body.can_share_with_other_dogs),
       medical_notes: optionalString(body.medical_notes),
       medication_notes: optionalString(body.medication_notes),
       feeding_notes: optionalString(body.feeding_notes),
@@ -207,6 +211,21 @@ export async function POST(request: Request, context: RouteContext) {
       return NextResponse.json(
         {
           error: validationMessage,
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    if (
+      form.can_share_with_other_dogs !== "yes" &&
+      form.can_share_with_other_dogs !== "no"
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Please confirm whether the dog can share with dogs from other households.",
         },
         {
           status: 400,
@@ -241,6 +260,8 @@ export async function POST(request: Request, context: RouteContext) {
         vaccination_expiry:
           form.vaccinated === "yes" ? form.vaccination_expiry || null : null,
         microchip_number: form.microchip_number || null,
+        vet_address: form.vet_address || null,
+        can_share_with_other_dogs: form.can_share_with_other_dogs === "yes",
         medical_notes: form.medical_notes || null,
         medication_notes: form.medication_notes || null,
         feeding_notes: form.feeding_notes || null,

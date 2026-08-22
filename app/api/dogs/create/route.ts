@@ -21,6 +21,7 @@ type CreateDogRequest = {
   vet_name?: unknown;
   vet_phone?: unknown;
   vet_address?: unknown;
+  can_share_with_other_dogs?: unknown;
   medical_notes?: unknown;
   medication_notes?: unknown;
   feeding_notes?: unknown;
@@ -138,6 +139,7 @@ export async function POST(request: Request) {
       vet_name: optionalString(body.vet_name),
       vet_phone: optionalString(body.vet_phone),
       vet_address: optionalString(body.vet_address),
+      can_share_with_other_dogs: optionalString(body.can_share_with_other_dogs),
       medical_notes: optionalString(body.medical_notes),
       medication_notes: optionalString(body.medication_notes),
       feeding_notes: optionalString(body.feeding_notes),
@@ -150,6 +152,21 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error: validationMessage,
+        },
+        {
+          status: 400,
+        },
+      );
+    }
+
+    if (
+      form.can_share_with_other_dogs !== "yes" &&
+      form.can_share_with_other_dogs !== "no"
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Please confirm whether the dog can share with dogs from other households.",
         },
         {
           status: 400,
@@ -189,6 +206,7 @@ export async function POST(request: Request) {
         vet_name: form.vet_name || null,
         vet_phone: form.vet_phone || null,
         vet_address: form.vet_address || null,
+        can_share_with_other_dogs: form.can_share_with_other_dogs === "yes",
         medical_notes: form.medical_notes || null,
         medication_notes: form.medication_notes || null,
         feeding_notes: form.feeding_notes || null,

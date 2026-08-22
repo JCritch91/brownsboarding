@@ -41,6 +41,7 @@ const emptyForm: DogFormValues = {
   vet_name: "",
   vet_phone: "",
   vet_address: "",
+  can_share_with_other_dogs: "yes",
   medical_notes: "",
   medication_notes: "",
   feeding_notes: "",
