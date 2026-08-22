@@ -299,108 +299,124 @@ export async function createPendingBookingWithDogs({
   supabase: SupabaseClient;
   booking: PendingBookingInsert;
 }): Promise<CreatedPendingBooking> {
-  const createdAt = new Date().toISOString();
-
-  const { data: createdBooking, error: bookingError } = await supabase
-    .from("bookings")
-    .insert({
-      owner_id: booking.ownerId,
-      dog_id: booking.primaryDogId,
-      booking_type: booking.bookingType,
-      daycare_session: booking.daycareSession,
-      start_date: booking.startDate,
-      end_date: booking.endDate,
-      status: "Pending",
-      notes: booking.notes,
-      availability_confirmation_required:
+  const { data: creationRows, error: creationError } = await supabase.rpc(
+    "create_pending_booking_v2_atomic",
+    {
+      p_owner_id: booking.ownerId,
+      p_dog_ids: booking.dogIds,
+      p_booking_type: booking.bookingType,
+      p_daycare_session: booking.daycareSession,
+      p_start_date: booking.startDate,
+      p_end_date: booking.endDate,
+      p_notes: booking.notes,
+      p_availability_confirmation_required:
         booking.availabilityConfirmationRequired,
-      availability_confirmed_at: null,
-      availability_confirmed_by: null,
-      space_units: booking.spaceUnits,
-      updated_at: createdAt,
-    })
-    .select(
-      `
-        id,
-        booking_reference,
-        owner_id,
-        dog_id,
-        booking_type,
-        daycare_session,
-        start_date,
-        end_date,
-        status,
-        notes,
-        availability_confirmation_required,
-        availability_confirmed_at,
-        availability_confirmed_by,
-        space_units,
-        created_at
-        `,
-    )
-    .single();
+      p_space_units: booking.spaceUnits,
+    },
+  );
 
-  if (bookingError || !createdBooking) {
-    throw new Error(
-      bookingError?.message || "The pending booking could not be created.",
-    );
-  }
+  if (creationError) {
+    const errorMessage =
+      creationError.message || "The pending booking could not be created.";
 
-  const bookingDogRows = booking.dogIds.map((dogId, index) => ({
-    booking_id: createdBooking.id,
-    dog_id: dogId,
-    sort_order: index,
-  }));
+    if (errorMessage.includes("BOOKING_OWNER_REQUIRED")) {
+      throw new Error("The booking customer is missing.");
+    }
 
-  const { error: bookingDogsError } = await supabase
-    .from("booking_dogs")
-    .insert(bookingDogRows);
+    if (errorMessage.includes("BOOKING_DOGS_REQUIRED")) {
+      throw new Error("At least one dog must be selected for the booking.");
+    }
 
-  if (bookingDogsError) {
-    /*
-     * Creation is not yet atomic across both inserts.
-     * Remove the new Pending booking so the repository
-     * cannot leave an incomplete booking behind.
-     *
-     * The database-level atomic function will replace
-     * this compensation mechanism in the next step.
-     */
-    const { error: rollbackError } = await supabase
-      .from("bookings")
-      .delete()
-      .eq("id", createdBooking.id)
-      .eq("status", "Pending");
+    if (errorMessage.includes("BOOKING_DOG_LIMIT_EXCEEDED")) {
+      throw new Error("A booking can include no more than two dogs.");
+    }
 
-    if (rollbackError) {
+    if (errorMessage.includes("DUPLICATE_BOOKING_DOG")) {
+      throw new Error("The same dog cannot be selected more than once.");
+    }
+
+    if (errorMessage.includes("INVALID_BOOKING_DOG")) {
       throw new Error(
-        `The booking dogs could not be saved: ${bookingDogsError.message}. The incomplete booking could not be removed automatically: ${rollbackError.message}.`,
+        "Every selected dog must be active and belong to the booking customer.",
       );
     }
 
+    if (errorMessage.includes("BOARDING_DAYCARE_SESSION_NOT_ALLOWED")) {
+      throw new Error(
+        "A daycare session cannot be selected for a boarding booking.",
+      );
+    }
+
+    if (errorMessage.includes("DAYCARE_SESSION_REQUIRED")) {
+      throw new Error("Please select a full-day or half-day daycare session.");
+    }
+
+    if (errorMessage.includes("INVALID_BOARDING_DATES")) {
+      throw new Error("A boarding booking must end after its start date.");
+    }
+
+    if (errorMessage.includes("INVALID_DAYCARE_DATES")) {
+      throw new Error("A daycare booking must start and end on the same date.");
+    }
+
+    if (errorMessage.includes("BOOKING_START_DATE_IN_PAST")) {
+      throw new Error("The booking start date cannot be in the past.");
+    }
+
+    if (errorMessage.includes("INVALID_SPACE_UNITS")) {
+      throw new Error("The booking contains an invalid space requirement.");
+    }
+
+    if (errorMessage.includes("BOOKING_NOTES_TOO_LONG")) {
+      throw new Error("Booking notes must not exceed 2,000 characters.");
+    }
+
+    throw new Error(errorMessage);
+  }
+
+  const creationResult = Array.isArray(creationRows)
+    ? creationRows[0]
+    : creationRows;
+
+  if (!creationResult) {
     throw new Error(
-      `The booking dogs could not be saved: ${bookingDogsError.message}.`,
+      "The booking was created without returning a booking result.",
+    );
+  }
+
+  if (creationResult.booking_status !== "Pending") {
+    throw new Error(
+      "The new booking did not return the expected Pending status.",
     );
   }
 
   return {
-    ...createdBooking,
-    booking_type: createdBooking.booking_type as BookingType,
+    id: String(creationResult.booking_id),
+    booking_reference: String(creationResult.booking_reference),
+    owner_id: String(creationResult.owner_id),
+    dog_id: String(creationResult.primary_dog_id),
+    booking_type: creationResult.booking_type as BookingType,
     daycare_session:
-      createdBooking.daycare_session as DaycareSessionType | null,
+      creationResult.daycare_session as DaycareSessionType | null,
+    start_date: String(creationResult.start_date),
+    end_date: String(creationResult.end_date),
     status: "Pending",
     notes:
-      typeof createdBooking.notes === "string" ? createdBooking.notes : null,
+      typeof creationResult.booking_notes === "string"
+        ? creationResult.booking_notes
+        : null,
     availability_confirmation_required: Boolean(
-      createdBooking.availability_confirmation_required,
+      creationResult.availability_confirmation_required,
     ),
     availability_confirmed_at:
-      typeof createdBooking.availability_confirmed_at === "string"
-        ? createdBooking.availability_confirmed_at
+      typeof creationResult.availability_confirmed_at === "string"
+        ? creationResult.availability_confirmed_at
         : null,
     availability_confirmed_by:
-      typeof createdBooking.availability_confirmed_by === "string"
-        ? createdBooking.availability_confirmed_by
+      typeof creationResult.availability_confirmed_by === "string"
+        ? creationResult.availability_confirmed_by
         : null,
-    space_units: Number(createdBooking.space_units),
+    space_units: Number(creationResult.space_units),
+    created_at: String(creationResult.created_at),
   };
 }
