@@ -338,7 +338,10 @@ export default function BookingForm({
           </div>
 
           <div className="mt-3 grid grid-cols-3 gap-2 text-[10px] md:mt-4 md:gap-3 md:text-sm">
-            <div className="rounded-lg border border-green-300 bg-green-50 px-2 py-2 text-center font-medium text-green-800 md:p-3">
+            <div className="rounded-lg border border-[#D9CBB8] bg-white px-2 py-2 text-center font-medium text-[#8B6A4E] md:p-3">
+              Availability not confirmed
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] sm:grid-cols-4 md:mt-4 md:gap-3 md:text-sm">
               Available
             </div>
 
@@ -347,8 +350,16 @@ export default function BookingForm({
             </div>
 
             <div className="rounded-lg border border-red-300 bg-red-50 px-2 py-2 text-center font-medium text-red-700 md:p-3">
-              Unavailable / full
+              Unavailable
             </div>
+          </div>
+
+          <div className="mt-3 rounded-lg border border-blue-300 bg-blue-50 p-3 text-sm text-blue-800 md:mt-4 md:p-4 md:text-base">
+            <p>
+              White dates can still be requested. Availability has not yet been
+              confirmed for these dates, and Browns Boarding will confirm
+              whether the booking can be accommodated.
+            </p>
           </div>
 
           {(startDate || endDate) && (

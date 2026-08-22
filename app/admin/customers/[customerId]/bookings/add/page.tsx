@@ -310,12 +310,10 @@ can_share_with_other_dogs
     const availabilityRecord = findAvailabilityForDate(date);
 
     if (!availabilityRecord) {
-      return true;
+      return false;
     }
 
-    return (
-      !availabilityRecord.available || availabilityRecord.spaces_available <= 0
-    );
+    return !availabilityRecord.available;
   }
 
   function isLimitedAvailabilityDate(date: Date) {

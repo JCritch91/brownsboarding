@@ -220,18 +220,10 @@ export default function BookingsPage() {
     const dayAvailability = findAvailabilityForDate(date);
 
     if (!dayAvailability) {
-      return true;
+      return false;
     }
 
-    if (!dayAvailability.available) {
-      return true;
-    }
-
-    if (dayAvailability.spaces_available <= 0) {
-      return true;
-    }
-
-    return false;
+    return !dayAvailability.available;
   }
 
   function isLimitedAvailabilityDate(date: Date) {
