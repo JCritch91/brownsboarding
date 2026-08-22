@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-import { getDatesInRange, validateBookingDates } from "@/lib/helpers";
-
-import { ACTIVE_BOOKING_STATUSES } from "@/types/booking";
+import { createPendingBookingV2 } from "@/lib/booking-engine/service";
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  },
 );
 
 type RouteContext = {
@@ -23,11 +27,45 @@ type CreateAdminBookingRequest = {
   notes?: unknown;
 };
 
+function optionalString(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function getBookingCreationStatus(error: unknown) {
+  const message =
+    error instanceof Error ? error.message : "Unable to create the booking.";
+
+  if (
+    message.includes("already have an active booking") ||
+    message.includes("cannot currently accommodate") ||
+    message.includes("has been marked as unavailable") ||
+    message.includes("cannot share") ||
+    message.includes("shared-booking allowance")
+  ) {
+    return 409;
+  }
+
+  if (
+    message.includes("Please select") ||
+    message.includes("must contain") ||
+    message.includes("must end") ||
+    message.includes("cannot be in the past") ||
+    message.includes("must not exceed") ||
+    message.includes("booking customer is missing") ||
+    message.includes("must belong") ||
+    message.includes("inactive")
+  ) {
+    return 400;
+  }
+
+  return 500;
+}
+
 export async function POST(request: Request, context: RouteContext) {
   try {
     const { customerId } = await context.params;
 
-    if (typeof customerId !== "string" || !customerId.trim()) {
+    if (!customerId?.trim()) {
       return NextResponse.json(
         {
           error: "Customer ID is missing.",
@@ -41,8 +79,8 @@ export async function POST(request: Request, context: RouteContext) {
     const authorizationHeader = request.headers.get("authorization");
 
     const accessToken = authorizationHeader?.startsWith("Bearer ")
-      ? authorizationHeader.slice(7)
-      : null;
+      ? authorizationHeader.slice(7).trim()
+      : "";
 
     if (!accessToken) {
       return NextResponse.json(
@@ -75,10 +113,10 @@ export async function POST(request: Request, context: RouteContext) {
       .from("profiles")
       .select(
         `
-        id,
-        active,
-        is_admin
-        `,
+          id,
+          active,
+          is_admin
+          `,
       )
       .eq("id", user.id)
       .maybeSingle();
@@ -109,10 +147,10 @@ export async function POST(request: Request, context: RouteContext) {
       .from("profiles")
       .select(
         `
-        id,
-        active,
-        is_admin
-        `,
+          id,
+          active,
+          is_admin
+          `,
       )
       .eq("id", customerId)
       .maybeSingle();
@@ -177,29 +215,10 @@ export async function POST(request: Request, context: RouteContext) {
       );
     }
 
-    const dogId = typeof body.dogId === "string" ? body.dogId.trim() : "";
-
-    const startDate =
-      typeof body.startDate === "string" ? body.startDate.trim() : "";
-
-    const endDate = typeof body.endDate === "string" ? body.endDate.trim() : "";
-
-    if (
-      body.notes !== undefined &&
-      body.notes !== null &&
-      typeof body.notes !== "string"
-    ) {
-      return NextResponse.json(
-        {
-          error: "The booking notes are invalid.",
-        },
-        {
-          status: 400,
-        },
-      );
-    }
-
-    const notes = typeof body.notes === "string" ? body.notes.trim() : "";
+    const dogId = optionalString(body.dogId);
+    const startDate = optionalString(body.startDate);
+    const endDate = optionalString(body.endDate);
+    const notes = optionalString(body.notes);
 
     if (!dogId) {
       return NextResponse.json(
@@ -223,31 +242,15 @@ export async function POST(request: Request, context: RouteContext) {
       );
     }
 
-    const validationMessage = validateBookingDates(startDate, endDate);
-
-    if (validationMessage) {
-      return NextResponse.json(
-        {
-          error: validationMessage,
-        },
-        {
-          status: 400,
-        },
-      );
-    }
-
     const { data: dog, error: dogLoadError } = await supabaseAdmin
       .from("dogs")
       .select(
         `
-        id,
-        owner_id,
-        name,
-        active,
-        vaccinated,
-        vaccination_expiry,
-        meet_and_greet_completed
-        `,
+          id,
+          owner_id,
+          active,
+          can_share_with_other_dogs
+          `,
       )
       .eq("id", dogId)
       .eq("owner_id", customer.id)
@@ -286,185 +289,38 @@ export async function POST(request: Request, context: RouteContext) {
       );
     }
 
-    const { data: existingBookings, error: overlapLoadError } =
-      await supabaseAdmin
-        .from("bookings")
-        .select(
-          `
-        id,
-        start_date,
-        end_date,
-        status
-        `,
-        )
-        .eq("dog_id", dog.id)
-        .in("status", ACTIVE_BOOKING_STATUSES);
+    let creationResult;
 
-    if (overlapLoadError) {
+    try {
+      creationResult = await createPendingBookingV2({
+        supabase: supabaseAdmin,
+        input: {
+          ownerId: customer.id,
+          dogIds: [dog.id],
+          bookingType: "boarding",
+          daycareSession: null,
+          startDate,
+          endDate,
+          notes,
+        },
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Unable to create the booking.";
+
       return NextResponse.json(
         {
-          error: overlapLoadError.message,
+          error: message,
         },
         {
-          status: 500,
+          status: getBookingCreationStatus(error),
         },
       );
     }
 
-    const overlappingBooking = (existingBookings || []).find(
-      (existingBooking) =>
-        startDate < existingBooking.end_date &&
-        endDate > existingBooking.start_date,
-    );
-
-    if (overlappingBooking) {
-      return NextResponse.json(
-        {
-          error:
-            "The selected dog already has a booking that overlaps with these dates.",
-        },
-        {
-          status: 409,
-        },
-      );
-    }
-
-    const occupiedDates = getDatesInRange(startDate, endDate);
-
-    /*
-     * The departure date does not consume a
-     * boarding space.
-     */
-    occupiedDates.pop();
-
-    if (occupiedDates.length === 0) {
-      return NextResponse.json(
-        {
-          error: "The booking must contain at least one occupied night.",
-        },
-        {
-          status: 400,
-        },
-      );
-    }
-
-    const { data: availabilityRecords, error: availabilityLoadError } =
-      await supabaseAdmin
-        .from("availability")
-        .select(
-          `
-        id,
-        date,
-        available,
-        total_spaces,
-        spaces_available
-        `,
-        )
-        .gte("date", startDate)
-        .lt("date", endDate)
-        .order("date", {
-          ascending: true,
-        });
-
-    if (availabilityLoadError) {
-      return NextResponse.json(
-        {
-          error: availabilityLoadError.message,
-        },
-        {
-          status: 500,
-        },
-      );
-    }
-
-    const availabilityByDate = new Map(
-      (availabilityRecords || []).map((record) => [record.date, record]),
-    );
-
-    for (const occupiedDate of occupiedDates) {
-      const availabilityRecord = availabilityByDate.get(occupiedDate);
-
-      if (!availabilityRecord) {
-        return NextResponse.json(
-          {
-            error: `No availability has been configured for ${occupiedDate}.`,
-          },
-          {
-            status: 409,
-          },
-        );
-      }
-
-      if (!availabilityRecord.available) {
-        return NextResponse.json(
-          {
-            error: `${occupiedDate} is unavailable.`,
-          },
-          {
-            status: 409,
-          },
-        );
-      }
-
-      if (availabilityRecord.spaces_available <= 0) {
-        return NextResponse.json(
-          {
-            error: `${occupiedDate} is fully booked.`,
-          },
-          {
-            status: 409,
-          },
-        );
-      }
-    }
-
-    /*
-     * This route creates only the initial Pending
-     * booking. Pending bookings do not consume
-     * availability and do not trigger calendar or
-     * email operations.
-     *
-     * If the administrator selected Confirm
-     * Immediately, the page calls the existing
-     * secure confirmation route afterwards.
-     */
-    const { data: booking, error: bookingCreateError } = await supabaseAdmin
-      .from("bookings")
-      .insert({
-        owner_id: customer.id,
-        dog_id: dog.id,
-        start_date: startDate,
-        end_date: endDate,
-        status: "Pending",
-        notes: notes || null,
-        updated_at: new Date().toISOString(),
-      })
-      .select(
-        `
-        id,
-        booking_reference,
-        owner_id,
-        dog_id,
-        start_date,
-        end_date,
-        status,
-        notes,
-        created_at
-        `,
-      )
-      .single();
-
-    if (bookingCreateError || !booking) {
-      return NextResponse.json(
-        {
-          error:
-            bookingCreateError?.message || "The booking could not be created.",
-        },
-        {
-          status: 500,
-        },
-      );
-    }
+    const { booking, availability, warning } = creationResult;
 
     return NextResponse.json(
       {
@@ -475,20 +331,33 @@ export async function POST(request: Request, context: RouteContext) {
           bookingReference: booking.booking_reference,
           ownerId: booking.owner_id,
           dogId: booking.dog_id,
+          dogIds: [booking.dog_id],
+          bookingType: booking.booking_type,
+          daycareSession: booking.daycare_session,
           startDate: booking.start_date,
           endDate: booking.end_date,
           status: booking.status,
           notes: booking.notes,
+          spaceUnits: booking.space_units,
+          availabilityConfirmationRequired:
+            booking.availability_confirmation_required,
           createdAt: booking.created_at,
         },
-        message: "The booking was created as Pending.",
+        availability: {
+          decision: availability.decision,
+          confirmationRequired: availability.availabilityConfirmationRequired,
+          unconfiguredDates: availability.unconfiguredDates,
+          sharedDates: availability.sharedDates,
+        },
+        warning,
+        message: warning || "The booking was created as Pending.",
       },
       {
         status: 201,
       },
     );
   } catch (error) {
-    console.error("Admin customer booking creation failed:", error);
+    console.error("Administrator V2 booking creation failed:", error);
 
     return NextResponse.json(
       {
