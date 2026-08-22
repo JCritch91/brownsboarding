@@ -171,6 +171,8 @@ export async function POST(request: Request) {
         booking_reference,
         owner_id,
         dog_id,
+        booking_type,
+        daycare_session,
         start_date,
         end_date,
         status,
@@ -263,24 +265,30 @@ export async function POST(request: Request) {
       );
     }
 
-    const { data: dog, error: dogLoadError } = await supabaseAdmin
-      .from("dogs")
-      .select(
-        `
-        id,
-        owner_id,
-        name,
-        breed
+    const { data: bookingDogLinkData, error: bookingDogsLoadError } =
+      await supabaseAdmin
+        .from("booking_dogs")
+        .select(
+          `
+        dog_id,
+        sort_order,
+        dogs (
+          id,
+          owner_id,
+          name,
+          breed
+        )
         `,
-      )
-      .eq("id", booking.dog_id)
-      .eq("owner_id", booking.owner_id)
-      .maybeSingle();
+        )
+        .eq("booking_id", booking.id)
+        .order("sort_order", {
+          ascending: true,
+        });
 
-    if (dogLoadError) {
+    if (bookingDogsLoadError) {
       return NextResponse.json(
         {
-          error: dogLoadError.message,
+          error: bookingDogsLoadError.message,
         },
         {
           status: 500,
@@ -288,15 +296,52 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!dog) {
-      return NextResponse.json(
-        {
-          error: "The dog associated with this booking could not be found.",
-        },
-        {
-          status: 404,
-        },
-      );
+    const linkedDogs = (bookingDogLinkData || [])
+      .map((bookingDogLink) =>
+        Array.isArray(bookingDogLink.dogs)
+          ? bookingDogLink.dogs[0]
+          : bookingDogLink.dogs,
+      )
+      .filter((dog): dog is NonNullable<typeof dog> => Boolean(dog));
+
+    if (linkedDogs.length === 0) {
+      const { data: legacyDog, error: legacyDogError } = await supabaseAdmin
+        .from("dogs")
+        .select(
+          `
+            id,
+            owner_id,
+            name,
+            breed
+            `,
+        )
+        .eq("id", booking.dog_id)
+        .eq("owner_id", booking.owner_id)
+        .maybeSingle();
+
+      if (legacyDogError) {
+        return NextResponse.json(
+          {
+            error: legacyDogError.message,
+          },
+          {
+            status: 500,
+          },
+        );
+      }
+
+      if (!legacyDog) {
+        return NextResponse.json(
+          {
+            error: "The dogs associated with this booking could not be found.",
+          },
+          {
+            status: 404,
+          },
+        );
+      }
+
+      linkedDogs.push(legacyDog);
     }
 
     /*
@@ -431,9 +476,22 @@ export async function POST(request: Request) {
       customer.email ||
       "Customer";
 
-    const dogName = formatName(dog.name || "") || "Dog";
+    const dogNames = linkedDogs
+      .map((dog) => formatName(String(dog.name || "")))
+      .filter(Boolean);
 
-    const dogBreed = dog.breed ? formatName(dog.breed) : null;
+    const dogName =
+      dogNames.length === 0
+        ? "Dog"
+        : dogNames.length === 1
+          ? dogNames[0]
+          : `${dogNames[0]} and ${dogNames[1]}`;
+
+    const dogBreeds = linkedDogs
+      .map((dog) => (dog.breed ? formatName(String(dog.breed)) : ""))
+      .filter(Boolean);
+
+    const dogBreed = dogBreeds.length > 0 ? dogBreeds.join(", ") : null;
 
     const newStatus =
       paymentType === "Deposit" ? "Balance Pending" : "Balance Paid";
@@ -455,6 +513,8 @@ export async function POST(request: Request) {
         ownerEmail: customer.email || null,
         dogName,
         dogBreed,
+        bookingType: booking.booking_type,
+        daycareSession: booking.daycare_session,
         startDate: booking.start_date,
         endDate: booking.end_date,
         bookingStatus: newStatus,
