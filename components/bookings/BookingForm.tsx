@@ -11,6 +11,8 @@ import MessageBox from "@/components/MessageBox";
 import { FormSelect, FormTextarea } from "@/components/FormInput";
 import type { Availability } from "@/types/availability";
 
+import type { BookingType, DaycareSessionType } from "@/types/booking";
+
 export type BookingFormDog = {
   id: string;
   name: string;
@@ -18,6 +20,7 @@ export type BookingFormDog = {
   meet_and_greet_completed: boolean | null;
   vaccinated: boolean | null;
   vaccination_expiry: string | null;
+  can_share_with_other_dogs: boolean;
 };
 
 export type BookingFormAvailability = Availability;
@@ -26,17 +29,18 @@ type BookingFormProps = {
   dogs: BookingFormDog[];
   availability: BookingFormAvailability[];
 
-  selectedDog: string;
+  selectedDogIds: string[];
+  bookingType: BookingType;
+  daycareSession: DaycareSessionType | null;
   selectedRange: DateRange | undefined;
-
   startDate: string;
   endDate: string;
   notes: string;
-
   calendarMonths: number;
 
-  projectedNights: number;
-  nightlyRate: number | null;
+  projectedQuantity: number;
+  projectedUnitLabel: string;
+  projectedUnitRate: number | null;
   projectedTotal: number;
   projectedDeposit: number;
   projectedBalance: number;
@@ -56,7 +60,9 @@ type BookingFormProps = {
   additionalActions?: ReactNode;
   additionalFields?: ReactNode;
 
-  onDogChange: (dogId: string) => void;
+  onDogSelectionChange: (dogIds: string[]) => void;
+  onBookingTypeChange: (bookingType: BookingType) => void;
+  onDaycareSessionChange: (daycareSession: DaycareSessionType) => void;
   onDateRangeSelect: (range: DateRange | undefined) => void;
   onClearDates: () => void;
   onNotesChange: (notes: string) => void;
@@ -70,14 +76,17 @@ type BookingFormProps = {
 
 export default function BookingForm({
   dogs,
-  selectedDog,
+  selectedDogIds,
+  bookingType,
+  daycareSession,
   selectedRange,
   startDate,
   endDate,
   notes,
   calendarMonths,
-  projectedNights,
-  nightlyRate,
+  projectedQuantity,
+  projectedUnitLabel,
+  projectedUnitRate,
   projectedTotal,
   projectedDeposit,
   projectedBalance,
@@ -92,7 +101,9 @@ export default function BookingForm({
   summaryMessage = "Your booking request will be reviewed by Browns Boarding before confirmation. Any projected cost shown is an estimate. The final cost and deposit amount will be confirmed before your booking is accepted.",
   additionalActions,
   additionalFields,
-  onDogChange,
+  onDogSelectionChange,
+  onBookingTypeChange,
+  onDaycareSessionChange,
   onDateRangeSelect,
   onClearDates,
   onNotesChange,
@@ -102,6 +113,21 @@ export default function BookingForm({
   isLimitedAvailabilityDate,
   isGoodAvailabilityDate,
 }: BookingFormProps) {
+  function toggleDogSelection(dogId: string) {
+    if (selectedDogIds.includes(dogId)) {
+      onDogSelectionChange(
+        selectedDogIds.filter((selectedDogId) => selectedDogId !== dogId),
+      );
+
+      return;
+    }
+
+    if (selectedDogIds.length >= 2) {
+      return;
+    }
+
+    onDogSelectionChange([...selectedDogIds, dogId]);
+  }
   return (
     <div>
       {introductoryMessage && (
@@ -119,22 +145,139 @@ export default function BookingForm({
             Select Dog
           </h2>
 
-          <FormSelect
-            id="dog"
-            label="Dog"
-            value={selectedDog}
-            onChange={(event) => onDogChange(event.target.value)}
-            required
-          >
-            <option value="">Select a dog</option>
+          <p className="mb-4 text-sm text-[#8B6A4E] md:text-base">
+            Select one or two dogs from the same household for this booking.
+          </p>
 
-            {dogs.map((dog) => (
-              <option key={dog.id} value={dog.id}>
-                {dog.name}
-                {dog.breed ? ` • ${dog.breed}` : ""}
-              </option>
-            ))}
-          </FormSelect>
+          <div className="grid gap-3 md:grid-cols-2">
+            {dogs.map((dog) => {
+              const selected = selectedDogIds.includes(dog.id);
+
+              const selectionLimitReached =
+                selectedDogIds.length >= 2 && !selected;
+
+              return (
+                <label
+                  key={dog.id}
+                  className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors ${
+                    selected
+                      ? "border-[#8B6A4E] bg-[#F5EFE6]"
+                      : "border-[#D9CBB8] bg-white hover:bg-[#FFFDF9]"
+                  } ${
+                    selectionLimitReached ? "cursor-not-allowed opacity-60" : ""
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selected}
+                    disabled={selectionLimitReached}
+                    onChange={() => toggleDogSelection(dog.id)}
+                    className="mt-1 h-5 w-5 accent-[#8B6A4E]"
+                  />
+
+                  <span>
+                    <span className="block font-semibold text-[#5C4033]">
+                      {dog.name}
+                    </span>
+
+                    {dog.breed && (
+                      <span className="mt-1 block text-sm text-[#8B6A4E]">
+                        {dog.breed}
+                      </span>
+                    )}
+
+                    {!dog.can_share_with_other_dogs && (
+                      <span className="mt-2 block text-xs font-medium text-amber-700">
+                        Must not share with dogs from another household
+                      </span>
+                    )}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+
+          <p className="mt-3 text-sm text-[#8B6A4E]">
+            {selectedDogIds.length} of 2 dogs selected
+          </p>
+        </section>
+
+        <section>
+          <h2 className="mb-4 text-xl font-semibold text-[#5C4033] md:mb-6 md:text-2xl">
+            Select Service
+          </h2>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <label
+              className={`cursor-pointer rounded-xl border p-4 transition-colors ${
+                bookingType === "boarding"
+                  ? "border-[#8B6A4E] bg-[#F5EFE6]"
+                  : "border-[#D9CBB8] bg-white hover:bg-[#FFFDF9]"
+              }`}
+            >
+              <input
+                type="radio"
+                name="bookingType"
+                value="boarding"
+                checked={bookingType === "boarding"}
+                onChange={() => onBookingTypeChange("boarding")}
+                className="mr-3 accent-[#8B6A4E]"
+              />
+
+              <span className="font-semibold text-[#5C4033]">
+                Home Boarding
+              </span>
+
+              <span className="mt-2 block text-sm text-[#8B6A4E]">
+                An overnight stay with separate arrival and departure dates.
+              </span>
+            </label>
+
+            <label
+              className={`cursor-pointer rounded-xl border p-4 transition-colors ${
+                bookingType === "daycare"
+                  ? "border-[#8B6A4E] bg-[#F5EFE6]"
+                  : "border-[#D9CBB8] bg-white hover:bg-[#FFFDF9]"
+              }`}
+            >
+              <input
+                type="radio"
+                name="bookingType"
+                value="daycare"
+                checked={bookingType === "daycare"}
+                onChange={() => onBookingTypeChange("daycare")}
+                className="mr-3 accent-[#8B6A4E]"
+              />
+
+              <span className="font-semibold text-[#5C4033]">
+                Doggy Day Care
+              </span>
+
+              <span className="mt-2 block text-sm text-[#8B6A4E]">
+                Care on one selected attendance date.
+              </span>
+            </label>
+          </div>
+
+          {bookingType === "daycare" && (
+            <div className="mt-4">
+              <FormSelect
+                id="daycareSession"
+                label="Day Care Session"
+                value={daycareSession || ""}
+                onChange={(event) =>
+                  onDaycareSessionChange(
+                    event.target.value as DaycareSessionType,
+                  )
+                }
+                required
+              >
+                <option value="">Select a session</option>
+                <option value="full_day">Full Day</option>
+                <option value="half_day">Half Day</option>
+              </FormSelect>
+            </div>
+          )}
         </section>
 
         {/* Admin-specific fields */}
@@ -143,7 +286,7 @@ export default function BookingForm({
         {/* Availability calendar */}
         <section>
           <h2 className="mb-4 text-xl font-semibold text-[#5C4033] md:mb-6 md:text-2xl">
-            Stay Dates
+            {bookingType === "daycare" ? "Attendance Date" : "Stay Dates"}
           </h2>
 
           <div className="overflow-x-auto rounded-xl border border-[#D9CBB8] bg-white p-3 shadow-sm md:p-6">
@@ -213,18 +356,22 @@ export default function BookingForm({
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-sm font-medium text-[#5C4033] md:text-base">
-                    Selected dates
+                    {bookingType === "daycare"
+                      ? "Selected attendance date"
+                      : "Selected dates"}
                   </p>
 
                   <p className="mt-1 text-sm text-[#8B6A4E] md:text-base">
-                    Arrival:{" "}
+                    {bookingType === "daycare" ? "Attendance" : "Arrival"}:{" "}
                     {startDate ? formatDisplayDate(startDate) : "Not selected"}
                   </p>
 
-                  <p className="text-sm text-[#8B6A4E] md:text-base">
-                    Departure:{" "}
-                    {endDate ? formatDisplayDate(endDate) : "Not selected"}
-                  </p>
+                  {bookingType === "boarding" && (
+                    <p className="text-sm text-[#8B6A4E] md:text-base">
+                      Departure:{" "}
+                      {endDate ? formatDisplayDate(endDate) : "Not selected"}
+                    </p>
+                  )}
                 </div>
 
                 <Button type="button" variant="light" onClick={onClearDates}>
@@ -240,11 +387,13 @@ export default function BookingForm({
                 Projected Stay Cost
               </p>
 
-              <p className="mt-2 text-sm text-[#8B6A4E] md:text-base">
-                {projectedNights} night
-                {projectedNights === 1 ? "" : "s"} at {formatMoney(nightlyRate)}{" "}
-                per night.
-              </p>
+              {projectedQuantity > 0 && projectedUnitRate !== null && (
+                <p className="mt-2 text-sm text-[#8B6A4E] md:text-base">
+                  {projectedQuantity} {projectedUnitLabel}
+                  {projectedQuantity === 1 ? "" : "s"} at{" "}
+                  {formatMoney(projectedUnitRate)}.
+                </p>
+              )}
 
               <p className="mt-1 text-sm text-[#8B6A4E] md:text-base">
                 Estimated total cost: {formatMoney(projectedTotal)}

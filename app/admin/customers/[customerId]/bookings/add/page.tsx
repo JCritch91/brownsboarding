@@ -28,6 +28,7 @@ import BookingForm, {
   type BookingFormAvailability,
   type BookingFormDog,
 } from "@/components/bookings/BookingForm";
+import type { BookingType, DaycareSessionType } from "@/types/booking";
 
 type CreateAdminBookingResponse = {
   success: boolean;
@@ -37,10 +38,15 @@ type CreateAdminBookingResponse = {
     bookingReference: string;
     ownerId: string;
     dogId: string;
+    dogIds: string[];
+    bookingType: BookingType;
+    daycareSession: DaycareSessionType | null;
     startDate: string;
     endDate: string;
     status: "Pending";
     notes?: string | null;
+    spaceUnits: number;
+    availabilityConfirmationRequired: boolean;
     createdAt?: string | null;
   };
   message?: string;
@@ -86,7 +92,12 @@ export default function AdminAddCustomerBookingPage() {
     [],
   );
 
-  const [selectedDog, setSelectedDog] = useState("");
+  const [selectedDogIds, setSelectedDogIds] = useState<string[]>([]);
+
+  const [bookingType, setBookingType] = useState<BookingType>("boarding");
+
+  const [daycareSession, setDaycareSession] =
+    useState<DaycareSessionType | null>(null);
 
   const [startDate, setStartDate] = useState("");
 
@@ -98,11 +109,13 @@ export default function AdminAddCustomerBookingPage() {
 
   const [calendarMonths, setCalendarMonths] = useState(1);
 
-  const [nightlyRate, setNightlyRate] = useState<number | null>(null);
-
-  const [depositPercentage, setDepositPercentage] = useState<number | null>(
-    null,
-  );
+  const [pricing, setPricing] = useState<{
+    boardingNightlyRate: number;
+    boardingDepositPercentage: number;
+    daycareFullDayRate: number;
+    daycareHalfDayRate: number;
+    daycareDepositPercentage: number;
+  } | null>(null);
 
   const [message, setMessage] = useState("");
 
@@ -172,8 +185,9 @@ export default function AdminAddCustomerBookingPage() {
           name,
           breed,
           meet_and_greet_completed,
-          vaccinated,
-          vaccination_expiry
+vaccinated,
+vaccination_expiry,
+can_share_with_other_dogs
           `,
         )
         .eq("owner_id", customerId)
@@ -235,9 +249,13 @@ export default function AdminAddCustomerBookingPage() {
         throw new Error("No active pricing settings were found.");
       }
 
-      setNightlyRate(Number(pricing.nightly_rate));
-
-      setDepositPercentage(Number(pricing.deposit_percentage));
+      setPricing({
+        boardingNightlyRate: Number(pricing.nightly_rate),
+        boardingDepositPercentage: Number(pricing.deposit_percentage),
+        daycareFullDayRate: Number(pricing.daycare_full_day_rate),
+        daycareHalfDayRate: Number(pricing.daycare_half_day_rate),
+        daycareDepositPercentage: Number(pricing.daycare_deposit_percentage),
+      });
     } catch (error) {
       setIsError(true);
       setMessage(
@@ -329,19 +347,50 @@ export default function AdminAddCustomerBookingPage() {
   }
 
   function handleDateRangeSelect(range: DateRange | undefined) {
-    setSelectedRange(range);
     setMessage("");
     setIsError(false);
 
     if (!range?.from) {
+      setSelectedRange(undefined);
       setStartDate("");
       setEndDate("");
       return;
     }
 
-    setStartDate(formatDateForDatabase(range.from));
+    const selectedDate = formatDateForDatabase(range.from);
 
-    setEndDate(range.to ? formatDateForDatabase(range.to) : "");
+    if (bookingType === "daycare") {
+      setSelectedRange({
+        from: range.from,
+        to: range.from,
+      });
+
+      setStartDate(selectedDate);
+      setEndDate(selectedDate);
+      return;
+    }
+
+    setSelectedRange(range);
+    setStartDate(selectedDate);
+
+    if (range.to) {
+      setEndDate(formatDateForDatabase(range.to));
+    } else {
+      setEndDate("");
+    }
+  }
+
+  function handleBookingTypeChange(nextBookingType: BookingType) {
+    setBookingType(nextBookingType);
+    setMessage("");
+    setIsError(false);
+    setSelectedRange(undefined);
+    setStartDate("");
+    setEndDate("");
+
+    if (nextBookingType === "boarding") {
+      setDaycareSession(null);
+    }
   }
 
   function clearDateSelection() {
@@ -350,54 +399,6 @@ export default function AdminAddCustomerBookingPage() {
     setEndDate("");
     setMessage("");
     setIsError(false);
-  }
-
-  function checkAvailabilityForRange(
-    rangeStartDate: string,
-    rangeEndDate: string,
-  ) {
-    const occupiedDates = getDatesInRange(rangeStartDate, rangeEndDate);
-
-    /*
-     * The departure date is excluded
-     * because the dog does not occupy
-     * a boarding space that night.
-     */
-    occupiedDates.pop();
-
-    for (const occupiedDate of occupiedDates) {
-      const availabilityRecord = availability.find(
-        (record) => record.date === occupiedDate,
-      );
-
-      if (!availabilityRecord) {
-        return {
-          available: false,
-          message: `No availability has been configured for ${formatDisplayDate(
-            occupiedDate,
-          )}.`,
-        };
-      }
-
-      if (!availabilityRecord.available) {
-        return {
-          available: false,
-          message: `${formatDisplayDate(occupiedDate)} is unavailable.`,
-        };
-      }
-
-      if (availabilityRecord.spaces_available <= 0) {
-        return {
-          available: false,
-          message: `${formatDisplayDate(occupiedDate)} is fully booked.`,
-        };
-      }
-    }
-
-    return {
-      available: true,
-      message: "",
-    };
   }
 
   async function handleBooking(event: FormEvent<HTMLFormElement>) {
@@ -422,40 +423,82 @@ export default function AdminAddCustomerBookingPage() {
       return;
     }
 
-    if (!selectedDog) {
+    if (selectedDogIds.length === 0) {
       setIsError(true);
-      setMessage("Please select a dog.");
+      setMessage("Please select at least one dog.");
       return;
     }
 
-    const validationMessage = validateBookingDates(startDate, endDate);
-
-    if (validationMessage) {
+    if (selectedDogIds.length > 2) {
       setIsError(true);
-      setMessage(validationMessage);
+      setMessage("A booking can include no more than two dogs.");
       return;
     }
 
-    const dog = dogs.find((currentDog) => currentDog.id === selectedDog);
-
-    if (!dog) {
+    if (bookingType === "daycare" && !daycareSession) {
       setIsError(true);
-      setMessage("Unable to find the selected dog.");
+      setMessage("Please select a full-day or half-day daycare session.");
       return;
     }
 
-    const availabilityCheck = checkAvailabilityForRange(startDate, endDate);
-
-    if (!availabilityCheck.available) {
+    if (!startDate) {
       setIsError(true);
-      setMessage(availabilityCheck.message);
+      setMessage(
+        bookingType === "daycare"
+          ? "Please select an attendance date."
+          : "Please select an arrival date.",
+      );
       return;
     }
 
-    if (
-      bookingMode === "confirmed" &&
-      (nightlyRate === null || depositPercentage === null)
-    ) {
+    if (bookingType === "boarding" && (!endDate || endDate <= startDate)) {
+      setIsError(true);
+      setMessage("A Boarding booking must end after its arrival date.");
+      return;
+    }
+
+    if (bookingType === "daycare" && endDate !== startDate) {
+      setIsError(true);
+      setMessage(
+        "A Doggy Day Care booking must start and end on the same date.",
+      );
+      return;
+    }
+
+    const selectedDogs = selectedDogIds
+      .map((dogId) => dogs.find((dog) => dog.id === dogId))
+      .filter((dog): dog is BookingFormDog => Boolean(dog));
+
+    if (selectedDogs.length !== selectedDogIds.length) {
+      setIsError(true);
+      setMessage("One or more selected dogs could not be found.");
+      return;
+    }
+
+    const occupiedDates =
+      bookingType === "daycare"
+        ? [startDate]
+        : getDatesInRange(startDate, endDate).slice(0, -1);
+
+    const explicitlyUnavailableDate = occupiedDates.find((occupiedDate) => {
+      const availabilityRecord = availability.find(
+        (record) => record.date === occupiedDate,
+      );
+
+      return availabilityRecord && !availabilityRecord.available;
+    });
+
+    if (explicitlyUnavailableDate) {
+      setIsError(true);
+      setMessage(
+        `${formatDisplayDate(
+          explicitlyUnavailableDate,
+        )} has been marked as unavailable.`,
+      );
+      return;
+    }
+
+    if (bookingMode === "confirmed" && !pricing) {
       setIsError(true);
       setMessage("The active pricing settings could not be loaded.");
       return;
@@ -468,7 +511,9 @@ export default function AdminAddCustomerBookingPage() {
         `/api/admin/customers/${customerId}/bookings/create`,
         {
           body: {
-            dogId: selectedDog,
+            dogIds: selectedDogIds,
+            bookingType,
+            daycareSession: bookingType === "daycare" ? daycareSession : null,
             startDate,
             endDate,
             notes,
@@ -505,26 +550,21 @@ export default function AdminAddCustomerBookingPage() {
 
     const newBooking = creationResult.data.booking;
 
-    /*
-     * Pending mode stops after secure
-     * creation. No availability,
-     * calendar or email operations are
-     * performed.
-     */
     if (bookingMode === "pending") {
       setSaving(false);
-
       window.location.href = `/admin/customers/${customerId}`;
-
       return;
     }
 
-    /*
-     * Confirm Immediately passes the
-     * new Pending booking to the
-     * existing secure confirmation
-     * route.
-     */
+    if (newBooking.availabilityConfirmationRequired) {
+      setSaving(false);
+      setIsError(false);
+      setMessage(
+        "The booking was created as Pending because one or more dates require an availability review. Confirm availability from Admin Bookings before confirming the booking.",
+      );
+      return;
+    }
+
     const confirmationResult =
       await authenticatedApiRequest<ConfirmAdminBookingResponse>(
         "/api/admin/bookings/confirm",
@@ -542,12 +582,6 @@ export default function AdminAddCustomerBookingPage() {
       return;
     }
 
-    /*
-     * A failed confirmation leaves the
-     * booking as Pending. It can be
-     * confirmed later from Admin
-     * Bookings.
-     */
     if (!confirmationResult.ok) {
       setIsError(true);
       setMessage(
@@ -584,12 +618,39 @@ export default function AdminAddCustomerBookingPage() {
     window.location.href = `/admin/customers/${customerId}`;
   }
 
-  const projectedNights =
-    startDate && endDate ? calculateNumberOfNights(startDate, endDate) : 0;
+  const projectedQuantity =
+    bookingType === "daycare"
+      ? startDate
+        ? 1
+        : 0
+      : startDate && endDate && endDate > startDate
+        ? calculateNumberOfNights(startDate, endDate)
+        : 0;
+
+  const projectedUnitRate =
+    bookingType === "boarding"
+      ? (pricing?.boardingNightlyRate ?? null)
+      : daycareSession === "full_day"
+        ? (pricing?.daycareFullDayRate ?? null)
+        : daycareSession === "half_day"
+          ? (pricing?.daycareHalfDayRate ?? null)
+          : null;
+
+  const projectedUnitLabel =
+    bookingType === "boarding"
+      ? "night"
+      : daycareSession === "half_day"
+        ? "half day"
+        : "full day";
+
+  const projectedDepositPercentage =
+    bookingType === "boarding"
+      ? (pricing?.boardingDepositPercentage ?? null)
+      : (pricing?.daycareDepositPercentage ?? null);
 
   const projectedTotal =
-    nightlyRate !== null && projectedNights > 0
-      ? nightlyRate * projectedNights
+    projectedUnitRate !== null && projectedQuantity > 0
+      ? projectedUnitRate * projectedQuantity
       : 0;
 
   const isProjectedShortNotice = startDate
@@ -598,8 +659,8 @@ export default function AdminAddCustomerBookingPage() {
 
   const projectedDeposit = isProjectedShortNotice
     ? 0
-    : depositPercentage !== null && projectedTotal > 0
-      ? projectedTotal * (depositPercentage / 100)
+    : projectedDepositPercentage !== null && projectedTotal > 0
+      ? projectedTotal * (projectedDepositPercentage / 100)
       : 0;
 
   const projectedBalance = projectedTotal - projectedDeposit;
@@ -635,14 +696,17 @@ export default function AdminAddCustomerBookingPage() {
           <BookingForm
             dogs={dogs}
             availability={availability}
-            selectedDog={selectedDog}
+            selectedDogIds={selectedDogIds}
+            bookingType={bookingType}
+            daycareSession={daycareSession}
             selectedRange={selectedRange}
             startDate={startDate}
             endDate={endDate}
             notes={notes}
             calendarMonths={calendarMonths}
-            projectedNights={projectedNights}
-            nightlyRate={nightlyRate}
+            projectedQuantity={projectedQuantity}
+            projectedUnitLabel={projectedUnitLabel}
+            projectedUnitRate={projectedUnitRate}
             projectedTotal={projectedTotal}
             projectedDeposit={projectedDeposit}
             projectedBalance={projectedBalance}
@@ -731,13 +795,15 @@ export default function AdminAddCustomerBookingPage() {
               </section>
             }
             cancelHref={`/admin/customers/${customerId}`}
-            introductoryMessage={`Create a booking for ${getCustomerName()}. Choose whether to leave it pending or confirm it immediately.`}
+            introductoryMessage={`Create a Boarding or Doggy Day Care booking for ${getCustomerName()}. Select one or two dogs from the customer's household, then choose whether to leave the booking Pending or confirm it immediately.`}
             summaryMessage={
               bookingMode === "confirmed"
-                ? "This booking will be confirmed immediately. Availability will be reduced, Google Calendar will be updated and the customer will receive a confirmation email."
+                ? "This booking will be confirmed immediately when configured or compatible shared availability is available. If one or more dates require an availability review, the booking will remain Pending instead."
                 : "This booking will be created as Pending. It can then be reviewed and confirmed from Admin Bookings."
             }
-            onDogChange={setSelectedDog}
+            onDogSelectionChange={setSelectedDogIds}
+            onBookingTypeChange={handleBookingTypeChange}
+            onDaycareSessionChange={setDaycareSession}
             onDateRangeSelect={handleDateRangeSelect}
             onClearDates={clearDateSelection}
             onNotesChange={setNotes}

@@ -11,7 +11,6 @@ import {
   getDatesInRange,
   calculateNumberOfNights,
   isWithinTwoWeeks,
-  validateBookingDates,
 } from "@/lib/helpers";
 import CustomerPageLayout from "@/components/CustomerPageLayout";
 import PageCard from "@/components/PageCard";
@@ -22,6 +21,7 @@ import BookingForm, {
 } from "@/components/bookings/BookingForm";
 import type { Availability } from "@/types/availability";
 import { authenticatedApiRequest } from "@/lib/client/authenticated-api";
+import type { BookingType, DaycareSessionType } from "@/types/booking";
 
 type CreateBookingResponse = {
   success: boolean;
@@ -49,17 +49,25 @@ export default function BookingsPage() {
 
   const [availability, setAvailability] = useState<Availability[]>([]);
 
-  const [selectedDog, setSelectedDog] = useState("");
+  const [selectedDogIds, setSelectedDogIds] = useState<string[]>([]);
+
+  const [bookingType, setBookingType] = useState<BookingType>("boarding");
+
+  const [daycareSession, setDaycareSession] =
+    useState<DaycareSessionType | null>(null);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [notes, setNotes] = useState("");
   const [selectedRange, setSelectedRange] = useState<DateRange | undefined>();
   const [calendarMonths, setCalendarMonths] = useState(1);
 
-  const [nightlyRate, setNightlyRate] = useState<number | null>(null);
-  const [depositPercentage, setDepositPercentage] = useState<number | null>(
-    null,
-  );
+  const [pricing, setPricing] = useState<{
+    boardingNightlyRate: number;
+    boardingDepositPercentage: number;
+    daycareFullDayRate: number;
+    daycareHalfDayRate: number;
+    daycareDepositPercentage: number;
+  } | null>(null);
 
   useEffect(() => {
     loadPageData();
@@ -82,7 +90,7 @@ export default function BookingsPage() {
     const { data: dogsData, error: dogsError } = await supabase
       .from("dogs")
       .select(
-        "id, name, breed, meet_and_greet_completed, vaccinated, vaccination_expiry",
+        "id, name, breed, meet_and_greet_completed, vaccinated,vaccination_expiry,can_share_with_other_dogs",
       )
       .eq("owner_id", user.id)
       .eq("active", true)
@@ -118,8 +126,15 @@ export default function BookingsPage() {
       const pricingData = await getActivePricingSettings();
 
       if (pricingData) {
-        setNightlyRate(Number(pricingData.nightly_rate));
-        setDepositPercentage(Number(pricingData.deposit_percentage));
+        setPricing({
+          boardingNightlyRate: Number(pricingData.nightly_rate),
+          boardingDepositPercentage: Number(pricingData.deposit_percentage),
+          daycareFullDayRate: Number(pricingData.daycare_full_day_rate),
+          daycareHalfDayRate: Number(pricingData.daycare_half_day_rate),
+          daycareDepositPercentage: Number(
+            pricingData.daycare_deposit_percentage,
+          ),
+        });
       }
     } catch (error) {
       setIsError(true);
@@ -248,22 +263,48 @@ export default function BookingsPage() {
   }
 
   function handleDateRangeSelect(range: DateRange | undefined) {
-    setSelectedRange(range);
     setMessage("");
     setIsError(false);
 
     if (!range?.from) {
+      setSelectedRange(undefined);
       setStartDate("");
       setEndDate("");
       return;
     }
 
-    setStartDate(formatDateForDatabase(range.from));
+    const selectedDate = formatDateForDatabase(range.from);
+
+    if (bookingType === "daycare") {
+      setSelectedRange({
+        from: range.from,
+        to: range.from,
+      });
+
+      setStartDate(selectedDate);
+      setEndDate(selectedDate);
+      return;
+    }
+
+    setSelectedRange(range);
+    setStartDate(selectedDate);
 
     if (range.to) {
       setEndDate(formatDateForDatabase(range.to));
     } else {
       setEndDate("");
+    }
+  }
+
+  function handleBookingTypeChange(nextBookingType: BookingType) {
+    setBookingType(nextBookingType);
+    setMessage("");
+    setIsError(false);
+
+    clearDateSelection();
+
+    if (nextBookingType === "boarding") {
+      setDaycareSession(null);
     }
   }
 
@@ -275,55 +316,108 @@ export default function BookingsPage() {
     setIsError(false);
   }
 
-  async function handleBooking(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  async function handleBooking(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (saving) {
+      return;
+    }
 
     setMessage("");
     setIsError(false);
 
-    if (!selectedDog) {
+    if (selectedDogIds.length === 0) {
       setIsError(true);
-      setMessage("Please select a dog.");
+      setMessage("Please select at least one dog.");
       return;
     }
 
-    const validationMessage = validateBookingDates(startDate, endDate);
-
-    if (validationMessage) {
+    if (selectedDogIds.length > 2) {
       setIsError(true);
-      setMessage(validationMessage);
+      setMessage("A booking can include no more than two dogs.");
       return;
     }
 
-    const dog = dogs.find((currentDog) => currentDog.id === selectedDog);
-
-    if (!dog) {
+    if (bookingType === "daycare" && !daycareSession) {
       setIsError(true);
-      setMessage("Unable to find selected dog.");
+      setMessage("Please select a full-day or half-day daycare session.");
       return;
     }
 
-    if (!dog.vaccinated) {
+    if (!startDate) {
       setIsError(true);
       setMessage(
-        "This dog cannot be booked because vaccination information is incomplete.",
+        bookingType === "daycare"
+          ? "Please select an attendance date."
+          : "Please select an arrival date.",
       );
       return;
     }
 
-    if (dog.vaccination_expiry && dog.vaccination_expiry < startDate) {
+    if (bookingType === "boarding" && (!endDate || endDate <= startDate)) {
+      setIsError(true);
+      setMessage("A Boarding booking must end after its arrival date.");
+      return;
+    }
+
+    if (bookingType === "daycare" && endDate !== startDate) {
       setIsError(true);
       setMessage(
-        "This dog's vaccination will have expired before the booking starts.",
+        "A Doggy Day Care booking must start and end on the same date.",
       );
       return;
     }
 
-    const availabilityCheck = checkAvailabilityForRange(startDate, endDate);
+    const selectedDogs = selectedDogIds
+      .map((dogId) => dogs.find((dog) => dog.id === dogId))
+      .filter((dog): dog is BookingFormDog => Boolean(dog));
 
-    if (!availabilityCheck.available) {
+    if (selectedDogs.length !== selectedDogIds.length) {
       setIsError(true);
-      setMessage(availabilityCheck.message);
+      setMessage("One or more selected dogs could not be found.");
+      return;
+    }
+
+    for (const dog of selectedDogs) {
+      if (!dog.vaccinated) {
+        setIsError(true);
+        setMessage(`${dog.name}'s vaccination information is incomplete.`);
+        return;
+      }
+
+      if (!dog.vaccination_expiry) {
+        setIsError(true);
+        setMessage(`${dog.name}'s vaccination expiry date is missing.`);
+        return;
+      }
+
+      if (dog.vaccination_expiry < startDate) {
+        setIsError(true);
+        setMessage(
+          `${dog.name}'s vaccination will have expired before the booking begins.`,
+        );
+        return;
+      }
+    }
+
+    const occupiedDates =
+      bookingType === "daycare"
+        ? [startDate]
+        : getDatesInRange(startDate, endDate).slice(0, -1);
+
+    const explicitlyUnavailableDate = occupiedDates.find((occupiedDate) => {
+      const availabilityRecord = availability.find(
+        (record) => record.date === occupiedDate,
+      );
+
+      return availabilityRecord && !availabilityRecord.available;
+    });
+
+    if (explicitlyUnavailableDate) {
+      setIsError(true);
+      setMessage(
+        `${explicitlyUnavailableDate} has been marked as unavailable.`,
+      );
       return;
     }
 
@@ -333,7 +427,9 @@ export default function BookingsPage() {
       "/api/bookings/create",
       {
         body: {
-          dogId: selectedDog,
+          dogIds: selectedDogIds,
+          bookingType,
+          daycareSession: bookingType === "daycare" ? daycareSession : null,
           startDate,
           endDate,
           notes,
@@ -369,10 +465,12 @@ export default function BookingsPage() {
 
     setMessage(
       result.data.message ||
-        "Booking request submitted successfully. Browns Boarding will review your request and confirm the final cost and deposit details.",
+        "Booking request submitted successfully. Browns Boarding will review your request and confirm the final cost and payment details.",
     );
 
-    setSelectedDog("");
+    setSelectedDogIds([]);
+    setBookingType("boarding");
+    setDaycareSession(null);
     setStartDate("");
     setEndDate("");
     setNotes("");
@@ -383,12 +481,39 @@ export default function BookingsPage() {
     return <LoadingScreen message="Loading booking form..." />;
   }
 
-  const projectedNights =
-    startDate && endDate ? calculateNumberOfNights(startDate, endDate) : 0;
+  const projectedQuantity =
+    bookingType === "daycare"
+      ? startDate
+        ? 1
+        : 0
+      : startDate && endDate && endDate > startDate
+        ? calculateNumberOfNights(startDate, endDate)
+        : 0;
+
+  const projectedUnitRate =
+    bookingType === "boarding"
+      ? (pricing?.boardingNightlyRate ?? null)
+      : daycareSession === "full_day"
+        ? (pricing?.daycareFullDayRate ?? null)
+        : daycareSession === "half_day"
+          ? (pricing?.daycareHalfDayRate ?? null)
+          : null;
+
+  const projectedUnitLabel =
+    bookingType === "boarding"
+      ? "night"
+      : daycareSession === "half_day"
+        ? "half day"
+        : "full day";
+
+  const projectedDepositPercentage =
+    bookingType === "boarding"
+      ? (pricing?.boardingDepositPercentage ?? null)
+      : (pricing?.daycareDepositPercentage ?? null);
 
   const projectedTotal =
-    nightlyRate !== null && projectedNights > 0
-      ? nightlyRate * projectedNights
+    projectedUnitRate !== null && projectedQuantity > 0
+      ? projectedUnitRate * projectedQuantity
       : 0;
 
   const isProjectedShortNotice = startDate
@@ -397,8 +522,8 @@ export default function BookingsPage() {
 
   const projectedDeposit = isProjectedShortNotice
     ? 0
-    : depositPercentage !== null && projectedTotal > 0
-      ? projectedTotal * (depositPercentage / 100)
+    : projectedDepositPercentage !== null && projectedTotal > 0
+      ? projectedTotal * (projectedDepositPercentage / 100)
       : 0;
 
   const projectedBalance = projectedTotal - projectedDeposit;
@@ -406,8 +531,8 @@ export default function BookingsPage() {
   return (
     <CustomerPageLayout>
       <PageCard
-        title="Book a Stay"
-        subtitle="Select your dog and preferred boarding dates."
+        title="Request a Booking"
+        subtitle="Select one or two dogs, choose Home Boarding or Doggy Day Care, and enter your preferred dates."
         actions={<Button href="/my-bookings">My Bookings</Button>}
       >
         {dogs.length === 0 ? (
@@ -424,14 +549,17 @@ export default function BookingsPage() {
           <BookingForm
             dogs={dogs}
             availability={availability}
-            selectedDog={selectedDog}
+            selectedDogIds={selectedDogIds}
+            bookingType={bookingType}
+            daycareSession={daycareSession}
             selectedRange={selectedRange}
             startDate={startDate}
             endDate={endDate}
             notes={notes}
             calendarMonths={calendarMonths}
-            projectedNights={projectedNights}
-            nightlyRate={nightlyRate}
+            projectedQuantity={projectedQuantity}
+            projectedUnitLabel={projectedUnitLabel}
+            projectedUnitRate={projectedUnitRate}
             projectedTotal={projectedTotal}
             projectedDeposit={projectedDeposit}
             projectedBalance={projectedBalance}
@@ -441,7 +569,10 @@ export default function BookingsPage() {
             isError={isError}
             submitLabel="Request Booking"
             savingLabel="Submitting Request..."
-            onDogChange={setSelectedDog}
+            introductoryMessage="You can include one or two dogs from your household in the same booking request. Dates shown without configured availability can still be requested, and Browns Boarding will confirm whether they can be accommodated."
+            onDogSelectionChange={setSelectedDogIds}
+            onBookingTypeChange={handleBookingTypeChange}
+            onDaycareSessionChange={setDaycareSession}
             onDateRangeSelect={handleDateRangeSelect}
             onClearDates={clearDateSelection}
             onNotesChange={setNotes}
