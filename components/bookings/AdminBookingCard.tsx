@@ -8,6 +8,8 @@ import type { BookingWithCustomer } from "@/types/booking";
 type AdminBookingCardProps = {
   booking: BookingWithCustomer;
 
+  onConfirmAvailability: (booking: BookingWithCustomer) => void | Promise<void>;
+
   onConfirm: (booking: BookingWithCustomer) => void | Promise<void>;
 
   onCancel: (booking: BookingWithCustomer) => void | Promise<void>;
@@ -29,6 +31,7 @@ function getCustomerName(booking: BookingWithCustomer) {
 
 export default function AdminBookingCard({
   booking,
+  onConfirmAvailability,
   onConfirm,
   onCancel,
   onMarkDepositPaid,
@@ -67,6 +70,44 @@ export default function AdminBookingCard({
             </p>
           )}
 
+          {booking.availability_confirmation_required && (
+            <div
+              className={`mt-4 rounded-lg border p-3 ${
+                booking.availability_confirmed_at
+                  ? "border-green-300 bg-green-50 text-green-800"
+                  : "border-amber-300 bg-amber-50 text-amber-800"
+              }`}
+            >
+              {booking.availability_confirmed_at ? (
+                <>
+                  <p className="font-semibold">Availability confirmed</p>
+
+                  <p className="mt-1 text-sm">
+                    Unconfigured availability was reviewed and approved for this
+                    booking.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="font-semibold">Availability review required</p>
+
+                  <p className="mt-1 text-sm">
+                    Availability had not been configured for one or more
+                    selected dates when this request was submitted.
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() => onConfirmAvailability(booking)}
+                    className="mt-3 inline-flex min-h-11 items-center justify-center rounded-lg border border-amber-500 bg-white px-4 py-2 text-sm font-semibold text-amber-800 transition-colors hover:bg-amber-100"
+                  >
+                    Confirm Availability
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
           <BookingPricingPanel booking={booking} />
 
           {booking.notes && (
@@ -78,7 +119,16 @@ export default function AdminBookingCard({
 
         <AdminBookingActions
           booking={booking}
-          onConfirm={onConfirm}
+          onConfirm={(selectedBooking) => {
+            if (
+              selectedBooking.availability_confirmation_required &&
+              !selectedBooking.availability_confirmed_at
+            ) {
+              return;
+            }
+
+            return onConfirm(selectedBooking);
+          }}
           onCancel={onCancel}
           onMarkDepositPaid={onMarkDepositPaid}
           onMarkBalancePaid={onMarkBalancePaid}

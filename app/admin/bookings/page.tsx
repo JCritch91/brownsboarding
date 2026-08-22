@@ -35,6 +35,15 @@ type BookingPaymentResponse = {
   error?: string;
 };
 
+type BookingAvailabilityConfirmationResponse = {
+  success: boolean;
+  availabilityConfirmed: boolean;
+  alreadyConfirmed: boolean;
+  createdAvailabilityDates: number;
+  message?: string;
+  error?: string;
+};
+
 type BookingConfirmationResponse = {
   success: boolean;
   databaseConfirmed: boolean;
@@ -84,6 +93,11 @@ export default function AdminBookingsPage() {
     useState<BookingWithCustomer | null>(null);
   const [confirmingBooking, setConfirmingBooking] = useState(false);
 
+  const [bookingToConfirmAvailability, setBookingToConfirmAvailability] =
+    useState<BookingWithCustomer | null>(null);
+
+  const [confirmingAvailability, setConfirmingAvailability] = useState(false);
+
   const [paymentAction, setPaymentAction] = useState<PaymentAction | null>(
     null,
   );
@@ -123,10 +137,16 @@ export default function AdminBookingsPage() {
         id,
         booking_reference,
         owner_id,
-        dog_id,
-        start_date,
-        end_date,
-        status,
+dog_id,
+booking_type,
+daycare_session,
+start_date,
+end_date,
+status,
+availability_confirmation_required,
+availability_confirmed_at,
+availability_confirmed_by,
+space_units,
         notes,
         created_at,
         pricing_setting_id,
@@ -188,8 +208,99 @@ export default function AdminBookingsPage() {
     setBookings(bookingsWithCustomers);
   }
 
+  function requestAvailabilityConfirmation(booking: BookingWithCustomer) {
+    if (confirmingAvailability) {
+      return;
+    }
+
+    if (
+      !booking.availability_confirmation_required ||
+      booking.availability_confirmed_at
+    ) {
+      setIsError(true);
+      setMessage("This booking does not require an availability review.");
+      return;
+    }
+
+    setMessage("");
+    setIsError(false);
+    setBookingToConfirmAvailability(booking);
+  }
+
+  async function confirmSelectedBookingAvailability() {
+    if (!bookingToConfirmAvailability || confirmingAvailability) {
+      return;
+    }
+
+    const booking = bookingToConfirmAvailability;
+
+    setConfirmingAvailability(true);
+    setMessage("");
+    setIsError(false);
+
+    const result =
+      await authenticatedApiRequest<BookingAvailabilityConfirmationResponse>(
+        "/api/admin/bookings/confirm-availability",
+        {
+          body: {
+            bookingId: booking.id,
+          },
+        },
+      );
+
+    if (result.unauthenticated) {
+      setConfirmingAvailability(false);
+      setBookingToConfirmAvailability(null);
+      window.location.href = "/login";
+      return;
+    }
+
+    if (!result.ok) {
+      setConfirmingAvailability(false);
+      setBookingToConfirmAvailability(null);
+      setIsError(true);
+      setMessage(
+        result.error || "Availability could not be confirmed for this booking.",
+      );
+      await loadBookings();
+      return;
+    }
+
+    if (!result.data || !result.data.availabilityConfirmed) {
+      setConfirmingAvailability(false);
+      setBookingToConfirmAvailability(null);
+      setIsError(true);
+      setMessage(
+        result.data?.error ||
+          "The availability service did not confirm the selected booking.",
+      );
+      await loadBookings();
+      return;
+    }
+
+    setConfirmingAvailability(false);
+    setBookingToConfirmAvailability(null);
+    setIsError(false);
+    setMessage(
+      result.data.message || "Availability was confirmed successfully.",
+    );
+
+    await loadBookings();
+  }
+
   function requestBookingConfirmation(booking: BookingWithCustomer) {
     if (confirmingBooking) {
+      return;
+    }
+
+    if (
+      booking.availability_confirmation_required &&
+      !booking.availability_confirmed_at
+    ) {
+      setIsError(true);
+      setMessage(
+        "Availability must be reviewed before this booking can be confirmed.",
+      );
       return;
     }
 
@@ -622,6 +733,7 @@ export default function AdminBookingsPage() {
                 <AdminBookingCard
                   key={booking.id}
                   booking={booking}
+                  onConfirmAvailability={requestAvailabilityConfirmation}
                   onConfirm={requestBookingConfirmation}
                   onCancel={requestBookingCancellation}
                   onMarkDepositPaid={markDepositPaid}
@@ -632,6 +744,87 @@ export default function AdminBookingsPage() {
           )}
         </div>
       </PageCard>
+
+      <ConfirmationModal
+        isOpen={bookingToConfirmAvailability !== null}
+        title="Confirm Availability"
+        confirmText="Confirm Availability"
+        cancelText="Review Later"
+        isConfirming={confirmingAvailability}
+        variant="primary"
+        onConfirm={confirmSelectedBookingAvailability}
+        onCancel={() => {
+          if (!confirmingAvailability) {
+            setBookingToConfirmAvailability(null);
+          }
+        }}
+      >
+        {bookingToConfirmAvailability && (
+          <div className="space-y-4">
+            <p>
+              Availability had not been configured for one or more dates when
+              this booking request was submitted.
+            </p>
+
+            <dl className="grid gap-3 rounded-xl border border-[#D9CBB8] bg-[#FFFDF9] p-4 sm:grid-cols-2">
+              <div>
+                <dt className="text-xs font-semibold text-[#8B6A4E]">
+                  Booking reference
+                </dt>
+
+                <dd className="mt-1 font-semibold text-[#5C4033]">
+                  {bookingToConfirmAvailability.booking_reference}
+                </dd>
+              </div>
+
+              <div>
+                <dt className="text-xs font-semibold text-[#8B6A4E]">Dog</dt>
+
+                <dd className="mt-1 font-semibold text-[#5C4033]">
+                  {formatName(bookingToConfirmAvailability.dogs?.name || "Dog")}
+                </dd>
+              </div>
+
+              <div>
+                <dt className="text-xs font-semibold text-[#8B6A4E]">
+                  Start date
+                </dt>
+
+                <dd className="mt-1 text-[#5C4033]">
+                  {formatDisplayDate(bookingToConfirmAvailability.start_date)}
+                </dd>
+              </div>
+
+              <div>
+                <dt className="text-xs font-semibold text-[#8B6A4E]">
+                  End date
+                </dt>
+
+                <dd className="mt-1 text-[#5C4033]">
+                  {formatDisplayDate(bookingToConfirmAvailability.end_date)}
+                </dd>
+              </div>
+            </dl>
+
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-amber-800">
+              <p className="font-semibold">Administrator review required</p>
+
+              <p className="mt-1">
+                Confirm only if Browns Boarding can accommodate this booking.
+                Missing availability records will be created with one available
+                space.
+              </p>
+            </div>
+
+            <div className="rounded-lg border border-blue-300 bg-blue-50 p-3 text-blue-800">
+              <p>
+                This action confirms availability only. The booking will remain
+                Pending until the separate Confirm Booking action is completed.
+              </p>
+            </div>
+          </div>
+        )}
+      </ConfirmationModal>
 
       <ConfirmationModal
         isOpen={bookingToConfirm !== null}
