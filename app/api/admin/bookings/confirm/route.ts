@@ -4,6 +4,14 @@ import { createClient } from "@supabase/supabase-js";
 import { getBookingOccupiedDates } from "@/lib/booking-engine/domain";
 
 import {
+  formatBookingDogBreeds,
+  formatBookingDogNames,
+  validateDogsForBookingConfirmation,
+  type BookingDogDetails,
+  type BookingDogLinkRecord,
+} from "@/lib/booking-engine/booking-dogs";
+
+import {
   calculateBookingEnginePricing,
   type BookingEnginePricingSettings,
 } from "@/lib/booking-engine/pricing";
@@ -237,28 +245,24 @@ total_cost,
       );
     }
 
-    const { data: dog, error: dogLoadError } = await supabaseAdmin
-      .from("dogs")
-      .select(
-        `
-      id,
-      owner_id,
-      name,
-      breed,
-      active,
-      vaccinated,
-      vaccination_expiry,
-      meet_and_greet_completed
-      `,
-      )
-      .eq("id", booking.dog_id)
-      .eq("owner_id", booking.owner_id)
-      .maybeSingle();
+    const { data: bookingDogLinkData, error: bookingDogLinksError } =
+      await supabaseAdmin
+        .from("booking_dogs")
+        .select(
+          `
+        dog_id,
+        sort_order
+        `,
+        )
+        .eq("booking_id", booking.id)
+        .order("sort_order", {
+          ascending: true,
+        });
 
-    if (dogLoadError) {
+    if (bookingDogLinksError) {
       return NextResponse.json(
         {
-          error: dogLoadError.message,
+          error: bookingDogLinksError.message,
         },
         {
           status: 500,
@@ -266,21 +270,17 @@ total_cost,
       );
     }
 
-    if (!dog) {
-      return NextResponse.json(
-        {
-          error: "The dog associated with this booking could not be found.",
-        },
-        {
-          status: 404,
-        },
-      );
-    }
+    const bookingDogLinks = (bookingDogLinkData || []).map(
+      (bookingDogLink) => ({
+        dog_id: String(bookingDogLink.dog_id),
+        sort_order: Number(bookingDogLink.sort_order),
+      }),
+    ) satisfies BookingDogLinkRecord[];
 
-    if (!dog.active) {
+    if (bookingDogLinks.length === 0) {
       return NextResponse.json(
         {
-          error: "The booking cannot be confirmed because the dog is inactive.",
+          error: "The booking does not contain any linked dogs.",
         },
         {
           status: 400,
@@ -288,11 +288,67 @@ total_cost,
       );
     }
 
-    if (!dog.vaccinated) {
+    const linkedDogIds = bookingDogLinks.map(
+      (bookingDogLink) => bookingDogLink.dog_id,
+    );
+
+    const { data: dogData, error: dogsLoadError } = await supabaseAdmin
+      .from("dogs")
+      .select(
+        `
+          id,
+          owner_id,
+          name,
+          breed,
+          active,
+          vaccinated,
+          vaccination_expiry,
+          meet_and_greet_completed,
+          can_share_with_other_dogs
+          `,
+      )
+      .in("id", linkedDogIds);
+
+    if (dogsLoadError) {
       return NextResponse.json(
         {
-          error:
-            "The booking cannot be confirmed because the dog's vaccination information is incomplete.",
+          error: dogsLoadError.message,
+        },
+        {
+          status: 500,
+        },
+      );
+    }
+
+    const dogs = (dogData || []).map((dog) => ({
+      id: String(dog.id),
+      owner_id: String(dog.owner_id),
+      name: String(dog.name || ""),
+      breed: typeof dog.breed === "string" ? dog.breed : null,
+      active: Boolean(dog.active),
+      vaccinated: typeof dog.vaccinated === "boolean" ? dog.vaccinated : null,
+      vaccination_expiry:
+        typeof dog.vaccination_expiry === "string"
+          ? dog.vaccination_expiry
+          : null,
+      meet_and_greet_completed:
+        typeof dog.meet_and_greet_completed === "boolean"
+          ? dog.meet_and_greet_completed
+          : null,
+      can_share_with_other_dogs: dog.can_share_with_other_dogs !== false,
+    })) satisfies BookingDogDetails[];
+
+    const dogValidation = validateDogsForBookingConfirmation({
+      ownerId: booking.owner_id,
+      bookingStartDate: booking.start_date,
+      dogs,
+      bookingDogLinks,
+    });
+
+    if (!dogValidation.valid) {
+      return NextResponse.json(
+        {
+          error: dogValidation.error,
         },
         {
           status: 400,
@@ -300,29 +356,10 @@ total_cost,
       );
     }
 
-    if (!dog.vaccination_expiry) {
-      return NextResponse.json(
-        {
-          error:
-            "The booking cannot be confirmed because the dog's vaccination expiry date is missing.",
-        },
-        {
-          status: 400,
-        },
-      );
-    }
-
-    if (dog.vaccination_expiry < booking.start_date) {
-      return NextResponse.json(
-        {
-          error:
-            "The booking cannot be confirmed because the dog's vaccination will have expired before the stay begins.",
-        },
-        {
-          status: 400,
-        },
-      );
-    }
+    const bookingDogs = dogValidation.dogs;
+    const primaryDog = dogValidation.primaryDog;
+    const dogName = formatBookingDogNames(bookingDogs);
+    const dogBreed = formatBookingDogBreeds(bookingDogs);
 
     const { data: pricing, error: pricingLoadError } = await supabaseAdmin
       .from("pricing_settings")
@@ -720,8 +757,10 @@ total_cost,
       bookingReference: booking.booking_reference,
       customerName,
       customerEmail: customer.email,
-      dogName: dog.name,
-      dogBreed: dog.breed,
+      dogName,
+      dogBreed,
+      bookingType: booking.booking_type,
+      daycareSession: booking.daycare_session,
       startDate: booking.start_date,
       endDate: booking.end_date,
       bookingStatus: pricingResult.newStatus,
@@ -753,7 +792,9 @@ total_cost,
       bookingReference: booking.booking_reference,
       customerEmail: customer.email,
       customerName,
-      dogName: dog.name,
+      dogName,
+      bookingType: booking.booking_type,
+      daycareSession: booking.daycare_session,
       startDate: booking.start_date,
       endDate: booking.end_date,
       shortNoticeBooking,
@@ -818,6 +859,9 @@ total_cost,
           bookingReference: booking.booking_reference,
           previousStatus: booking.status,
           newStatus: pricingResult.newStatus,
+          bookingType: booking.booking_type,
+          daycareSession: booking.daycare_session,
+          dogIds: bookingDogs.map((bookingDog) => bookingDog.id),
           startDate: booking.start_date,
           endDate: booking.end_date,
           notes: booking.notes,
@@ -830,10 +874,17 @@ total_cost,
         },
 
         dog: {
-          id: dog.id,
-          name: dog.name,
-          breed: dog.breed,
+          id: primaryDog.id,
+          name: primaryDog.name,
+          breed: primaryDog.breed,
         },
+
+        dogs: bookingDogs.map((bookingDog) => ({
+          id: bookingDog.id,
+          name: bookingDog.name,
+          breed: bookingDog.breed,
+          canShareWithOtherDogs: bookingDog.can_share_with_other_dogs,
+        })),
 
         pricing: {
           pricingSettingId: pricingResult.pricingSettingId,

@@ -1,11 +1,15 @@
 import { createEmailTemplate } from "@/lib/email-template";
 import { sendGmailEmail } from "@/lib/gmail";
 
+import type { BookingType, DaycareSessionType } from "@/types/booking";
+
 export type SendBookingConfirmationEmailInput = {
   bookingReference: string;
   customerEmail: string;
   customerName: string;
   dogName: string;
+  bookingType: BookingType;
+  daycareSession: DaycareSessionType | null;
   startDate: string;
   endDate: string;
   totalCost: string;
@@ -70,6 +74,22 @@ function validateInput(input: SendBookingConfirmationEmailInput) {
     throw new Error("Dog name is missing.");
   }
 
+  if (input.bookingType !== "boarding" && input.bookingType !== "daycare") {
+    throw new Error("The booking type is invalid.");
+  }
+
+  if (input.bookingType === "boarding" && input.daycareSession !== null) {
+    throw new Error("A Boarding booking cannot contain a Daycare session.");
+  }
+
+  if (
+    input.bookingType === "daycare" &&
+    input.daycareSession !== "full_day" &&
+    input.daycareSession !== "half_day"
+  ) {
+    throw new Error("The Doggy Day Care session is invalid.");
+  }
+
   if (
     typeof input.startDate !== "string" ||
     !isValidDisplayDate(input.startDate)
@@ -79,6 +99,12 @@ function validateInput(input: SendBookingConfirmationEmailInput) {
 
   if (typeof input.endDate !== "string" || !isValidDisplayDate(input.endDate)) {
     throw new Error("The booking end date is invalid.");
+  }
+
+  if (input.bookingType === "daycare" && input.startDate !== input.endDate) {
+    throw new Error(
+      "A Doggy Day Care booking must start and end on the same date.",
+    );
   }
 
   if (typeof input.totalCost !== "string" || !input.totalCost.trim()) {
@@ -116,6 +142,42 @@ function getBalanceDueDate(startDate: string) {
   return `${dueDay}/${dueMonth}/${dueYear}`;
 }
 
+function getServiceName({
+  bookingType,
+  daycareSession,
+}: {
+  bookingType: BookingType;
+  daycareSession: DaycareSessionType | null;
+}) {
+  if (bookingType === "boarding") {
+    return "Boarding";
+  }
+
+  return daycareSession === "half_day"
+    ? "Doggy Day Care, Half Day"
+    : "Doggy Day Care, Full Day";
+}
+
+function getDateLabel(bookingType: BookingType) {
+  return bookingType === "daycare" ? "Attendance date" : "Booking dates";
+}
+
+function getFormattedDates({
+  bookingType,
+  startDate,
+  endDate,
+}: {
+  bookingType: BookingType;
+  startDate: string;
+  endDate: string;
+}) {
+  if (bookingType === "daycare") {
+    return startDate;
+  }
+
+  return `${startDate} to ${endDate}`;
+}
+
 export async function sendBookingConfirmationEmail(
   input: SendBookingConfirmationEmailInput,
 ): Promise<SendBookingConfirmationEmailResult> {
@@ -129,9 +191,22 @@ export async function sendBookingConfirmationEmail(
 
   const dogName = escapeHtml(input.dogName.trim());
 
-  const startDate = escapeHtml(input.startDate);
+  const serviceName = escapeHtml(
+    getServiceName({
+      bookingType: input.bookingType,
+      daycareSession: input.daycareSession,
+    }),
+  );
 
-  const endDate = escapeHtml(input.endDate);
+  const dateLabel = getDateLabel(input.bookingType);
+
+  const formattedDates = escapeHtml(
+    getFormattedDates({
+      bookingType: input.bookingType,
+      startDate: input.startDate,
+      endDate: input.endDate,
+    }),
+  );
 
   const totalCost = escapeHtml(input.totalCost.trim());
 
@@ -154,7 +229,7 @@ export async function sendBookingConfirmationEmail(
         `
     : `
           <p>
-            <strong>Total stay cost:</strong><br />
+            <strong>Total booking cost:</strong><br />
             ${totalCost}
           </p>
 
@@ -182,15 +257,20 @@ export async function sendBookingConfirmationEmail(
     </p>
 
     <p>
-      <strong>Booking dates:</strong><br />
-      ${startDate} to ${endDate}
+      <strong>Service:</strong><br />
+      ${serviceName}
+    </p>
+
+    <p>
+      <strong>${dateLabel}:</strong><br />
+      ${formattedDates}
     </p>
 
     ${paymentText}
 
     <p>
       Please include your booking reference when contacting Browns Boarding
-      about this stay.
+      about this booking.
     </p>
 
     <p>
