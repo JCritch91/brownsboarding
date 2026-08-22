@@ -17,6 +17,7 @@ export type Dog = {
   feeding_notes: string | null;
   behaviour_notes: string | null;
   meet_and_greet_completed: boolean | null;
+  can_share_with_other_dogs: boolean;
   active: boolean;
   created_at?: string | null;
   updated_at?: string | null;
