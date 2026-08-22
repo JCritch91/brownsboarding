@@ -203,8 +203,8 @@ export async function loadOverlappingActiveBookings({
     )
     .in("id", bookingIds)
     .in("status", ACTIVE_BOOKING_STATUSES)
-    .lt("start_date", endDate)
-    .gt("end_date", startDate);
+    .lte("start_date", endDate)
+    .gte("end_date", startDate);
 
   if (bookingError) {
     throw new Error(bookingError.message);
