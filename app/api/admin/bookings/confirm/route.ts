@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-import {
-  getDatesInRange,
-  isWithinTwoWeeks,
-  validateBookingDates,
-} from "@/lib/helpers";
+import { getBookingOccupiedDates } from "@/lib/booking-engine/domain";
 
-import { calculateBookingPricing } from "@/lib/services/booking-confirmation-service";
+import {
+  calculateBookingEnginePricing,
+  type BookingEnginePricingSettings,
+} from "@/lib/booking-engine/pricing";
 
 import {
   buildBookingCalendarPayload,
@@ -114,16 +113,26 @@ export async function POST(request: Request) {
         `
     id,
     booking_reference,
-    owner_id,
-    dog_id,
-    start_date,
-    end_date,
-    status,
+owner_id,
+dog_id,
+booking_type,
+daycare_session,
+start_date,
+end_date,
+status,
+availability_confirmation_required,
+availability_confirmed_at,
+availability_confirmed_by,
+space_units,
     notes,
-    pricing_setting_id,
-    nightly_rate,
-    number_of_nights,
-    total_cost,
+pricing_setting_id,
+price_unit,
+unit_rate,
+quantity,
+deposit_percentage_applied,
+nightly_rate,
+number_of_nights,
+total_cost,
     deposit_amount,
     balance_amount
     `,
@@ -157,6 +166,21 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error: `A booking with status "${booking.status}" cannot be confirmed.`,
+        },
+        {
+          status: 409,
+        },
+      );
+    }
+
+    if (
+      booking.availability_confirmation_required &&
+      !booking.availability_confirmed_at
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Availability must be reviewed and confirmed before this booking can be confirmed.",
         },
         {
           status: 409,
@@ -206,22 +230,6 @@ export async function POST(request: Request) {
         {
           error:
             "The booking cannot be confirmed because the customer account is inactive.",
-        },
-        {
-          status: 400,
-        },
-      );
-    }
-
-    const bookingDateValidation = validateBookingDates(
-      booking.start_date,
-      booking.end_date,
-    );
-
-    if (bookingDateValidation) {
-      return NextResponse.json(
-        {
-          error: bookingDateValidation,
         },
         {
           status: 400,
@@ -320,12 +328,15 @@ export async function POST(request: Request) {
       .from("pricing_settings")
       .select(
         `
-    id,
-    nightly_rate,
-    deposit_percentage,
-    effective_from,
-    active
-    `,
+  id,
+  nightly_rate,
+  deposit_percentage,
+  daycare_full_day_rate,
+  daycare_half_day_rate,
+  daycare_deposit_percentage,
+  effective_from,
+  active
+  `,
       )
       .eq("active", true)
       .lte("effective_from", booking.start_date)
@@ -361,14 +372,34 @@ export async function POST(request: Request) {
       );
     }
 
-    const nightlyRate = Number(pricing.nightly_rate);
+    let pricingResult;
 
-    const depositPercentage = Number(pricing.deposit_percentage);
-
-    if (!Number.isFinite(nightlyRate) || nightlyRate < 0) {
+    try {
+      pricingResult = calculateBookingEnginePricing({
+        bookingType: booking.booking_type,
+        daycareSession: booking.daycare_session,
+        startDate: booking.start_date,
+        endDate: booking.end_date,
+        pricing: {
+          id: pricing.id,
+          nightly_rate: Number(pricing.nightly_rate),
+          deposit_percentage: Number(pricing.deposit_percentage),
+          daycare_full_day_rate: Number(pricing.daycare_full_day_rate),
+          daycare_half_day_rate: Number(pricing.daycare_half_day_rate),
+          daycare_deposit_percentage: Number(
+            pricing.daycare_deposit_percentage,
+          ),
+          effective_from: pricing.effective_from,
+          active: pricing.active,
+        } satisfies BookingEnginePricingSettings,
+      });
+    } catch (error) {
       return NextResponse.json(
         {
-          error: "The active nightly rate is invalid.",
+          error:
+            error instanceof Error
+              ? error.message
+              : "The booking price could not be calculated.",
         },
         {
           status: 500,
@@ -376,34 +407,19 @@ export async function POST(request: Request) {
       );
     }
 
-    if (
-      !Number.isFinite(depositPercentage) ||
-      depositPercentage < 0 ||
-      depositPercentage > 100
-    ) {
-      return NextResponse.json(
-        {
-          error: "The active deposit percentage is invalid.",
-        },
-        {
-          status: 500,
-        },
-      );
-    }
-
-    const occupiedDates = getDatesInRange(booking.start_date, booking.end_date);
-
-    /*
-     * The departure date does not consume a boarding
-     * space, so it is excluded from the availability
-     * checks.
-     */
-    occupiedDates.pop();
+    const occupiedDates = getBookingOccupiedDates({
+      bookingType: booking.booking_type,
+      startDate: booking.start_date,
+      endDate: booking.end_date,
+    });
 
     if (occupiedDates.length === 0) {
       return NextResponse.json(
         {
-          error: "The booking does not contain any occupied nights.",
+          error:
+            booking.booking_type === "daycare"
+              ? "The daycare booking does not contain a valid attendance date."
+              : "The boarding booking does not contain any occupied nights.",
         },
         {
           status: 400,
@@ -411,105 +427,37 @@ export async function POST(request: Request) {
       );
     }
 
-    const { data: availabilityRecords, error: availabilityLoadError } =
-      await supabaseAdmin
-        .from("availability")
-        .select(
-          `
-    id,
-    date,
-    available,
-    total_spaces,
-    spaces_available
-    `,
-        )
-        .gte("date", booking.start_date)
-        .lt("date", booking.end_date)
-        .order("date", { ascending: true });
+    const { data: confirmationRows, error: confirmationError } =
+      await supabaseAdmin.rpc("confirm_booking_v2_atomic", {
+        p_booking_id: booking.id,
+        p_pricing_setting_id: pricingResult.pricingSettingId,
+        p_price_unit: pricingResult.priceUnit,
+        p_unit_rate: pricingResult.unitRate,
+        p_quantity: pricingResult.quantity,
+        p_deposit_percentage: pricingResult.depositPercentage,
+        p_total_cost: pricingResult.totalCost,
+        p_deposit_amount: pricingResult.depositAmount,
+        p_balance_amount: pricingResult.balanceAmount,
+        p_new_status: pricingResult.newStatus,
+      });
 
-    if (availabilityLoadError) {
-      return NextResponse.json(
-        {
-          error: availabilityLoadError.message,
-        },
-        {
-          status: 500,
-        },
-      );
-    }
-
-    const availabilityByDate = new Map(
-      (availabilityRecords || []).map((availabilityRecord) => [
-        availabilityRecord.date,
-        availabilityRecord,
-      ]),
-    );
-
-    for (const occupiedDate of occupiedDates) {
-      const availabilityRecord = availabilityByDate.get(occupiedDate);
-
-      if (!availabilityRecord) {
-        return NextResponse.json(
-          {
-            error: `No availability has been configured for ${occupiedDate}.`,
-          },
-          {
-            status: 409,
-          },
-        );
-      }
-
-      if (!availabilityRecord.available) {
-        return NextResponse.json(
-          {
-            error: `${occupiedDate} is unavailable for bookings.`,
-          },
-          {
-            status: 409,
-          },
-        );
-      }
-
-      if (availabilityRecord.spaces_available <= 0) {
-        return NextResponse.json(
-          {
-            error: `${occupiedDate} is fully booked.`,
-          },
-          {
-            status: 409,
-          },
-        );
-      }
-    }
-
-    const pricingResult = calculateBookingPricing(
-      booking.start_date,
-      booking.end_date,
-      nightlyRate,
-      depositPercentage,
-    );
-
-    const { data: confirmationData, error: confirmationError } =
-      await supabaseAdmin
-        .rpc("confirm_booking_atomic", {
-          p_booking_id: booking.id,
-          p_pricing_setting_id: pricing.id,
-          p_nightly_rate: nightlyRate,
-          p_number_of_nights: pricingResult.numberOfNights,
-          p_total_cost: pricingResult.totalCost,
-          p_deposit_amount: pricingResult.depositAmount,
-          p_balance_amount: pricingResult.balanceAmount,
-          p_new_status: pricingResult.newStatus,
-        })
-        .single();
+    const confirmationData = Array.isArray(confirmationRows)
+      ? confirmationRows[0]
+      : confirmationRows;
 
     if (confirmationError) {
-      console.error("Atomic booking confirmation failed:", confirmationError);
+      console.error(
+        "Atomic V2 booking confirmation failed:",
+        confirmationError,
+      );
 
       const errorMessage =
         confirmationError.message || "The booking could not be confirmed.";
 
-      if (errorMessage.includes("BOOKING_NOT_PENDING")) {
+      if (
+        errorMessage.includes("BOOKING_NOT_PENDING") ||
+        errorMessage.includes("BOOKING_STATUS_CHANGED")
+      ) {
         return NextResponse.json(
           {
             error:
@@ -521,11 +469,81 @@ export async function POST(request: Request) {
         );
       }
 
+      if (errorMessage.includes("AVAILABILITY_REVIEW_REQUIRED")) {
+        return NextResponse.json(
+          {
+            error:
+              "Availability must be reviewed and confirmed before this booking can be confirmed.",
+          },
+          {
+            status: 409,
+          },
+        );
+      }
+
+      if (errorMessage.includes("AVAILABILITY_RECORD_MISSING")) {
+        return NextResponse.json(
+          {
+            error: "One or more required availability records are missing.",
+          },
+          {
+            status: 409,
+          },
+        );
+      }
+
+      if (errorMessage.includes("AVAILABILITY_UNAVAILABLE")) {
+        return NextResponse.json(
+          {
+            error: "One or more booking dates have been marked as unavailable.",
+          },
+          {
+            status: 409,
+          },
+        );
+      }
+
       if (errorMessage.includes("INSUFFICIENT_AVAILABILITY")) {
         return NextResponse.json(
           {
             error:
-              "The booking could not be confirmed because one or more dates are no longer available.",
+              "One or more booking dates no longer have sufficient availability.",
+          },
+          {
+            status: 409,
+          },
+        );
+      }
+
+      if (errorMessage.includes("REQUESTED_DOG_CANNOT_SHARE")) {
+        return NextResponse.json(
+          {
+            error:
+              "One or more selected dogs cannot share with dogs from another household.",
+          },
+          {
+            status: 409,
+          },
+        );
+      }
+
+      if (errorMessage.includes("EXISTING_DOG_CANNOT_SHARE")) {
+        return NextResponse.json(
+          {
+            error:
+              "A dog already attending on one or more selected dates cannot share with dogs from another household.",
+          },
+          {
+            status: 409,
+          },
+        );
+      }
+
+      if (errorMessage.includes("SHARED_BOOKING_LIMIT_REACHED")) {
+        return NextResponse.json(
+          {
+            error:
+              "The additional compatible shared-booking allowance has already been used for one or more selected dates.",
           },
           {
             status: 409,
@@ -540,6 +558,38 @@ export async function POST(request: Request) {
           },
           {
             status: 404,
+          },
+        );
+      }
+
+      if (
+        errorMessage.includes("INVALID_BOARDING_DATES") ||
+        errorMessage.includes("INVALID_DAYCARE_DATES") ||
+        errorMessage.includes("INVALID_BOOKING_TYPE") ||
+        errorMessage.includes("INVALID_BOARDING_QUANTITY") ||
+        errorMessage.includes("INVALID_DAYCARE_QUANTITY") ||
+        errorMessage.includes("INVALID_BOARDING_PRICE_UNIT") ||
+        errorMessage.includes("INVALID_DAYCARE_PRICE_UNIT")
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "The booking contains invalid service, date or pricing information.",
+          },
+          {
+            status: 400,
+          },
+        );
+      }
+
+      if (errorMessage.includes("PRICING_TOTAL_MISMATCH")) {
+        return NextResponse.json(
+          {
+            error:
+              "The calculated booking price does not match its deposit and balance.",
+          },
+          {
+            status: 500,
           },
         );
       }
@@ -579,9 +629,10 @@ export async function POST(request: Request) {
     notes
     `,
         )
-        .gte("date", booking.start_date)
-        .lt("date", booking.end_date)
-        .order("date", { ascending: true });
+        .in("date", occupiedDates)
+        .order("date", {
+          ascending: true,
+        });
 
     if (updatedAvailabilityError) {
       return NextResponse.json(
@@ -658,7 +709,7 @@ export async function POST(request: Request) {
       customer.email ||
       "Customer";
 
-    const shortNoticeBooking = isWithinTwoWeeks(booking.start_date);
+    const shortNoticeBooking = pricingResult.shortNoticeBooking;
 
     const paymentStatus = shortNoticeBooking
       ? "Full balance due"
@@ -785,10 +836,13 @@ export async function POST(request: Request) {
         },
 
         pricing: {
-          pricingSettingId: pricing.id,
-          nightlyRate,
-          depositPercentage,
+          pricingSettingId: pricingResult.pricingSettingId,
+          priceUnit: pricingResult.priceUnit,
+          unitRate: pricingResult.unitRate,
+          quantity: pricingResult.quantity,
+          depositPercentage: pricingResult.depositPercentage,
           numberOfNights: pricingResult.numberOfNights,
+          nightlyRate: pricingResult.nightlyRate,
           totalCost: pricingResult.totalCost,
           depositAmount: pricingResult.depositAmount,
           balanceAmount: pricingResult.balanceAmount,
