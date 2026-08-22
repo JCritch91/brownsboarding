@@ -78,10 +78,25 @@ deposit_amount,
 balance_amount,
 deposit_paid_at,
 balance_paid_at,
+dogs (
+  id,
+  name,
+  breed,
+  can_share_with_other_dogs
+),
+booking_dogs (
+  id,
+  booking_id,
+  dog_id,
+  sort_order,
+  created_at,
   dogs (
+    id,
     name,
-    breed
+    breed,
+    can_share_with_other_dogs
   )
+)
   `,
       )
 
